@@ -380,30 +380,37 @@ namespace DenEmo
         private void HandleDragAndDrop()
         {
             Event evt = Event.current;
+            if (evt.type != EventType.DragUpdated && evt.type != EventType.DragPerform) return;
+            
             Rect dropArea = new Rect(0, 0, position.width, position.height);
-            switch (evt.type)
+            if (!dropArea.Contains(evt.mousePosition)) return;
+            
+            SkinnedMeshRenderer foundSmr = null;
+            foreach (var obj in DragAndDrop.objectReferences)
             {
-                case EventType.DragUpdated:
-                case EventType.DragPerform:
-                    if (!dropArea.Contains(evt.mousePosition)) return;
-                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-                    if (evt.type == EventType.DragPerform)
-                    {
-                        DragAndDrop.AcceptDrag();
-                        foreach (var obj in DragAndDrop.objectReferences)
-                        {
-                            if (obj is SkinnedMeshRenderer smr)
-                            {
-                                _model.SetTarget(smr);
-                                RefreshListAndCache();
-                                Repaint();
-                                break;
-                            }
-                        }
-                    }
-                    evt.Use();
-                    break;
+                if (obj is GameObject go) foundSmr = go.GetComponent<SkinnedMeshRenderer>();
+                else if (obj is SkinnedMeshRenderer smr) foundSmr = smr;
+                
+                if (foundSmr != null) break;
             }
+            
+            if (foundSmr == null) return;
+
+            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+            if (evt.type == EventType.DragPerform)
+            {
+                DragAndDrop.AcceptDrag();
+                _listUI.StopThrottle();
+                _model.SetTarget(foundSmr);
+                RefreshListAndCache();
+                if (_model.TargetSkinnedMesh != null)
+                {
+                    CreateSnapshot(false);
+                    SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
+                }
+                Repaint();
+            }
+            evt.Use();
         }
 
         // --- Preferences and Snapshots ---

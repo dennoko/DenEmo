@@ -37,8 +37,26 @@ namespace DenEmo.Core
             
             if (string.IsNullOrEmpty(path)) return null;
 
-            var clip = new AnimationClip { frameRate = 60 };
             string currentSmrPath = GetRelativePath(model.TargetSkinnedMesh.transform, model.TargetSkinnedMesh.transform.root);
+
+            // 既存アセットがあれば参照を維持したまま上書き、なければ新規作成
+            var existingClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            AnimationClip clip;
+            bool isOverwrite;
+
+            if (existingClip != null)
+            {
+                // 既存クリップの全カーブをクリア（参照は保持したまま中身だけ更新）
+                clip = existingClip;
+                clip.ClearCurves();
+                clip.frameRate = 60;
+                isOverwrite = true;
+            }
+            else
+            {
+                clip = new AnimationClip { frameRate = 60 };
+                isOverwrite = false;
+            }
 
             foreach (var item in model.Items)
             {
@@ -63,7 +81,14 @@ namespace DenEmo.Core
                 AnimationUtility.SetEditorCurve(clip, binding, curve);
             }
 
-            AssetDatabase.CreateAsset(clip, path);
+            if (isOverwrite)
+            {
+                EditorUtility.SetDirty(clip);
+            }
+            else
+            {
+                AssetDatabase.CreateAsset(clip, path);
+            }
             AssetDatabase.SaveAssets();
 
             var asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
