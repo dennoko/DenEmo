@@ -70,7 +70,17 @@ namespace DenEmo.Core
             // Add the new key
             var newKey = new Keyframe(time, value);
             int idx = curve.AddKey(newKey);
-            if (idx < 0) idx = 0; // AddKey may return -1 on duplicates; reuse 0
+            if (idx < 0)
+            {
+                // AddKey failed (e.g. exact duplicate time slipped through); find by position
+                idx = FindKeyAtTime(curve, time, 0f);
+                if (idx < 0)
+                {
+                    AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
+                    EditorUtility.SetDirty(_clipModel.Clip);
+                    return; // Cannot determine correct index; bail out safely
+                }
+            }
 
             ApplyTangentMode(curve, idx, interp);
 
