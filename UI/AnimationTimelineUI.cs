@@ -134,7 +134,7 @@ namespace DenEmo.UI
             float sx     = trackX + norm * trackW;
 
             // Vertical line
-            EditorGUI.DrawRect(new Rect(sx - 1, rect.y, 2, rect.height + SCRUBBER_HEIGHT), new Color(1f, 1f, 1f, 0.8f));
+            EditorGUI.DrawRect(new Rect(sx - 1, rect.y, 2, rect.height), new Color(1f, 1f, 1f, 0.8f));
             // Handle nub
             EditorGUI.DrawRect(new Rect(sx - 5, rect.y, 10, rect.height), DenEmoTheme.TextPrimary);
         }
@@ -212,7 +212,7 @@ namespace DenEmo.UI
                 {
                     playStartRealTime = EditorApplication.timeSinceStartup;
                     playStartClipTime = clipModel.CurrentTime;
-                    if (!preview.IsActive) preview.Start(clipModel, null);
+                    // Preview is started/managed by AnimationModeUI; only update play time here
                 }
                 window.Repaint();
             }

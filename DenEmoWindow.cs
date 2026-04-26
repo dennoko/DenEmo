@@ -538,6 +538,27 @@ namespace DenEmo
             DenEmoTheme.EndSection();
         }
 
+        private void DrawAnimationSaveSection()
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE ANIMATION" : "アニメーション保存");
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(6);
+
+            if (GUILayout.Button(
+                DenEmoLoc.EnglishMode ? "Save Animation" : "アニメーションを保存",
+                DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
+            {
+                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl));
+            }
+
+            GUILayout.Space(6);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6);
+
+            DenEmoTheme.EndSection();
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────
 
         private void RefreshListAndCache()

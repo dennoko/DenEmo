@@ -70,6 +70,7 @@ namespace DenEmo.UI
         public void OnUpdate(EditorWindow window)
         {
             if (!_isPlaying || ClipModel.Clip == null) return;
+            if (!Preview.IsActive) return;
 
             double elapsed = EditorApplication.timeSinceStartup - _playStartRealTime;
             float  t       = _playStartClipTime + (float)elapsed;
