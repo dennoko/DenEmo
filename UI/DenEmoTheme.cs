@@ -101,7 +101,7 @@ namespace DenEmo.UI
             CardStyle.normal.background = _texCard;
             CardStyle.border  = new RectOffset(1, 1, 1, 1);
             CardStyle.padding = new RectOffset(10, 10, 8, 8);
-            CardStyle.margin  = new RectOffset(6, 6, 4, 4);
+            CardStyle.margin  = new RectOffset(6, 6, 10, 10);
 
             CardOuterStyle = new GUIStyle();
             CardOuterStyle.normal.background = _texCard;

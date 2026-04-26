@@ -284,7 +284,7 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
-            GUILayout.Space(2f);
+            GUILayout.Space(5f);
         }
 
         private void DrawSingleRow(ShapeKeyItem item, bool spaceLeft, ShapeKeyModel model)
@@ -348,7 +348,7 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
-            GUILayout.Space(2f);
+            GUILayout.Space(5f);
         }
 
         private void DrawFavButton(ShapeKeyItem item, ShapeKeyModel model)
