@@ -52,7 +52,13 @@ public static class DenEmoLoc
         ["ui.align.apply.button"] = "適用",
         ["ui.align.apply.tip"] = "ベースアニメーションに含まれるブレンドシェイプのみ保存対象（チェック）にします。vrc.* 系は除外されます。",
 
-        // Apply animation to mesh
+        // Animation source (unified clip field + actions)
+        ["ui.animSource.clip.label"] = "アニメーションクリップ",
+        ["ui.animSource.clip.tip"] = "操作対象の AnimationClip を指定します。",
+        ["ui.animSource.loadAnim.button"] = "アニメーションを読み込む",
+        ["ui.animSource.alignKeys.button"] = "アニメーションファイルのキーを揃える",
+
+        // Apply animation to mesh (tooltip kept for reuse)
         ["ui.applyAnim.label"] = "アニメーションを適用",
         ["ui.applyAnim.tip"] = "選択したアニメーションクリップのブレンドシェイプ値（時刻0秒）を現在のメッシュに反映します。",
         ["ui.applyAnim.button"] = "適用",
@@ -79,11 +85,14 @@ public static class DenEmoLoc
         ["ui.group.none"] = "(全解除)",
         ["ui.group.some"] = "(一部)",
 
-        // Footer
+        // Footer / Save Settings
         ["ui.footer.saveAnim"] = "アニメーションを保存",
         ["ui.footer.refresh"] = "更新",
         ["ui.footer.saveTo"] = "保存先 (既定):",
         ["ui.footer.browse"] = "参照",
+        ["ui.footer.overwriteEnable"] = "上書き保存を有効にする",
+        ["ui.footer.overwriteEnable.tip"] = "指定したアニメーションファイルに直接上書き保存します。無効時はダイアログで保存先を選択します。",
+        ["ui.footer.overwriteTarget"] = "上書き先",
 
         // Dialogs & messages
         ["dlg.error"] = "エラー",
@@ -133,7 +142,13 @@ public static class DenEmoLoc
         ["ui.align.apply.button"] = "Apply",
         ["ui.align.apply.tip"] = "Set save targets (checks) to shapes contained in the base animation. vrc.* shapes are excluded.",
 
-        // Apply animation to mesh
+        // Animation source (unified clip field + actions)
+        ["ui.animSource.clip.label"] = "Animation Clip",
+        ["ui.animSource.clip.tip"] = "Specify the AnimationClip to work with.",
+        ["ui.animSource.loadAnim.button"] = "Load Animation",
+        ["ui.animSource.alignKeys.button"] = "Align Animation File Keys",
+
+        // Apply animation to mesh (tooltip kept for reuse)
         ["ui.applyAnim.label"] = "Apply Animation",
         ["ui.applyAnim.tip"] = "Applies blendshape values at time 0s from the selected clip to the current mesh.",
         ["ui.applyAnim.button"] = "Apply",
@@ -160,11 +175,14 @@ public static class DenEmoLoc
         ["ui.group.none"] = "(None)",
         ["ui.group.some"] = "(Partial)",
 
-        // Footer
+        // Footer / Save Settings
         ["ui.footer.saveAnim"] = "Save Animation",
         ["ui.footer.refresh"] = "Refresh",
         ["ui.footer.saveTo"] = "Save To (default):",
         ["ui.footer.browse"] = "Browse",
+        ["ui.footer.overwriteEnable"] = "Enable overwrite save",
+        ["ui.footer.overwriteEnable.tip"] = "Saves directly to the specified animation file. When disabled, a dialog will open to choose the save path.",
+        ["ui.footer.overwriteTarget"] = "Overwrite target",
 
         // Dialogs & messages
         ["dlg.error"] = "Error",

@@ -15,44 +15,66 @@ namespace DenEmo
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoWindow>("DenEmo");
-            w.minSize = new Vector2(350, 300);
+            w.minSize = new Vector2(380, 400);
         }
 
         private ShapeKeyModel _model = new ShapeKeyModel();
         private ShapeKeyListUI _listUI = new ShapeKeyListUI();
-        
+
         private string saveFolder = "Assets/Generated_Animations";
         private string searchText = string.Empty;
         private string lastSearchText = null;
-        private bool alignToExistingClipKeys = false;
-        private bool showOnlyIncluded = false;
-        private bool lastShowOnlyIncluded = false;
-        private bool symmetryMode = false;
+
+        private bool showOnlyIncluded   = false;
+        private bool showOnlyNonZero    = false;
+        private bool showOnlyFavorites  = false;
+        private bool symmetryMode       = false;
+        private bool autoBackup         = true;
+        private bool overwriteSaveEnabled = false;
+
+        private bool lastShowOnlyIncluded  = false;
+        private bool lastShowOnlyNonZero   = false;
+        private bool lastShowOnlyFavorites = false;
+        private bool lastSymmetryMode      = false;
+
         private Vector2 scroll;
-        
-        private AnimationClip loadedClip = null;
-        private AnimationClip baseAlignClip = null;
-        
+
+        private AnimationClip loadedClip        = null;
+        private AnimationClip overwriteTargetClip = null;
+
         private HashSet<string> collapsedGroups = new HashSet<string>();
-        
-        private string statusMessage = null;
-        private int statusLevel = 0; // 0=Info, 1=Success, 2=Warning, 3=Error
-        private double statusSetAt = 0;
+
+        private string statusMessage  = null;
+        private int    statusLevel    = 0;
+        private double statusSetAt    = 0;
         private double statusAutoClearSec = 0;
-        
-        private bool includeFlagsDirty = false;
+
+        private bool   includeFlagsDirty         = false;
         private double lastIncludeFlagsChangeTime = 0;
-        private List<float> snapshotValues = null;
+        private List<float> snapshotValues        = null;
+
+        // ─── Lifecycle ───────────────────────────────────────────────────────
 
         private void OnEnable()
         {
             DenEmoLoc.LoadPrefs();
-            saveFolder = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
-            searchText = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
-            alignToExistingClipKeys = DenEmoProjectPrefs.GetBool("DenEmo_AlignToClip", false);
-            showOnlyIncluded = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyIncluded", false);
-            symmetryMode = DenEmoProjectPrefs.GetBool("DenEmo_SymmetryMode", false);
-            
+            saveFolder            = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
+            searchText            = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
+            showOnlyIncluded      = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyIncluded", false);
+            showOnlyNonZero       = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyNonZero", false);
+            showOnlyFavorites     = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyFavorites", false);
+            symmetryMode          = DenEmoProjectPrefs.GetBool("DenEmo_SymmetryMode", false);
+            autoBackup            = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup", true);
+            overwriteSaveEnabled  = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
+
+            var overwriteGuid = DenEmoProjectPrefs.GetString("DenEmo_OverwriteClipGuid", "");
+            if (!string.IsNullOrEmpty(overwriteGuid))
+            {
+                var clipAssetPath = AssetDatabase.GUIDToAssetPath(overwriteGuid);
+                if (!string.IsNullOrEmpty(clipAssetPath))
+                    overwriteTargetClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipAssetPath);
+            }
+
             var last = DenEmoProjectPrefs.GetString("DenEmo_LastTarget", string.Empty);
             if (!string.IsNullOrEmpty(last))
             {
@@ -63,42 +85,59 @@ namespace DenEmo
                     RefreshListAndCache();
                 }
             }
-            
+
             Undo.undoRedoPerformed += OnUndoRedo;
             SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
-            
             LoadCollapsedGroupsPrefs();
-            
-            _listUI.OnIncludeFlagsChanged = () => {
+
+            _listUI.OnIncludeFlagsChanged = () =>
+            {
                 includeFlagsDirty = true;
                 lastIncludeFlagsChangeTime = EditorApplication.timeSinceStartup;
             };
+            _listUI.OnFavoriteChanged  = OnFavoriteChanged;
+            _listUI.OnSnapshotCreate  = () => CreateSnapshot(false);
+            _listUI.OnSnapshotRestore = RestoreSnapshot;
         }
 
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
             _listUI.StopThrottle();
-            
-            if (includeFlagsDirty)
-                SaveIncludeFlagsPrefsImmediate();
 
-            if (_model.TargetSkinnedMesh) 
+            if (includeFlagsDirty) SaveIncludeFlagsPrefsImmediate();
+
+            if (_model.TargetSkinnedMesh)
                 DenEmoProjectPrefs.SetString("DenEmo_LastTarget", _model.TargetSkinnedMesh.GetInstanceID().ToString());
-            
+
             DenEmoProjectPrefs.SetString("DenEmo_SaveFolder", saveFolder);
             DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
-            DenEmoProjectPrefs.SetBool("DenEmo_AlignToClip", alignToExistingClipKeys);
-            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded", showOnlyIncluded);
-            DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode", symmetryMode);
-            
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded",      showOnlyIncluded);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyNonZero",       showOnlyNonZero);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyFavorites",     showOnlyFavorites);
+            DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode",          symmetryMode);
+            DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",            autoBackup);
+            DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled",  overwriteSaveEnabled);
+
+            if (overwriteTargetClip != null)
+            {
+                var clipAssetPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
+                DenEmoProjectPrefs.SetString("DenEmo_OverwriteClipGuid",
+                    string.IsNullOrEmpty(clipAssetPath) ? "" : AssetDatabase.AssetPathToGUID(clipAssetPath));
+            }
+            else
+            {
+                DenEmoProjectPrefs.SetString("DenEmo_OverwriteClipGuid", "");
+            }
+
             if (snapshotValues != null && snapshotValues.Count > 0)
             {
                 var parts = new string[snapshotValues.Count];
-                for (int i = 0; i < snapshotValues.Count; i++) parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
+                for (int i = 0; i < snapshotValues.Count; i++)
+                    parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
                 DenEmoProjectPrefs.SetString("DenEmo_Snapshot", string.Join(",", parts));
             }
-            
+
             SaveBlendValuesPrefs();
             SaveCollapsedGroupsPrefs();
         }
@@ -109,71 +148,67 @@ namespace DenEmo
             Repaint();
         }
 
-        private void RefreshListAndCache()
-        {
-            _model.RefreshList(searchText, showOnlyIncluded);
-            LipSyncExclusionRule.ApplyExclusion(_model.TargetSkinnedMesh, _model.Items);
-            LoadIncludeFlagsPrefs();
-            _model.BuildGroups();
-            CreateSnapshot(true);
-            UpdateVisibility();
-        }
-
-        private void UpdateVisibility()
-        {
-            var tokens = ShapeKeyModel.BuildSearchTokens(searchText);
-            _model.UpdateVisibility(tokens, showOnlyIncluded);
-        }
-
-        private void SetStatus(string msg, int level, double autoClearSec = 3.0)
-        {
-            if (level != 0 && autoClearSec == 3.0) autoClearSec = 6.0;
-            statusMessage = msg;
-            statusLevel = level;
-            statusSetAt = EditorApplication.timeSinceStartup;
-            statusAutoClearSec = autoClearSec;
-            Repaint();
-        }
-
-        private void TickStatusAutoClear()
-        {
-            if (statusAutoClearSec <= 0) return;
-            if (!string.IsNullOrEmpty(statusMessage) && EditorApplication.timeSinceStartup - statusSetAt > statusAutoClearSec)
-            {
-                statusMessage = null;
-                statusLevel = 0;
-                statusAutoClearSec = 0;
-                Repaint();
-            }
-        }
+        // ─── OnGUI ───────────────────────────────────────────────────────────
 
         private void OnGUI()
         {
+            DenEmoTheme.Initialize();
             TickStatusAutoClear();
+
+            // ウィンドウ全体を Surface0 で塗る
+            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
+
             DenEmoCommonUI.DrawHeader(this);
             HandleDragAndDrop();
 
-            if (!DrawBasicSettings()) 
+            bool hasTarget = DrawTargetMeshSection();
+            if (!hasTarget)
             {
+                GUILayout.FlexibleSpace();
                 DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
                 return;
             }
 
-            DrawSnapshotAndSearch();
+            DrawAnimationSourceSection();
+            DrawSearchFilterSection();
+
             _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
-            DrawFooter();
-            
+
+            DrawFooterSection();
             DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
+
+            // インクルードフラグの遅延保存
+            if (includeFlagsDirty && EditorApplication.timeSinceStartup - lastIncludeFlagsChangeTime > 0.5)
+                SaveIncludeFlagsPrefsImmediate();
+
+            // フィルター変更検知
+            bool filterChanged = searchText != lastSearchText
+                || showOnlyIncluded  != lastShowOnlyIncluded
+                || showOnlyNonZero   != lastShowOnlyNonZero
+                || showOnlyFavorites != lastShowOnlyFavorites
+                || symmetryMode      != lastSymmetryMode;
+
+            if (filterChanged)
+            {
+                UpdateVisibility();
+                lastSearchText       = searchText;
+                lastShowOnlyIncluded  = showOnlyIncluded;
+                lastShowOnlyNonZero   = showOnlyNonZero;
+                lastShowOnlyFavorites = showOnlyFavorites;
+                lastSymmetryMode      = symmetryMode;
+            }
         }
 
-        private bool DrawBasicSettings()
+        // ─── Sections ────────────────────────────────────────────────────────
+
+        private bool DrawTargetMeshSection()
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(DenEmoLoc.T("ui.section.basic"), EditorStyles.boldLabel);
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "TARGET MESH" : "対象メッシュ");
+
             EditorGUI.BeginChangeCheck();
-            var newSmr = EditorGUILayout.ObjectField(new GUIContent(DenEmoLoc.T("ui.mesh.label"), DenEmoLoc.T("ui.mesh.tooltip")), _model.TargetSkinnedMesh, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
+            var newSmr = EditorGUILayout.ObjectField(
+                new GUIContent(DenEmoLoc.T("ui.mesh.label"), DenEmoLoc.T("ui.mesh.tooltip")),
+                _model.TargetSkinnedMesh, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
             if (EditorGUI.EndChangeCheck())
             {
                 _listUI.StopThrottle();
@@ -189,75 +224,233 @@ namespace DenEmo
 
             if (_model.TargetSkinnedMesh == null)
             {
-                EditorGUILayout.HelpBox(DenEmoLoc.T("ui.mesh.missing"), MessageType.Info);
-                EditorGUILayout.EndVertical();
+                GUILayout.Space(4);
+                GUILayout.Label(DenEmoLoc.T("ui.mesh.missing"), DenEmoTheme.CaptionStyle);
+                DenEmoTheme.EndSection();
                 return false;
             }
 
             if (!_model.TargetSkinnedMesh.gameObject.activeInHierarchy || !_model.TargetSkinnedMesh.enabled)
             {
-                EditorGUILayout.HelpBox(DenEmoLoc.T("ui.mesh.inactive.warn"), MessageType.Warning);
+                GUILayout.Space(2);
+                var warnStyle = new GUIStyle(DenEmoTheme.CaptionStyle);
+                warnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
+                GUILayout.Label("⚠ " + DenEmoLoc.T("ui.mesh.inactive.warn"), warnStyle);
             }
 
             if (_model.Items.Count == 0)
             {
-                EditorGUILayout.HelpBox(DenEmoLoc.T("ui.mesh.noShapes"), MessageType.Info);
-                EditorGUILayout.EndVertical();
+                GUILayout.Space(4);
+                GUILayout.Label(DenEmoLoc.T("ui.mesh.noShapes"), DenEmoTheme.CaptionStyle);
+                DenEmoTheme.EndSection();
                 return false;
             }
 
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            alignToExistingClipKeys = EditorGUILayout.ToggleLeft(
-                new GUIContent(DenEmoLoc.T("ui.align.toggle"), DenEmoLoc.T("ui.align.toggle.tip")), alignToExistingClipKeys);
-            EditorGUILayout.EndHorizontal();
+            DenEmoTheme.EndSection();
+            return true;
+        }
 
-            EditorGUILayout.BeginHorizontal();
-            using (new EditorGUI.DisabledGroupScope(!alignToExistingClipKeys))
-            {
-                EditorGUILayout.LabelField(new GUIContent(DenEmoLoc.T("ui.align.base.label"), DenEmoLoc.T("ui.align.base.tip")), GUILayout.Width(110));
-                baseAlignClip = EditorGUILayout.ObjectField(GUIContent.none, baseAlignClip, typeof(AnimationClip), false) as AnimationClip;
-                using (new EditorGUI.DisabledGroupScope(baseAlignClip == null))
-                {
-                    if (GUILayout.Button(new GUIContent(DenEmoLoc.T("ui.align.apply.button"), DenEmoLoc.T("ui.align.apply.tip")), GUILayout.Width(60)))
-                    {
-                        AlignToBaseClip();
-                    }
-                }
-            }
-            EditorGUILayout.EndHorizontal();
+        private void DrawAnimationSourceSection()
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "ANIMATION SOURCE" : "アニメーション参照");
 
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(new GUIContent(DenEmoLoc.T("ui.applyAnim.label"), DenEmoLoc.T("ui.applyAnim.tip")), GUILayout.Width(120));
-            loadedClip = EditorGUILayout.ObjectField(GUIContent.none, loadedClip, typeof(AnimationClip), false) as AnimationClip;
+            loadedClip = EditorGUILayout.ObjectField(
+                new GUIContent(DenEmoLoc.T("ui.animSource.clip.label"), DenEmoLoc.T("ui.animSource.clip.tip")),
+                loadedClip, typeof(AnimationClip), false) as AnimationClip;
+
+            GUILayout.Space(4);
+
             using (new EditorGUI.DisabledGroupScope(loadedClip == null))
             {
-                if (GUILayout.Button(new GUIContent(DenEmoLoc.T("ui.applyAnim.button"), DenEmoLoc.T("ui.applyAnim.button.tip")), GUILayout.Width(60)))
+                if (GUILayout.Button(
+                    new GUIContent(DenEmoLoc.T("ui.animSource.loadAnim.button"), DenEmoLoc.T("ui.applyAnim.tip")),
+                    DenEmoTheme.ActionButtonStyle))
                 {
                     SetStatus(DenEmoLoc.T("status.applying"), 0, 0);
-                    string applyRes = AnimationExporter.ApplyAnimationToMesh(loadedClip, _model);
-                    if (applyRes == "SUCCESS")
-                    {
-                        SaveBlendValuesPrefs();
-                        SetStatus(DenEmoLoc.T("dlg.apply.done.msg"), 1);
-                    }
-                    else
-                    {
-                        SetStatus(applyRes, 2);
-                    }
+                    string res = AnimationExporter.ApplyAnimationToMesh(loadedClip, _model);
+                    if (res == "SUCCESS") { SaveBlendValuesPrefs(); SetStatus(DenEmoLoc.T("dlg.apply.done.msg"), 1); }
+                    else SetStatus(res, 2);
+                }
+
+                GUILayout.Space(2);
+
+                if (GUILayout.Button(
+                    new GUIContent(DenEmoLoc.T("ui.animSource.alignKeys.button"), DenEmoLoc.T("ui.align.apply.tip")),
+                    DenEmoTheme.ActionButtonStyle))
+                    AlignToBaseClip();
+            }
+
+            DenEmoTheme.EndSection();
+        }
+
+        private void DrawSearchFilterSection()
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SEARCH & FILTER" : "検索・絞り込み");
+
+            // 検索バー
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("🔍", GUILayout.Width(18));
+            GUI.SetNextControlName("SearchField");
+            searchText = EditorGUILayout.TextField(searchText, GUILayout.ExpandWidth(true));
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
+                {
+                    searchText = string.Empty;
+                    DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
+                    GUI.FocusControl(null);
+                    Repaint();
                 }
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
 
-            return true;
+            GUILayout.Space(6);
+
+            // フィルターチップ行
+            EditorGUILayout.BeginHorizontal();
+
+            showOnlyFavorites = DrawFilterChip(
+                showOnlyFavorites,
+                DenEmoLoc.EnglishMode ? "★ Fav" : "★ お気に入り",
+                "DenEmo_ShowOnlyFavorites");
+
+            GUILayout.Space(4);
+            showOnlyIncluded = DrawFilterChip(
+                showOnlyIncluded,
+                DenEmoLoc.EnglishMode ? "✓ Enabled" : "✓ 有効のみ",
+                "DenEmo_ShowOnlyIncluded");
+
+            GUILayout.Space(4);
+            showOnlyNonZero = DrawFilterChip(
+                showOnlyNonZero,
+                DenEmoLoc.EnglishMode ? "≠0 Non-zero" : "≠0 非ゼロ",
+                "DenEmo_ShowOnlyNonZero");
+
+            GUILayout.Space(4);
+            symmetryMode = DrawFilterChip(
+                symmetryMode,
+                DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",
+                "DenEmo_SymmetryMode");
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+
+            DenEmoTheme.EndSection();
+        }
+
+        private bool DrawFilterChip(bool current, string label, string prefsKey)
+        {
+            var style = current ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+            if (GUILayout.Button(label, style, GUILayout.ExpandWidth(false)))
+            {
+                current = !current;
+                DenEmoProjectPrefs.SetBool(prefsKey, current);
+                Repaint();
+            }
+            return current;
+        }
+
+        private void DrawFooterSection()
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE SETTINGS" : "保存設定");
+
+            // 保存先フォルダ
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label(DenEmoLoc.T("ui.footer.saveTo"), DenEmoTheme.CaptionStyle, GUILayout.Width(90));
+            saveFolder = EditorGUILayout.TextField(saveFolder, GUILayout.ExpandWidth(true));
+            if (GUILayout.Button(DenEmoLoc.T("ui.footer.browse"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(46)))
+            {
+                var newPath = EditorUtility.OpenFolderPanel("フォルダを選択", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(newPath))
+                    saveFolder = newPath.StartsWith(Application.dataPath)
+                        ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
+            }
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(2);
+
+            overwriteSaveEnabled = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    DenEmoLoc.T("ui.footer.overwriteEnable"),
+                    DenEmoLoc.T("ui.footer.overwriteEnable.tip")),
+                overwriteSaveEnabled, DenEmoTheme.CaptionStyle);
+
+            if (overwriteSaveEnabled)
+            {
+                GUILayout.Space(2);
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label(DenEmoLoc.T("ui.footer.overwriteTarget"), DenEmoTheme.CaptionStyle, GUILayout.Width(52));
+                overwriteTargetClip = EditorGUILayout.ObjectField(GUIContent.none, overwriteTargetClip, typeof(AnimationClip), false) as AnimationClip;
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(2);
+                autoBackup = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        DenEmoLoc.EnglishMode ? "Auto backup on overwrite" : "上書き時に自動バックアップ",
+                        DenEmoLoc.EnglishMode ? "Copies the existing .anim file to _backups/ before overwriting." : "上書き保存前に既存ファイルを _backups/ フォルダに複製します。"),
+                    autoBackup, DenEmoTheme.CaptionStyle);
+            }
+
+            DenEmoTheme.DrawSeparator(0);
+            GUILayout.Space(6);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(6);
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.footer.saveAnim"), DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
+            {
+                if (overwriteSaveEnabled && overwriteTargetClip != null)
+                {
+                    string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
+                    SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
+                    var err = AnimationExporter.SaveAnimationClipToPath(_model, clipPath, out string path, autoBackup);
+                    if (err != null) SetStatus(err, 3);
+                    else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
+                }
+                else
+                {
+                    SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
+                    var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path, autoBackup);
+                    if (err != null) SetStatus(err, 3);
+                    else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
+                }
+            }
+
+            GUILayout.Space(4);
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.SecondaryButtonStyle, GUILayout.Width(70)))
+                RefreshListAndCache();
+
+            GUILayout.Space(6);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6);
+
+            DenEmoTheme.EndSection();
+        }
+
+        // ─── Helpers ─────────────────────────────────────────────────────────
+
+        private void RefreshListAndCache()
+        {
+            _model.RefreshList(searchText, showOnlyIncluded);
+            LipSyncExclusionRule.ApplyExclusion(_model.TargetSkinnedMesh, _model.Items);
+            LoadFavoritesPrefs();
+            LoadIncludeFlagsPrefs();
+            _model.BuildGroups();
+            CreateSnapshot(true);
+            UpdateVisibility();
+        }
+
+        private void UpdateVisibility()
+        {
+            var tokens = ShapeKeyModel.BuildSearchTokens(searchText);
+            _model.UpdateVisibility(tokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites);
         }
 
         private void AlignToBaseClip()
         {
             var pairs = new HashSet<string>();
-            string currentSmrPath = ""; // Path relative to root
+            string currentSmrPath = "";
             if (_model.TargetSkinnedMesh != null)
             {
                 var parts = new List<string>();
@@ -268,7 +461,7 @@ namespace DenEmo
                 currentSmrPath = string.Join("/", parts.ToArray());
             }
 
-            foreach (var b in AnimationUtility.GetCurveBindings(baseAlignClip))
+            foreach (var b in AnimationUtility.GetCurveBindings(loadedClip))
             {
                 if (b.type != typeof(SkinnedMeshRenderer)) continue;
                 if (!b.propertyName.StartsWith("blendShape.")) continue;
@@ -288,112 +481,21 @@ namespace DenEmo
             SetStatus(DenEmoLoc.T("status.alignedSavedTargets"), 1);
         }
 
-        private void DrawSnapshotAndSearch()
-        {
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            var newShowOnly = EditorGUILayout.ToggleLeft(new GUIContent(DenEmoLoc.T("ui.filter.showIncluded"), DenEmoLoc.T("ui.filter.showIncluded.tip")), showOnlyIncluded);
-            if (newShowOnly != showOnlyIncluded)
-            {
-                showOnlyIncluded = newShowOnly;
-                DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded", showOnlyIncluded);
-            }
-            GUILayout.Space(12);
-            var newSym = EditorGUILayout.ToggleLeft(new GUIContent(DenEmoLoc.T("ui.symmetry.label"), DenEmoLoc.T("ui.symmetry.tip")), symmetryMode);
-            if (newSym != symmetryMode)
-            {
-                symmetryMode = newSym;
-                DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode", symmetryMode);
-                Repaint();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(DenEmoLoc.T("ui.snapshot.create"), GUILayout.Height(22))) CreateSnapshot(false);
-            if (GUILayout.Button(DenEmoLoc.T("ui.snapshot.restore"), GUILayout.Height(22))) RestoreSnapshot();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space(4f);
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(DenEmoLoc.T("ui.section.search"), EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            GUI.SetNextControlName("SearchField");
-            searchText = EditorGUILayout.TextField(searchText, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button(DenEmoLoc.T("ui.search.clear"), GUILayout.Width(60)))
-            {
-                searchText = string.Empty;
-                DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
-                GUI.FocusControl(null);
-                Repaint();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            if (searchText != lastSearchText || showOnlyIncluded != lastShowOnlyIncluded)
-            {
-                UpdateVisibility();
-                lastSearchText = searchText;
-                lastShowOnlyIncluded = showOnlyIncluded;
-            }
-
-            if (includeFlagsDirty && EditorApplication.timeSinceStartup - lastIncludeFlagsChangeTime > 0.5)
-            {
-                SaveIncludeFlagsPrefsImmediate();
-            }
-
-            EditorGUILayout.Space(4f);
-        }
-
-        private void DrawFooter()
-        {
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.saveAnim"), GUILayout.Height(30)))
-            {
-                SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
-                var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path);
-                if (err != null) SetStatus(err, 3);
-                else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
-            }
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), GUILayout.Width(80), GUILayout.Height(30)))
-            {
-                RefreshListAndCache();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(DenEmoLoc.T("ui.footer.saveTo"), GUILayout.Width(100));
-            saveFolder = EditorGUILayout.TextField(saveFolder);
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.browse"), GUILayout.Width(80)))
-            {
-                var newPath = EditorUtility.OpenFolderPanel("フォルダを選択", Application.dataPath, "");
-                if (!string.IsNullOrEmpty(newPath))
-                {
-                    saveFolder = newPath.StartsWith(Application.dataPath) ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-        }
-
         private void HandleDragAndDrop()
         {
             Event evt = Event.current;
             if (evt.type != EventType.DragUpdated && evt.type != EventType.DragPerform) return;
-            
+
             Rect dropArea = new Rect(0, 0, position.width, position.height);
             if (!dropArea.Contains(evt.mousePosition)) return;
-            
+
             SkinnedMeshRenderer foundSmr = null;
             foreach (var obj in DragAndDrop.objectReferences)
             {
                 if (obj is GameObject go) foundSmr = go.GetComponent<SkinnedMeshRenderer>();
                 else if (obj is SkinnedMeshRenderer smr) foundSmr = smr;
-                
                 if (foundSmr != null) break;
             }
-            
             if (foundSmr == null) return;
 
             DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
@@ -413,12 +515,74 @@ namespace DenEmo
             evt.Use();
         }
 
-        // --- Preferences and Snapshots ---
+        private void SetStatus(string msg, int level, double autoClearSec = 3.0)
+        {
+            if (level != 0 && autoClearSec == 3.0) autoClearSec = 6.0;
+            statusMessage     = msg;
+            statusLevel       = level;
+            statusSetAt       = EditorApplication.timeSinceStartup;
+            statusAutoClearSec = autoClearSec;
+            Repaint();
+        }
+
+        private void TickStatusAutoClear()
+        {
+            if (statusAutoClearSec <= 0) return;
+            if (!string.IsNullOrEmpty(statusMessage) &&
+                EditorApplication.timeSinceStartup - statusSetAt > statusAutoClearSec)
+            {
+                statusMessage     = null;
+                statusLevel       = 0;
+                statusAutoClearSec = 0;
+                Repaint();
+            }
+        }
+
+        // ─── Favorites ───────────────────────────────────────────────────────
+
+        private string GetFavoritesKey()
+        {
+            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
+            string meshPath = AssetDatabase.GetAssetPath(_model.TargetSkinnedMesh.sharedMesh);
+            string guid = string.IsNullOrEmpty(meshPath) ? _model.TargetSkinnedMesh.sharedMesh.name : AssetDatabase.AssetPathToGUID(meshPath);
+            return "DenEmo_Fav|" + guid;
+        }
+
+        private void LoadFavoritesPrefs()
+        {
+            var key = GetFavoritesKey();
+            if (string.IsNullOrEmpty(key)) return;
+            if (!EditorPrefs.HasKey(key)) return;
+            var s = EditorPrefs.GetString(key, "");
+            if (string.IsNullOrEmpty(s)) return;
+            var names = new HashSet<string>(s.Split(','));
+            foreach (var item in _model.Items)
+                item.IsFavorite = names.Contains(item.Name);
+        }
+
+        private void SaveFavoritesPrefs()
+        {
+            var key = GetFavoritesKey();
+            if (string.IsNullOrEmpty(key)) return;
+            var favorites = new List<string>();
+            foreach (var item in _model.Items)
+                if (item.IsFavorite) favorites.Add(item.Name);
+            EditorPrefs.SetString(key, string.Join(",", favorites));
+        }
+
+        private void OnFavoriteChanged(string shapeName, bool isFavorite)
+        {
+            SaveFavoritesPrefs();
+            if (showOnlyFavorites) UpdateVisibility();
+            Repaint();
+        }
+
+        // ─── Preferences & Snapshots ─────────────────────────────────────────
 
         private string GetBlendPrefsKey()
         {
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
-            string scene = _model.TargetObject ? _model.TargetObject.scene.name : "";
+            string scene    = _model.TargetObject ? _model.TargetObject.scene.name : "";
             string meshName = _model.TargetSkinnedMesh.sharedMesh.name;
             return $"DenEmo_Values|{scene}|{meshName}";
         }
@@ -428,7 +592,8 @@ namespace DenEmo
             var key = GetBlendPrefsKey();
             if (string.IsNullOrEmpty(key)) return;
             var parts = new string[_model.Items.Count];
-            for (int i = 0; i < _model.Items.Count; i++) parts[i] = _model.Items[i].Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            for (int i = 0; i < _model.Items.Count; i++)
+                parts[i] = _model.Items[i].Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
             EditorPrefs.SetString(key, string.Join(",", parts));
         }
 
@@ -451,7 +616,8 @@ namespace DenEmo
             if (string.IsNullOrEmpty(key)) return;
             key += "|IncludeFlags";
             var parts = new string[_model.Items.Count];
-            for (int i = 0; i < _model.Items.Count; i++) parts[i] = _model.Items[i].IsIncluded ? "1" : "0";
+            for (int i = 0; i < _model.Items.Count; i++)
+                parts[i] = _model.Items[i].IsIncluded ? "1" : "0";
             EditorPrefs.SetString(key, string.Join(",", parts));
             includeFlagsDirty = false;
         }
@@ -461,8 +627,7 @@ namespace DenEmo
             collapsedGroups.Clear();
             var s = DenEmoProjectPrefs.GetString("DenEmo_GroupsCollapsed", "");
             if (string.IsNullOrEmpty(s)) return;
-            var parts = s.Split(new char[] { '\n', '\r', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var p in parts)
+            foreach (var p in s.Split(new char[] { '\n', '\r', ',' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var k = p.Trim();
                 if (k.Length > 0) collapsedGroups.Add(k);
@@ -471,8 +636,8 @@ namespace DenEmo
 
         private void SaveCollapsedGroupsPrefs()
         {
-            if (collapsedGroups.Count == 0) DenEmoProjectPrefs.SetString("DenEmo_GroupsCollapsed", "");
-            else DenEmoProjectPrefs.SetString("DenEmo_GroupsCollapsed", string.Join(",", collapsedGroups));
+            DenEmoProjectPrefs.SetString("DenEmo_GroupsCollapsed",
+                collapsedGroups.Count == 0 ? "" : string.Join(",", collapsedGroups));
         }
 
         private void CreateSnapshot(bool loadTime)
@@ -483,7 +648,8 @@ namespace DenEmo
             if (!loadTime)
             {
                 var parts = new string[snapshotValues.Count];
-                for (int i = 0; i < snapshotValues.Count; i++) parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
+                for (int i = 0; i < snapshotValues.Count; i++)
+                    parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
                 DenEmoProjectPrefs.SetString("DenEmo_Snapshot", string.Join(",", parts));
             }
         }
@@ -497,10 +663,10 @@ namespace DenEmo
                 {
                     var parts = s.Split(',');
                     snapshotValues = new List<float>();
-                    for (int i = 0; i < parts.Length; i++)
+                    foreach (var p in parts)
                     {
-                        if (float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) snapshotValues.Add(f);
-                        else snapshotValues.Add(0f);
+                        snapshotValues.Add(float.TryParse(p, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0f);
                     }
                 }
             }
@@ -509,7 +675,8 @@ namespace DenEmo
             for (int i = 0; i < n; i++)
             {
                 _model.Items[i].Value = snapshotValues[i];
-                if (_model.TargetSkinnedMesh) _model.TargetSkinnedMesh.SetBlendShapeWeight(i, snapshotValues[i]);
+                if (_model.TargetSkinnedMesh)
+                    _model.TargetSkinnedMesh.SetBlendShapeWeight(i, snapshotValues[i]);
             }
             SaveBlendValuesPrefs();
         }

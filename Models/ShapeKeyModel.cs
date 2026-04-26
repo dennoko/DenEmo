@@ -50,12 +50,12 @@ namespace DenEmo.Models
             }
         }
 
-        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded)
+        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero = false, bool showOnlyFavorites = false)
         {
             foreach (var item in Items)
             {
                 item.IsVisible = false;
-                
+
                 if (item.IsVrcShape || item.IsLipSyncShape)
                     continue;
 
@@ -63,6 +63,12 @@ namespace DenEmo.Models
                     continue;
 
                 if (showOnlyIncluded && !item.IsIncluded)
+                    continue;
+
+                if (showOnlyNonZero && Mathf.Approximately(item.Value, 0f))
+                    continue;
+
+                if (showOnlyFavorites && !item.IsFavorite)
                     continue;
 
                 item.IsVisible = true;

@@ -22,7 +22,7 @@ namespace DenEmo.Core
             return string.Join("/", parts.ToArray());
         }
 
-        public static string SaveAnimationClip(ShapeKeyModel model, string saveFolder, out string generatedPath)
+        public static string SaveAnimationClip(ShapeKeyModel model, string saveFolder, out string generatedPath, bool autoBackup = false)
         {
             generatedPath = null;
             if (model.TargetSkinnedMesh == null) return DenEmoLoc.T("dlg.apply.noTarget");
@@ -34,19 +34,31 @@ namespace DenEmo.Core
 
             string defaultName = model.TargetObject ? model.TargetObject.name + "_blendshape" : DenEmoLoc.T("save.panel.defaultName");
             string path = EditorUtility.SaveFilePanelInProject(DenEmoLoc.T("save.panel.title"), defaultName + ".anim", "anim", DenEmoLoc.T("save.panel.hint"), saveFolder);
-            
+
             if (string.IsNullOrEmpty(path)) return null;
 
             string currentSmrPath = GetRelativePath(model.TargetSkinnedMesh.transform, model.TargetSkinnedMesh.transform.root);
 
-            // 既存アセットがあれば参照を維持したまま上書き、なければ新規作成
             var existingClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
             AnimationClip clip;
             bool isOverwrite;
 
             if (existingClip != null)
             {
-                // 既存クリップの全カーブをクリア（参照は保持したまま中身だけ更新）
+                // 上書き前に自動バックアップ
+                if (autoBackup)
+                {
+                    string dir        = Path.GetDirectoryName(path).Replace('\\', '/');
+                    string backupDir  = dir + "/_backups";
+                    string timestamp  = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string backupPath = backupDir + "/" + Path.GetFileNameWithoutExtension(path) + "_" + timestamp + ".anim";
+                    if (!Directory.Exists(backupDir))
+                    {
+                        try { Directory.CreateDirectory(backupDir); AssetDatabase.Refresh(); } catch { }
+                    }
+                    AssetDatabase.CopyAsset(path, backupPath);
+                }
+
                 clip = existingClip;
                 clip.ClearCurves();
                 clip.frameRate = 60;
@@ -100,6 +112,88 @@ namespace DenEmo.Core
             
             generatedPath = path;
             return null; // indicates success
+        }
+
+        public static string SaveAnimationClipToPath(ShapeKeyModel model, string path, out string generatedPath, bool autoBackup = false)
+        {
+            generatedPath = null;
+            if (model.TargetSkinnedMesh == null) return DenEmoLoc.T("dlg.apply.noTarget");
+            if (string.IsNullOrEmpty(path)) return DenEmoLoc.T("dlg.apply.noClip");
+
+            string currentSmrPath = GetRelativePath(model.TargetSkinnedMesh.transform, model.TargetSkinnedMesh.transform.root);
+
+            var existingClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            AnimationClip clip;
+
+            if (existingClip != null)
+            {
+                if (autoBackup)
+                {
+                    string dir       = Path.GetDirectoryName(path).Replace('\\', '/');
+                    string backupDir = dir + "/_backups";
+                    string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string backupPath = backupDir + "/" + Path.GetFileNameWithoutExtension(path) + "_" + timestamp + ".anim";
+                    if (!Directory.Exists(backupDir))
+                    {
+                        try { Directory.CreateDirectory(backupDir); AssetDatabase.Refresh(); } catch { }
+                    }
+                    AssetDatabase.CopyAsset(path, backupPath);
+                }
+
+                clip = existingClip;
+                clip.ClearCurves();
+                clip.frameRate = 60;
+            }
+            else
+            {
+                clip = new AnimationClip { frameRate = 60 };
+            }
+
+            foreach (var item in model.Items)
+            {
+                if (!item.IsIncluded || item.IsVrcShape || item.IsLipSyncShape)
+                    continue;
+
+                float current = model.TargetSkinnedMesh.GetBlendShapeWeight(item.Index);
+                string prop = "blendShape." + item.Name;
+
+                var binding = new EditorCurveBinding
+                {
+                    type = typeof(SkinnedMeshRenderer),
+                    path = currentSmrPath,
+                    propertyName = prop
+                };
+
+                var key = new Keyframe[2];
+                key[0] = new Keyframe(0f, current);
+                key[1] = new Keyframe(0.0001f, current);
+                AnimationUtility.SetEditorCurve(clip, binding, new AnimationCurve(key));
+            }
+
+            if (existingClip != null)
+            {
+                EditorUtility.SetDirty(clip);
+            }
+            else
+            {
+                string dir2 = Path.GetDirectoryName(path);
+                if (!Directory.Exists(dir2))
+                {
+                    try { Directory.CreateDirectory(dir2); } catch { }
+                }
+                AssetDatabase.CreateAsset(clip, path);
+            }
+            AssetDatabase.SaveAssets();
+
+            var asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (asset != null)
+            {
+                EditorGUIUtility.PingObject(asset);
+                Selection.activeObject = asset;
+            }
+
+            generatedPath = path;
+            return null;
         }
 
         public static string ApplyAnimationToMesh(AnimationClip clip, ShapeKeyModel model)
