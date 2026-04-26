@@ -196,6 +196,61 @@ namespace DenEmo.Core
             return null;
         }
 
+        /// <summary>
+        /// Saves a multi-frame AnimationClip that has already been built in memory to the given asset path.
+        /// If the clip is already the asset at that path it is simply marked dirty.
+        /// If a different clip already exists at that path its curves are replaced.
+        /// If no asset exists yet one is created.
+        /// Returns null on success, an error message string on failure.
+        /// </summary>
+        public static string SaveMultiFrameClip(AnimationClip clip, string path)
+        {
+            if (clip == null)                      return DenEmoLoc.T("dlg.apply.noClip");
+            if (string.IsNullOrEmpty(path))        return DenEmoLoc.T("dlg.apply.noClip");
+
+            var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+
+            if (existing == clip)
+            {
+                // The clip is already the asset — just persist it.
+                EditorUtility.SetDirty(clip);
+                AssetDatabase.SaveAssets();
+            }
+            else if (existing != null)
+            {
+                // A different asset lives at that path — overwrite its curves.
+                Undo.RecordObject(existing, "Save Animation Clip");
+                existing.ClearCurves();
+                existing.frameRate = clip.frameRate;
+                foreach (var b in AnimationUtility.GetCurveBindings(clip))
+                {
+                    var curve = AnimationUtility.GetEditorCurve(clip, b);
+                    if (curve != null) AnimationUtility.SetEditorCurve(existing, b, curve);
+                }
+                EditorUtility.SetDirty(existing);
+                AssetDatabase.SaveAssets();
+            }
+            else
+            {
+                // No asset yet — create one.
+                string dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    try { Directory.CreateDirectory(dir); } catch { }
+                }
+                AssetDatabase.CreateAsset(clip, path);
+                AssetDatabase.SaveAssets();
+            }
+
+            var asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (asset != null)
+            {
+                EditorGUIUtility.PingObject(asset);
+                Selection.activeObject = asset;
+            }
+            return null;
+        }
+
         public static string ApplyAnimationToMesh(AnimationClip clip, ShapeKeyModel model)
         {
             if (clip == null) return DenEmoLoc.T("dlg.apply.noClip");

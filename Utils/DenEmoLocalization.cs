@@ -110,6 +110,15 @@ public static class DenEmoLoc
         ["save.panel.title"] = "アニメーションを保存",
         ["save.panel.defaultName"] = "blendshape_anim",
         ["save.panel.hint"] = "生成されたアニメーションを保存",
+
+        // Animation mode
+        ["ui.animMode.clip.label"] = "クリップ",
+        ["ui.animMode.clip.new"]   = "新規",
+        ["ui.animMode.clip.hint"]  = "クリップを選択するか、「新規」で作成してください。",
+        ["ui.animMode.length.label"] = "長さ(s):",
+        ["ui.animMode.interp.label"] = "補間:",
+        ["ui.animMode.tab.pose"]     = "ポーズ",
+        ["ui.animMode.tab.anim"]     = "アニメーション",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -200,6 +209,15 @@ public static class DenEmoLoc
         ["save.panel.title"] = "Save Animation",
         ["save.panel.defaultName"] = "blendshape_anim",
         ["save.panel.hint"] = "Save generated animation",
+
+        // Animation mode
+        ["ui.animMode.clip.label"] = "Clip",
+        ["ui.animMode.clip.new"]   = "New",
+        ["ui.animMode.clip.hint"]  = "Select a clip or create a new one.",
+        ["ui.animMode.length.label"] = "Length(s):",
+        ["ui.animMode.interp.label"] = "Interp:",
+        ["ui.animMode.tab.pose"]     = "POSE",
+        ["ui.animMode.tab.anim"]     = "ANIMATION",
     };
 
     public static string T(string key)

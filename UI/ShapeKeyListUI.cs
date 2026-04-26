@@ -50,7 +50,7 @@ namespace DenEmo.UI
             _pendingApplies.Clear();
         }
 
-        public void DrawList(ShapeKeyModel model, ref Vector2 scroll, bool treatAsGroupUI, HashSet<string> collapsedGroups, bool symmetryMode, EditorWindow window)
+        public void DrawList(ShapeKeyModel model, ref Vector2 scroll, bool treatAsGroupUI, HashSet<string> collapsedGroups, bool symmetryMode, EditorWindow window, AnimationDrawContext animContext = null)
         {
             DenEmoTheme.Initialize();
             ApplyPending(model.TargetSkinnedMesh);
@@ -101,8 +101,8 @@ namespace DenEmo.UI
                     if (collapsedGroups.Contains(seg.Key)) continue;
                 }
 
-                if (symmetryMode) DrawSymmetrySegment(model, start, end, treatAsGroup, window);
-                else              DrawNormalSegment(model, start, end, treatAsGroup, window);
+                if (symmetryMode) DrawSymmetrySegment(model, start, end, treatAsGroup, window, animContext);
+                else              DrawNormalSegment(model, start, end, treatAsGroup, window, animContext);
             }
 
             if (!anyVisible && model.Items.Count > 0)
@@ -159,7 +159,7 @@ namespace DenEmo.UI
             GUI.Label(countRect, $"{enabledCount}/{visibleCount}  {suffix}", DenEmoTheme.CaptionStyle);
         }
 
-        private void DrawSymmetrySegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window)
+        private void DrawSymmetrySegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window, AnimationDrawContext animContext)
         {
             var itemsDict = new Dictionary<string, (ShapeKeyItem L, ShapeKeyItem R)>();
             var singles   = new List<ShapeKeyItem>();
@@ -192,30 +192,30 @@ namespace DenEmo.UI
                 var right = kvp.Value.R;
 
                 if (left != null && right != null && Mathf.Abs(left.Value - right.Value) <= 0.001f)
-                    DrawMergedRow(kvp.Key, left, right, spaceLeft, model);
+                    DrawMergedRow(kvp.Key, left, right, spaceLeft, model, animContext);
                 else
                 {
-                    if (left  != null) DrawSingleRow(left,  spaceLeft, model);
-                    if (right != null) DrawSingleRow(right, spaceLeft, model);
+                    if (left  != null) DrawSingleRow(left,  spaceLeft, model, animContext);
+                    if (right != null) DrawSingleRow(right, spaceLeft, model, animContext);
                 }
             }
 
-            foreach (var s in singles) DrawSingleRow(s, spaceLeft, model);
+            foreach (var s in singles) DrawSingleRow(s, spaceLeft, model, animContext);
         }
 
-        private void DrawNormalSegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window)
+        private void DrawNormalSegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window, AnimationDrawContext animContext)
         {
             for (int i = start; i < end; i++)
             {
                 var item = model.Items[i];
                 if (!item.IsVisible || item.IsLipSyncShape) continue;
-                DrawSingleRow(item, spaceLeft, model);
+                DrawSingleRow(item, spaceLeft, model, animContext);
             }
         }
 
         // ─── 行描画 ───────────────────────────────────────────────────────────
 
-        private void DrawMergedRow(string baseName, ShapeKeyItem left, ShapeKeyItem right, bool spaceLeft, ShapeKeyModel model)
+        private void DrawMergedRow(string baseName, ShapeKeyItem left, ShapeKeyItem right, bool spaceLeft, ShapeKeyModel model, AnimationDrawContext animContext)
         {
             EditorGUILayout.BeginHorizontal();
             if (spaceLeft) GUILayout.Space(20);
@@ -237,9 +237,15 @@ namespace DenEmo.UI
 
             if (GUILayout.Button("0", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
             {
-                if (model.TargetSkinnedMesh != null) Undo.RecordObject(model.TargetSkinnedMesh, "Reset Shape Key");
+                if (animContext == null && model.TargetSkinnedMesh != null)
+                    Undo.RecordObject(model.TargetSkinnedMesh, "Reset Shape Key");
                 left.Value  = 0f; right.Value = 0f;
-                if (model.TargetSkinnedMesh)
+                if (animContext != null)
+                {
+                    animContext.OnValueChanged?.Invoke(left,  model, 0f);
+                    animContext.OnValueChanged?.Invoke(right, model, 0f);
+                }
+                else if (model.TargetSkinnedMesh)
                 {
                     model.TargetSkinnedMesh.SetBlendShapeWeight(left.Index,  0f);
                     model.TargetSkinnedMesh.SetBlendShapeWeight(right.Index, 0f);
@@ -253,7 +259,7 @@ namespace DenEmo.UI
             bool changed = EditorGUI.EndChangeCheck();
             bool isHot = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
 
-            if (changed && isHot && (!isSliderDragging || currentDraggingIndex != left.Index))
+            if (animContext == null && changed && isHot && (!isSliderDragging || currentDraggingIndex != left.Index))
             {
                 if (model.TargetSkinnedMesh != null) Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
                 isSliderDragging = true;
@@ -262,18 +268,27 @@ namespace DenEmo.UI
 
             if (changed)
             {
-                if (!isHot && !isSliderDragging && model.TargetSkinnedMesh != null)
-                    Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
-                left.Value  = newValue;
-                right.Value = newValue;
-                if (model.TargetSkinnedMesh)
+                if (animContext != null)
                 {
-                    if (isHot || isSliderDragging) { QueuePendingApply(left.Index, newValue); QueuePendingApply(right.Index, newValue); }
-                    else { model.TargetSkinnedMesh.SetBlendShapeWeight(left.Index, newValue); model.TargetSkinnedMesh.SetBlendShapeWeight(right.Index, newValue); }
+                    // Animation mode: route through context (left & right separately)
+                    animContext.OnValueChanged?.Invoke(left,  model, newValue);
+                    animContext.OnValueChanged?.Invoke(right, model, newValue);
+                }
+                else
+                {
+                    if (!isHot && !isSliderDragging && model.TargetSkinnedMesh != null)
+                        Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
+                    left.Value  = newValue;
+                    right.Value = newValue;
+                    if (model.TargetSkinnedMesh)
+                    {
+                        if (isHot || isSliderDragging) { QueuePendingApply(left.Index, newValue); QueuePendingApply(right.Index, newValue); }
+                        else { model.TargetSkinnedMesh.SetBlendShapeWeight(left.Index, newValue); model.TargetSkinnedMesh.SetBlendShapeWeight(right.Index, newValue); }
+                    }
                 }
             }
 
-            if (isSliderDragging && currentDraggingIndex == left.Index && !isHot)
+            if (animContext == null && isSliderDragging && currentDraggingIndex == left.Index && !isHot)
             {
                 isSliderDragging = false; currentDraggingIndex = -1; StopThrottle();
                 if (model.TargetSkinnedMesh)
@@ -283,11 +298,24 @@ namespace DenEmo.UI
                 }
             }
 
+            // Animation mode: keyframe toggle button (uses left shape as representative)
+            if (animContext != null)
+            {
+                bool hasKey   = animContext.HasKeyframeAtCurrentTime?.Invoke(left.Name) ?? false;
+                string kfIcon = hasKey ? "◆" : "◇";
+                var    kfStyle = hasKey ? DenEmoTheme.FavOnStyle : DenEmoTheme.FavOffStyle;
+                if (GUILayout.Button(kfIcon, kfStyle, GUILayout.Width(18)))
+                {
+                    animContext.OnKeyframeToggle?.Invoke(left, model);
+                    animContext.OnKeyframeToggle?.Invoke(right, model);
+                }
+            }
+
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(5f);
         }
 
-        private void DrawSingleRow(ShapeKeyItem item, bool spaceLeft, ShapeKeyModel model)
+        private void DrawSingleRow(ShapeKeyItem item, bool spaceLeft, ShapeKeyModel model, AnimationDrawContext animContext = null)
         {
             EditorGUILayout.BeginHorizontal();
             if (spaceLeft) GUILayout.Space(20);
@@ -307,7 +335,11 @@ namespace DenEmo.UI
 
             if (GUILayout.Button("0", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
             {
-                if (item.Value != 0f)
+                if (animContext != null)
+                {
+                    animContext.OnValueChanged?.Invoke(item, model, 0f);
+                }
+                else if (item.Value != 0f)
                 {
                     if (model.TargetSkinnedMesh != null) Undo.RecordObject(model.TargetSkinnedMesh, "Reset Shape Key");
                     item.Value = 0f;
@@ -322,7 +354,7 @@ namespace DenEmo.UI
             bool changed = EditorGUI.EndChangeCheck();
             bool isHot = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
 
-            if (changed && isHot && (!isSliderDragging || currentDraggingIndex != item.Index))
+            if (animContext == null && changed && isHot && (!isSliderDragging || currentDraggingIndex != item.Index))
             {
                 if (model.TargetSkinnedMesh != null) Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
                 isSliderDragging = true;
@@ -331,20 +363,37 @@ namespace DenEmo.UI
 
             if (changed)
             {
-                if (!isHot && !isSliderDragging && model.TargetSkinnedMesh != null)
-                    Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
-                item.Value = newValue;
-                if (model.TargetSkinnedMesh)
+                if (animContext != null)
                 {
-                    if (isHot || isSliderDragging) QueuePendingApply(item.Index, newValue);
-                    else model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, newValue);
+                    animContext.OnValueChanged?.Invoke(item, model, newValue);
+                }
+                else
+                {
+                    if (!isHot && !isSliderDragging && model.TargetSkinnedMesh != null)
+                        Undo.RecordObject(model.TargetSkinnedMesh, "Change Shape Key");
+                    item.Value = newValue;
+                    if (model.TargetSkinnedMesh)
+                    {
+                        if (isHot || isSliderDragging) QueuePendingApply(item.Index, newValue);
+                        else model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, newValue);
+                    }
                 }
             }
 
-            if (isSliderDragging && currentDraggingIndex == item.Index && !isHot)
+            if (animContext == null && isSliderDragging && currentDraggingIndex == item.Index && !isHot)
             {
                 isSliderDragging = false; currentDraggingIndex = -1; StopThrottle();
                 if (model.TargetSkinnedMesh) model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, item.Value);
+            }
+
+            // Animation mode: keyframe toggle button ◆/◇
+            if (animContext != null)
+            {
+                bool hasKey   = animContext.HasKeyframeAtCurrentTime?.Invoke(item.Name) ?? false;
+                string kfIcon = hasKey ? "◆" : "◇";
+                var    kfStyle = hasKey ? DenEmoTheme.FavOnStyle : DenEmoTheme.FavOffStyle;
+                if (GUILayout.Button(kfIcon, kfStyle, GUILayout.Width(18)))
+                    animContext.OnKeyframeToggle?.Invoke(item, model);
             }
 
             EditorGUILayout.EndHorizontal();

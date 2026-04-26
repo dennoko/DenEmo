@@ -11,6 +11,12 @@ namespace DenEmo
 {
     public class DenEmoWindow : EditorWindow
     {
+        // ─── Mode ─────────────────────────────────────────────────────────────
+
+        private enum EditorMode { Pose, Animation }
+        private EditorMode _currentMode = EditorMode.Pose;
+
+        // ─── Pose mode state ──────────────────────────────────────────────────
         [MenuItem("Tools/DenEmo")]
         public static void ShowWindow()
         {
@@ -18,8 +24,9 @@ namespace DenEmo
             w.minSize = new Vector2(380, 400);
         }
 
-        private ShapeKeyModel _model = new ShapeKeyModel();
-        private ShapeKeyListUI _listUI = new ShapeKeyListUI();
+        private ShapeKeyModel  _model   = new ShapeKeyModel();
+        private ShapeKeyListUI _listUI  = new ShapeKeyListUI();
+        private AnimationModeUI _animModeUI = new AnimationModeUI();
 
         private string saveFolder = "Assets/Generated_Animations";
         private string searchText = string.Empty;
@@ -87,8 +94,26 @@ namespace DenEmo
             }
 
             Undo.undoRedoPerformed += OnUndoRedo;
+            EditorApplication.update += OnEditorUpdate;
             SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
             LoadCollapsedGroupsPrefs();
+
+            // Restore mode
+            _currentMode = (EditorMode)DenEmoProjectPrefs.GetInt("DenEmo_Mode", 0);
+
+            // Restore animation clip reference
+            var animClipGuid = DenEmoProjectPrefs.GetString("DenEmo_AnimClipGuid", "");
+            if (!string.IsNullOrEmpty(animClipGuid))
+            {
+                var animClipPath = AssetDatabase.GUIDToAssetPath(animClipGuid);
+                if (!string.IsNullOrEmpty(animClipPath))
+                {
+                    var animClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(animClipPath);
+                    if (animClip != null) _animModeUI.ClipModel.SetClip(animClip);
+                }
+            }
+
+            _animModeUI.OnEnable(_model);
 
             _listUI.OnIncludeFlagsChanged = () =>
             {
@@ -103,7 +128,9 @@ namespace DenEmo
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
+            EditorApplication.update -= OnEditorUpdate;
             _listUI.StopThrottle();
+            _animModeUI.OnDisable();
 
             if (includeFlagsDirty) SaveIncludeFlagsPrefsImmediate();
 
@@ -118,6 +145,7 @@ namespace DenEmo
             DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode",          symmetryMode);
             DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",            autoBackup);
             DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled",  overwriteSaveEnabled);
+            DenEmoProjectPrefs.SetInt("DenEmo_Mode", (int)_currentMode);
 
             if (overwriteTargetClip != null)
             {
@@ -130,6 +158,18 @@ namespace DenEmo
                 DenEmoProjectPrefs.SetString("DenEmo_OverwriteClipGuid", "");
             }
 
+            // Save animation clip reference
+            if (_animModeUI.ClipModel.Clip != null)
+            {
+                var animClipPath = AssetDatabase.GetAssetPath(_animModeUI.ClipModel.Clip);
+                DenEmoProjectPrefs.SetString("DenEmo_AnimClipGuid",
+                    string.IsNullOrEmpty(animClipPath) ? "" : AssetDatabase.AssetPathToGUID(animClipPath));
+            }
+            else
+            {
+                DenEmoProjectPrefs.SetString("DenEmo_AnimClipGuid", "");
+            }
+
             if (snapshotValues != null && snapshotValues.Count > 0)
             {
                 var parts = new string[snapshotValues.Count];
@@ -140,6 +180,12 @@ namespace DenEmo
 
             SaveBlendValuesPrefs();
             SaveCollapsedGroupsPrefs();
+        }
+
+        private void OnEditorUpdate()
+        {
+            if (_currentMode == EditorMode.Animation)
+                _animModeUI.OnUpdate(this);
         }
 
         private void OnUndoRedo()
@@ -159,6 +205,7 @@ namespace DenEmo
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
 
             DenEmoCommonUI.DrawHeader(this);
+            DrawModeTabBar();
             HandleDragAndDrop();
 
             bool hasTarget = DrawTargetMeshSection();
@@ -169,12 +216,25 @@ namespace DenEmo
                 return;
             }
 
-            DrawAnimationSourceSection();
-            DrawSearchFilterSection();
+            if (_currentMode == EditorMode.Pose)
+            {
+                DrawAnimationSourceSection();
+                DrawSearchFilterSection();
+                _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
+                DrawFooterSection();
+            }
+            else
+            {
+                _animModeUI.DrawAnimationClipSection(_model, saveFolder, this);
+                _animModeUI.DrawTimeline(_model, this);
+                DrawSearchFilterSection();
+                var animContext = _animModeUI.ClipModel.Clip != null
+                    ? _animModeUI.BuildDrawContext(_model)
+                    : null;
+                _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this, animContext);
+                DrawAnimationSaveSection();
+            }
 
-            _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
-
-            DrawFooterSection();
             DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
 
             // インクルードフラグの遅延保存
@@ -199,6 +259,52 @@ namespace DenEmo
             }
         }
 
+        // ─── Mode tab bar ─────────────────────────────────────────────────────
+
+        private void DrawModeTabBar()
+        {
+            EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle);
+            GUILayout.FlexibleSpace();
+
+            var poseStyle = _currentMode == EditorMode.Pose      ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+            var animStyle = _currentMode == EditorMode.Animation  ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.pose"), poseStyle))
+                SwitchMode(EditorMode.Pose);
+            GUILayout.Space(2);
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.anim"), animStyle))
+                SwitchMode(EditorMode.Animation);
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(2);
+        }
+
+        private void SwitchMode(EditorMode mode)
+        {
+            if (_currentMode == mode) return;
+
+            if (_currentMode == EditorMode.Animation)
+            {
+                // Leaving animation mode: stop preview and restore snapshot
+                _animModeUI.StopPreview();
+                if (snapshotValues != null && snapshotValues.Count > 0)
+                    RestoreSnapshot();
+            }
+
+            _currentMode = mode;
+
+            if (_currentMode == EditorMode.Animation)
+            {
+                // Entering animation mode: save current state as snapshot
+                CreateSnapshot(false);
+                if (_animModeUI.ClipModel.Clip != null && _model.TargetSkinnedMesh != null)
+                    _animModeUI.StartPreview(_model);
+            }
+
+            Repaint();
+        }
+
         // ─── Sections ────────────────────────────────────────────────────────
 
         private bool DrawTargetMeshSection()
@@ -220,6 +326,8 @@ namespace DenEmo
                     CreateSnapshot(false);
                     SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
                 }
+                if (_currentMode == EditorMode.Animation)
+                    _animModeUI.OnTargetChanged(_model);
                 Repaint();
             }
 
@@ -512,6 +620,8 @@ namespace DenEmo
                     CreateSnapshot(false);
                     SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
                 }
+                if (_currentMode == EditorMode.Animation)
+                    _animModeUI.OnTargetChanged(_model);
                 Repaint();
             }
             evt.Use();

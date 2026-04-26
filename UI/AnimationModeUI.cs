@@ -1,0 +1,339 @@
+using System;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using DenEmo.Models;
+using DenEmo.Core;
+
+namespace DenEmo.UI
+{
+    // ─── Animation draw context ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Passed to ShapeKeyListUI when in Animation mode to intercept value changes
+    /// and show keyframe indicators per shape.
+    /// </summary>
+    public class AnimationDrawContext
+    {
+        public bool IsRecording;
+        /// <summary>Returns true when the given shape has a keyframe at the current playhead position.</summary>
+        public Func<string, bool> HasKeyframeAtCurrentTime;
+        /// <summary>Called when the user moves a slider; routing depends on record state.</summary>
+        public Action<ShapeKeyItem, ShapeKeyModel, float> OnValueChanged;
+        /// <summary>Called when the user clicks the ◆/◇ keyframe toggle button.</summary>
+        public Action<ShapeKeyItem, ShapeKeyModel> OnKeyframeToggle;
+    }
+
+    // ─── AnimationModeUI ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Orchestrates the animation-mode tab: clip settings, timeline, and recording.
+    /// </summary>
+    public class AnimationModeUI
+    {
+        // ─── Sub-objects ──────────────────────────────────────────────────────
+
+        public AnimationClipModel         ClipModel  { get; } = new AnimationClipModel();
+        public AnimationPreviewController Preview    { get; } = new AnimationPreviewController();
+        public AnimationTimelineUI        TimelineUI { get; } = new AnimationTimelineUI();
+
+        // ─── State ────────────────────────────────────────────────────────────
+
+        public bool               IsRecording  { get; private set; }
+        public InterpolationType  CurrentInterp { get; private set; } = InterpolationType.Ease;
+
+        private bool   _isPlaying;
+        private double _playStartRealTime;
+        private float  _playStartClipTime;
+        private string _smrPath = "";
+
+        // Cached styles
+        private GUIStyle _recOnStyle;
+        private GUIStyle _recOffStyle;
+
+        // ─── Lifecycle ────────────────────────────────────────────────────────
+
+        public void OnEnable(ShapeKeyModel shapeModel)
+        {
+            if (ClipModel.Clip != null && shapeModel.TargetSkinnedMesh != null)
+                StartPreview(shapeModel);
+        }
+
+        public void OnDisable()
+        {
+            _isPlaying  = false;
+            IsRecording = false;
+            Preview.Stop();
+        }
+
+        /// <summary>Call from EditorApplication.update to advance playback.</summary>
+        public void OnUpdate(EditorWindow window)
+        {
+            if (!_isPlaying || ClipModel.Clip == null) return;
+
+            double elapsed = EditorApplication.timeSinceStartup - _playStartRealTime;
+            float  t       = _playStartClipTime + (float)elapsed;
+
+            if (t >= ClipModel.ClipLength)
+            {
+                // Loop
+                _playStartRealTime = EditorApplication.timeSinceStartup;
+                _playStartClipTime = 0f;
+                t                  = 0f;
+            }
+
+            ClipModel.CurrentTime = t;
+            Preview.SampleAt(t);
+            window.Repaint();
+        }
+
+        // ─── Preview management ───────────────────────────────────────────────
+
+        public void StartPreview(ShapeKeyModel shapeModel)
+        {
+            if (shapeModel?.TargetSkinnedMesh == null) return;
+            _smrPath = GetRelativePath(
+                shapeModel.TargetSkinnedMesh.transform,
+                shapeModel.TargetSkinnedMesh.transform.root);
+            Preview.Start(ClipModel, shapeModel);
+        }
+
+        public void StopPreview()
+        {
+            _isPlaying = false;
+            Preview.Stop();
+        }
+
+        public void OnTargetChanged(ShapeKeyModel shapeModel)
+        {
+            Preview.Stop();
+            if (ClipModel.Clip != null && shapeModel?.TargetSkinnedMesh != null)
+                StartPreview(shapeModel);
+        }
+
+        // ─── Draw: Clip settings ──────────────────────────────────────────────
+
+        public void DrawAnimationClipSection(ShapeKeyModel shapeModel, string saveFolder, EditorWindow window)
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "ANIMATION CLIP" : "アニメーションクリップ");
+
+            // ── Clip field + New button ──────────────────────────────────────
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label(
+                DenEmoLoc.T("ui.animMode.clip.label"),
+                DenEmoTheme.CaptionStyle, GUILayout.Width(46));
+
+            EditorGUI.BeginChangeCheck();
+            var newClip = EditorGUILayout.ObjectField(ClipModel.Clip, typeof(AnimationClip), false) as AnimationClip;
+            if (EditorGUI.EndChangeCheck())
+            {
+                StopPreview();
+                ClipModel.SetClip(newClip);
+                if (newClip != null && shapeModel.TargetSkinnedMesh != null)
+                    StartPreview(shapeModel);
+                window.Repaint();
+            }
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.clip.new"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(48)))
+                CreateNewClip(shapeModel, saveFolder, window);
+
+            EditorGUILayout.EndHorizontal();
+
+            if (ClipModel.Clip == null)
+            {
+                GUILayout.Space(2);
+                GUILayout.Label(DenEmoLoc.T("ui.animMode.clip.hint"), DenEmoTheme.CaptionStyle);
+                DenEmoTheme.EndSection();
+                return;
+            }
+
+            GUILayout.Space(4);
+
+            // ── FPS + Length + REC ───────────────────────────────────────────
+            EditorGUILayout.BeginHorizontal();
+
+            GUILayout.Label("FPS:", DenEmoTheme.CaptionStyle, GUILayout.Width(28));
+            float newFps = EditorGUILayout.FloatField(ClipModel.FPS, GUILayout.Width(48));
+            if (!Mathf.Approximately(newFps, ClipModel.FPS) && newFps > 0f)
+            {
+                Undo.RecordObject(ClipModel.Clip, "Change FPS");
+                ClipModel.FPS           = newFps;
+                ClipModel.Clip.frameRate = newFps;
+                EditorUtility.SetDirty(ClipModel.Clip);
+            }
+
+            GUILayout.Space(10);
+            GUILayout.Label(DenEmoLoc.T("ui.animMode.length.label"), DenEmoTheme.CaptionStyle,
+                GUILayout.Width(DenEmoLoc.EnglishMode ? 56 : 56));
+            float newLen = EditorGUILayout.FloatField(ClipModel.ClipLength, GUILayout.Width(52));
+            if (!Mathf.Approximately(newLen, ClipModel.ClipLength) && newLen > 0f)
+                ClipModel.ClipLength = newLen;
+
+            GUILayout.FlexibleSpace();
+
+            // REC toggle
+            EnsureRecStyles();
+            if (GUILayout.Button(IsRecording ? "● REC" : "○ REC",
+                IsRecording ? _recOnStyle : _recOffStyle, GUILayout.Width(58)))
+            {
+                IsRecording = !IsRecording;
+                if (IsRecording && !Preview.IsActive && shapeModel.TargetSkinnedMesh != null)
+                    StartPreview(shapeModel);
+                window.Repaint();
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+
+            // ── Interpolation preset ─────────────────────────────────────────
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label(DenEmoLoc.T("ui.animMode.interp.label"), DenEmoTheme.CaptionStyle,
+                GUILayout.Width(DenEmoLoc.EnglishMode ? 52 : 44));
+            CurrentInterp = (InterpolationType)GUILayout.Toolbar(
+                (int)CurrentInterp,
+                new[] { "Step", "Linear", "Ease" },
+                DenEmoTheme.MiniButtonStyle,
+                GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+
+            DenEmoTheme.EndSection();
+        }
+
+        // ─── Draw: Timeline ───────────────────────────────────────────────────
+
+        public void DrawTimeline(ShapeKeyModel shapeModel, EditorWindow window)
+        {
+            if (ClipModel.Clip == null) return;
+            TimelineUI.Draw(
+                ClipModel, Preview, shapeModel, _smrPath,
+                IsRecording, CurrentInterp, window,
+                ref _isPlaying, ref _playStartRealTime, ref _playStartClipTime);
+        }
+
+        // ─── Animation draw context ───────────────────────────────────────────
+
+        public AnimationDrawContext BuildDrawContext(ShapeKeyModel shapeModel)
+        {
+            return new AnimationDrawContext
+            {
+                IsRecording = IsRecording,
+
+                HasKeyframeAtCurrentTime = (shapeName) =>
+                    ClipModel.HasKeyframeAt(shapeName, ClipModel.CurrentTime, _smrPath),
+
+                OnValueChanged = (item, model, newValue) =>
+                {
+                    item.Value = newValue;
+                    if (IsRecording && ClipModel.Clip != null)
+                    {
+                        Preview.RecordKeyframe(item.Name, _smrPath, ClipModel.CurrentTime, newValue, CurrentInterp);
+                        Preview.SampleAt(ClipModel.CurrentTime);
+                    }
+                    else
+                    {
+                        if (model.TargetSkinnedMesh != null)
+                            model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, newValue);
+                    }
+                },
+
+                OnKeyframeToggle = (item, model) =>
+                {
+                    if (ClipModel.Clip == null) return;
+                    bool hasKey = ClipModel.HasKeyframeAt(item.Name, ClipModel.CurrentTime, _smrPath);
+                    if (hasKey)
+                    {
+                        Preview.DeleteKeyframe(item.Name, _smrPath, ClipModel.CurrentTime);
+                    }
+                    else
+                    {
+                        Preview.RecordKeyframe(item.Name, _smrPath, ClipModel.CurrentTime, item.Value, CurrentInterp);
+                        Preview.SampleAt(ClipModel.CurrentTime);
+                    }
+                }
+            };
+        }
+
+        // ─── Save ─────────────────────────────────────────────────────────────
+
+        public void SaveClip(string saveFolder, ShapeKeyModel shapeModel, Action<string, int> setStatus)
+        {
+            if (ClipModel.Clip == null)
+            {
+                setStatus(DenEmoLoc.T("dlg.apply.noClip"), 3);
+                return;
+            }
+
+            string path = AssetDatabase.GetAssetPath(ClipModel.Clip);
+            if (string.IsNullOrEmpty(path))
+            {
+                string defaultName = shapeModel.TargetObject
+                    ? shapeModel.TargetObject.name + "_anim"
+                    : "blendshape_anim";
+                path = EditorUtility.SaveFilePanelInProject(
+                    DenEmoLoc.T("save.panel.title"), defaultName + ".anim", "anim",
+                    DenEmoLoc.T("save.panel.hint"), saveFolder);
+                if (string.IsNullOrEmpty(path)) return;
+            }
+
+            string err = AnimationExporter.SaveMultiFrameClip(ClipModel.Clip, path);
+            if (err != null) setStatus(err, 3);
+            else             setStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
+        }
+
+        // ─── Private helpers ──────────────────────────────────────────────────
+
+        private void CreateNewClip(ShapeKeyModel shapeModel, string saveFolder, EditorWindow window)
+        {
+            string defaultName = shapeModel.TargetObject
+                ? shapeModel.TargetObject.name + "_anim"
+                : "blendshape_anim";
+            string path = EditorUtility.SaveFilePanelInProject(
+                DenEmoLoc.T("save.panel.title"), defaultName + ".anim", "anim",
+                DenEmoLoc.T("save.panel.hint"), saveFolder);
+            if (string.IsNullOrEmpty(path)) return;
+
+            var clip = new AnimationClip { frameRate = ClipModel.FPS };
+            AssetDatabase.CreateAsset(clip, path);
+            AssetDatabase.SaveAssets();
+
+            StopPreview();
+            ClipModel.SetClip(clip);
+            if (shapeModel.TargetSkinnedMesh != null)
+                StartPreview(shapeModel);
+            window.Repaint();
+        }
+
+        private static string GetRelativePath(Transform target, Transform root)
+        {
+            if (target == root) return "";
+            var parts = new List<string>();
+            var t = target;
+            while (t != null && t != root) { parts.Add(t.name); t = t.parent; }
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private void EnsureRecStyles()
+        {
+            if (_recOnStyle == null)
+            {
+                _recOnStyle = new GUIStyle(EditorStyles.miniButton)
+                {
+                    fontStyle = FontStyle.Bold,
+                    normal    = { textColor = Color.red },
+                    hover     = { textColor = Color.red },
+                    active    = { textColor = Color.red }
+                };
+            }
+            if (_recOffStyle == null)
+            {
+                _recOffStyle = new GUIStyle(EditorStyles.miniButton)
+                {
+                    normal = { textColor = DenEmoTheme.TextTertiary }
+                };
+            }
+        }
+    }
+}
