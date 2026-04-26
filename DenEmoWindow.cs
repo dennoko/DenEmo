@@ -205,6 +205,7 @@ namespace DenEmo
         {
             DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "TARGET MESH" : "対象メッシュ");
 
+            EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginChangeCheck();
             var newSmr = EditorGUILayout.ObjectField(
                 new GUIContent(DenEmoLoc.T("ui.mesh.label"), DenEmoLoc.T("ui.mesh.tooltip")),
@@ -221,6 +222,12 @@ namespace DenEmo
                 }
                 Repaint();
             }
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(60)))
+            {
+                RefreshListAndCache();
+            }
+            EditorGUILayout.EndHorizontal();
 
             if (_model.TargetSkinnedMesh == null)
             {
@@ -415,11 +422,6 @@ namespace DenEmo
                     else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
                 }
             }
-
-            GUILayout.Space(4);
-
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.SecondaryButtonStyle, GUILayout.Width(70)))
-                RefreshListAndCache();
 
             GUILayout.Space(6);
             GUILayout.EndHorizontal();
