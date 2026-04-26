@@ -221,6 +221,38 @@ namespace DenEmo.Core
             _cacheDirty = true;
         }
 
+        /// <summary>Changes the interpolation mode of all keyframes across all tracks for the given SMR.</summary>
+        public void ChangeAllKeyframesInterpolation(string smrPath, InterpolationType interp)
+        {
+            if (_clipModel?.Clip == null) return;
+
+            Undo.RecordObject(_clipModel.Clip, "Change All Interpolation");
+            bool changed = false;
+
+            foreach (var binding in AnimationUtility.GetCurveBindings(_clipModel.Clip))
+            {
+                if (binding.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!binding.propertyName.StartsWith("blendShape.")) continue;
+                if (binding.path != (smrPath ?? "")) continue;
+
+                var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding);
+                if (curve == null) continue;
+
+                for (int i = 0; i < curve.keys.Length; i++)
+                {
+                    ApplyTangentMode(curve, i, interp);
+                }
+                AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(_clipModel.Clip);
+                _cacheDirty = true;
+            }
+        }
+
         // ─── Cache management ─────────────────────────────────────────────────
 
         private void RebuildCurveCache()
@@ -299,8 +331,8 @@ namespace DenEmo.Core
                     AnimationUtility.SetKeyRightTangentMode(curve, idx, AnimationUtility.TangentMode.Linear);
                     break;
                 case InterpolationType.Ease:
-                    AnimationUtility.SetKeyLeftTangentMode(curve,  idx, AnimationUtility.TangentMode.Auto);
-                    AnimationUtility.SetKeyRightTangentMode(curve, idx, AnimationUtility.TangentMode.Auto);
+                    AnimationUtility.SetKeyLeftTangentMode(curve,  idx, AnimationUtility.TangentMode.ClampedAuto);
+                    AnimationUtility.SetKeyRightTangentMode(curve, idx, AnimationUtility.TangentMode.ClampedAuto);
                     break;
             }
         }

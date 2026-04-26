@@ -318,7 +318,11 @@ namespace DenEmo.UI
                 var    kfStyle = hasKey ? DenEmoTheme.FavOnStyle : DenEmoTheme.FavOffStyle;
                 if (GUILayout.Button(kfIcon, kfStyle, GUILayout.Width(18)))
                 {
+                    // Capture right.Value before the first SampleAt → SyncValuesFromMesh call
+                    // corrupts it by re-evaluating curves (which don't yet include the new key).
+                    float rightVal = right.Value;
                     animContext.OnKeyframeToggle?.Invoke(left, model);
+                    right.Value = rightVal;
                     animContext.OnKeyframeToggle?.Invoke(right, model);
                 }
             }
