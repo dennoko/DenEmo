@@ -15,6 +15,9 @@ namespace DenEmo.Models
 
         public bool IsVisible     { get; set; }
 
+        public SkinnedMeshRenderer OwnerSmr { get; set; }
+        public string              SmrPath  { get; set; }
+
         public ShapeKeyItem(int index, string name, float initialValue)
         {
             Index          = index;

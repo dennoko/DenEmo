@@ -11,18 +11,18 @@ namespace DenEmo
 {
     public class DenEmoWindow : EditorWindow
     {
-        [MenuItem("Tools/DenEmo")]
+        [MenuItem("dennokoworks/DenEmo")]
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoWindow>("DenEmo");
             w.minSize = new Vector2(380, 400);
         }
 
-        private ShapeKeyModel _model = new ShapeKeyModel();
+        private ShapeKeyModel  _model  = new ShapeKeyModel();
         private ShapeKeyListUI _listUI = new ShapeKeyListUI();
 
-        private string saveFolder = "Assets/Generated_Animations";
-        private string searchText = string.Empty;
+        private string saveFolder  = "Assets/Generated_Animations";
+        private string searchText  = string.Empty;
         private string lastSearchText = null;
 
         private bool showOnlyIncluded   = false;
@@ -37,35 +37,58 @@ namespace DenEmo
         private bool lastShowOnlyFavorites = false;
         private bool lastSymmetryMode      = false;
 
+        // 追加ターゲットメッシュ（プライマリ以外にユーザーが明示指定したもの）
+        private List<SkinnedMeshRenderer> _additionalTargets = new List<SkinnedMeshRenderer>();
+
+        // -1 = All targets, 0+ = GetAllTargetMeshes()[index]
+        private int _meshFilterIndex = -1;
+
         private Vector2 scroll;
 
-        private AnimationClip loadedClip        = null;
+        private AnimationClip loadedClip         = null;
         private AnimationClip overwriteTargetClip = null;
 
         private HashSet<string> collapsedGroups = new HashSet<string>();
 
-        private string statusMessage  = null;
-        private int    statusLevel    = 0;
-        private double statusSetAt    = 0;
+        private string statusMessage      = null;
+        private int    statusLevel        = 0;
+        private double statusSetAt        = 0;
         private double statusAutoClearSec = 0;
 
-        private bool   includeFlagsDirty         = false;
-        private double lastIncludeFlagsChangeTime = 0;
-        private List<float> snapshotValues        = null;
+        private bool   includeFlagsDirty          = false;
+        private double lastIncludeFlagsChangeTime  = 0;
+        private List<float> snapshotValues         = null;
 
         // ─── Lifecycle ───────────────────────────────────────────────────────
 
         private void OnEnable()
         {
             DenEmoLoc.LoadPrefs();
-            saveFolder            = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
-            searchText            = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
-            showOnlyIncluded      = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyIncluded", false);
-            showOnlyNonZero       = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyNonZero", false);
-            showOnlyFavorites     = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyFavorites", false);
-            symmetryMode          = DenEmoProjectPrefs.GetBool("DenEmo_SymmetryMode", false);
-            autoBackup            = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup", true);
-            overwriteSaveEnabled  = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
+            saveFolder           = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
+            searchText           = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
+            showOnlyIncluded     = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyIncluded",  false);
+            showOnlyNonZero      = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyNonZero",   false);
+            showOnlyFavorites    = DenEmoProjectPrefs.GetBool("DenEmo_ShowOnlyFavorites", false);
+            symmetryMode         = DenEmoProjectPrefs.GetBool("DenEmo_SymmetryMode",      false);
+            autoBackup           = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup",        true);
+            overwriteSaveEnabled = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
+            _meshFilterIndex     = DenEmoProjectPrefs.GetInt("DenEmo_MeshFilter", -1);
+
+            // 追加ターゲットを復元
+            _additionalTargets.Clear();
+            var addIds = DenEmoProjectPrefs.GetString("DenEmo_AdditionalTargets", "");
+            if (!string.IsNullOrEmpty(addIds))
+            {
+                foreach (var part in addIds.Split(','))
+                {
+                    if (string.IsNullOrEmpty(part)) continue;
+                    if (int.TryParse(part, out int id))
+                    {
+                        var smr = EditorUtility.InstanceIDToObject(id) as SkinnedMeshRenderer;
+                        if (smr != null) _additionalTargets.Add(smr);
+                    }
+                }
+            }
 
             var overwriteGuid = DenEmoProjectPrefs.GetString("DenEmo_OverwriteClipGuid", "");
             if (!string.IsNullOrEmpty(overwriteGuid))
@@ -110,14 +133,21 @@ namespace DenEmo
             if (_model.TargetSkinnedMesh)
                 DenEmoProjectPrefs.SetString("DenEmo_LastTarget", _model.TargetSkinnedMesh.GetInstanceID().ToString());
 
-            DenEmoProjectPrefs.SetString("DenEmo_SaveFolder", saveFolder);
-            DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
-            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded",      showOnlyIncluded);
-            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyNonZero",       showOnlyNonZero);
-            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyFavorites",     showOnlyFavorites);
-            DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode",          symmetryMode);
-            DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",            autoBackup);
-            DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled",  overwriteSaveEnabled);
+            // 追加ターゲットを保存
+            var ids = new List<string>();
+            foreach (var smr in _additionalTargets)
+                if (smr != null) ids.Add(smr.GetInstanceID().ToString());
+            DenEmoProjectPrefs.SetString("DenEmo_AdditionalTargets", string.Join(",", ids));
+
+            DenEmoProjectPrefs.SetString("DenEmo_SaveFolder",        saveFolder);
+            DenEmoProjectPrefs.SetString("DenEmo_SearchText",        searchText);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded",    showOnlyIncluded);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyNonZero",     showOnlyNonZero);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyFavorites",   showOnlyFavorites);
+            DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode",        symmetryMode);
+            DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",          autoBackup);
+            DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled",overwriteSaveEnabled);
+            DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter",           _meshFilterIndex);
 
             if (overwriteTargetClip != null)
             {
@@ -155,17 +185,16 @@ namespace DenEmo
             DenEmoTheme.Initialize();
             TickStatusAutoClear();
 
-            // ウィンドウ全体を Surface0 で塗る
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
 
             DenEmoCommonUI.DrawHeader(this);
-            HandleDragAndDrop();
 
             bool hasTarget = DrawTargetMeshSection();
             if (!hasTarget)
             {
                 GUILayout.FlexibleSpace();
                 DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
+                HandleDragAndDrop();
                 return;
             }
 
@@ -176,13 +205,15 @@ namespace DenEmo
 
             DrawFooterSection();
             DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
+            
+            HandleDragAndDrop();
 
             // インクルードフラグの遅延保存
             if (includeFlagsDirty && EditorApplication.timeSinceStartup - lastIncludeFlagsChangeTime > 0.5)
                 SaveIncludeFlagsPrefsImmediate();
 
             // フィルター変更検知
-            bool filterChanged = searchText != lastSearchText
+            bool filterChanged = searchText       != lastSearchText
                 || showOnlyIncluded  != lastShowOnlyIncluded
                 || showOnlyNonZero   != lastShowOnlyNonZero
                 || showOnlyFavorites != lastShowOnlyFavorites
@@ -191,7 +222,7 @@ namespace DenEmo
             if (filterChanged)
             {
                 UpdateVisibility();
-                lastSearchText       = searchText;
+                lastSearchText        = searchText;
                 lastShowOnlyIncluded  = showOnlyIncluded;
                 lastShowOnlyNonZero   = showOnlyNonZero;
                 lastShowOnlyFavorites = showOnlyFavorites;
@@ -205,6 +236,7 @@ namespace DenEmo
         {
             DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "TARGET MESH" : "対象メッシュ");
 
+            // プライマリメッシュ
             EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginChangeCheck();
             var newSmr = EditorGUILayout.ObjectField(
@@ -214,6 +246,7 @@ namespace DenEmo
             {
                 _listUI.StopThrottle();
                 _model.SetTarget(newSmr);
+                ClampMeshFilterIndex();
                 RefreshListAndCache();
                 if (_model.TargetSkinnedMesh != null)
                 {
@@ -222,10 +255,13 @@ namespace DenEmo
                 }
                 Repaint();
             }
-
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(60)))
+            if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
             {
+                _listUI.StopThrottle();
+                _model.SetTarget(null);
+                ClampMeshFilterIndex();
                 RefreshListAndCache();
+                Repaint();
             }
             EditorGUILayout.EndHorizontal();
 
@@ -233,6 +269,8 @@ namespace DenEmo
             {
                 GUILayout.Space(4);
                 GUILayout.Label(DenEmoLoc.T("ui.mesh.missing"), DenEmoTheme.CaptionStyle);
+                // 追加メッシュ行は表示したまま（プライマリがなくても追加はできる）
+                DrawAdditionalTargets();
                 DenEmoTheme.EndSection();
                 return false;
             }
@@ -245,7 +283,16 @@ namespace DenEmo
                 GUILayout.Label("⚠ " + DenEmoLoc.T("ui.mesh.inactive.warn"), warnStyle);
             }
 
-            if (_model.Items.Count == 0)
+            // 追加ターゲットメッシュ
+            DrawAdditionalTargets();
+
+            // どのターゲットにもシェイプキーがなければ終了
+            bool hasShapes = false;
+            foreach (var smr in GetAllTargetMeshes())
+                if (smr != null && smr.sharedMesh != null && smr.sharedMesh.blendShapeCount > 0)
+                { hasShapes = true; break; }
+
+            if (!hasShapes)
             {
                 GUILayout.Space(4);
                 GUILayout.Label(DenEmoLoc.T("ui.mesh.noShapes"), DenEmoTheme.CaptionStyle);
@@ -255,6 +302,89 @@ namespace DenEmo
 
             DenEmoTheme.EndSection();
             return true;
+        }
+
+        private void DrawAdditionalTargets()
+        {
+            GUILayout.Space(2);
+
+            bool changed = false;
+
+            // 既存の要素のクリーンアップ（null要素があれば削除）
+            if (_additionalTargets.RemoveAll(item => item == null) > 0)
+            {
+                changed = true;
+            }
+
+            for (int i = 0; i < _additionalTargets.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                var addSmr = EditorGUILayout.ObjectField(
+                    new GUIContent("  +"),
+                    _additionalTargets[i], typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (addSmr == null)
+                    {
+                        _additionalTargets.RemoveAt(i);
+                        changed = true;
+                        EditorGUILayout.EndHorizontal();
+                        break;
+                    }
+                    else
+                    {
+                        _additionalTargets[i] = addSmr;
+                        changed = true;
+                    }
+                }
+                if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
+                {
+                    _additionalTargets.RemoveAt(i);
+                    changed = true;
+                    EditorGUILayout.EndHorizontal();
+                    break;
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            // 新規追加用の空スロットを常に表示
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginChangeCheck();
+            var newSmr = EditorGUILayout.ObjectField(
+                new GUIContent("  +"),
+                null, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (newSmr != null)
+                {
+                    _additionalTargets.Add(newSmr);
+                    changed = true;
+                }
+            }
+            
+            // 幅を揃えるためのダミー✕ボタン
+            using (new EditorGUI.DisabledGroupScope(true))
+            {
+                GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20));
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // 更新ボタン行
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(60)))
+            {
+                RefreshListAndCache();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (changed)
+            {
+                ClampMeshFilterIndex();
+                RefreshListAndCache();
+                Repaint();
+            }
         }
 
         private void DrawAnimationSourceSection()
@@ -296,7 +426,7 @@ namespace DenEmo
 
             // 検索バー
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("🔍", GUILayout.Width(18));
+            GUILayout.Label(DenEmoLoc.EnglishMode ? "🔍 Keyword" : "🔍 キーワード", GUILayout.Width(80));
             GUI.SetNextControlName("SearchField");
             searchText = EditorGUILayout.TextField(searchText, GUILayout.ExpandWidth(true));
             if (!string.IsNullOrEmpty(searchText))
@@ -339,10 +469,40 @@ namespace DenEmo
                 DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",
                 "DenEmo_SymmetryMode");
 
+            // 対象メッシュフィルター
+            var allTargets = GetAllTargetMeshes();
+            if (allTargets.Count > 0)
+            {
+                GUILayout.Space(6);
+                GUILayout.Label("Mesh:", DenEmoTheme.CaptionStyle, GUILayout.Width(38));
+
+                var meshOpts    = BuildMeshFilterOptions(allTargets);
+                int displayIdx  = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
+                int newDisplayIdx = EditorGUILayout.Popup(displayIdx, meshOpts, GUILayout.MinWidth(70), GUILayout.ExpandWidth(false));
+                int newFilterIdx  = newDisplayIdx <= 0 ? -1 : newDisplayIdx - 1;
+
+                if (newFilterIdx != _meshFilterIndex)
+                {
+                    _meshFilterIndex = newFilterIdx;
+                    DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter", _meshFilterIndex);
+                    RefreshListAndCache();
+                    Repaint();
+                }
+            }
+
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
             DenEmoTheme.EndSection();
+        }
+
+        private string[] BuildMeshFilterOptions(List<SkinnedMeshRenderer> targets)
+        {
+            var opts = new string[targets.Count + 1];
+            opts[0] = "All";
+            for (int i = 0; i < targets.Count; i++)
+                opts[i + 1] = targets[i] != null ? targets[i].name : "?";
+            return opts;
         }
 
         private bool DrawFilterChip(bool current, string label, string prefsKey)
@@ -432,8 +592,42 @@ namespace DenEmo
 
         // ─── Helpers ─────────────────────────────────────────────────────────
 
+        // 明示的に指定されたターゲットメッシュの一覧（プライマリ + 追加）
+        private List<SkinnedMeshRenderer> GetAllTargetMeshes()
+        {
+            var result = new List<SkinnedMeshRenderer>();
+            var seen   = new HashSet<SkinnedMeshRenderer>();
+
+            if (_model.TargetSkinnedMesh != null && seen.Add(_model.TargetSkinnedMesh))
+                result.Add(_model.TargetSkinnedMesh);
+
+            foreach (var smr in _additionalTargets)
+                if (smr != null && seen.Add(smr))
+                    result.Add(smr);
+
+            return result;
+        }
+
+        // フィルターに従ってアクティブなメッシュを返す
+        private List<SkinnedMeshRenderer> GetActiveMeshes()
+        {
+            var all = GetAllTargetMeshes();
+            if (_meshFilterIndex < 0 || _meshFilterIndex >= all.Count)
+                return all;
+            return new List<SkinnedMeshRenderer> { all[_meshFilterIndex] };
+        }
+
+        private void ClampMeshFilterIndex()
+        {
+            var all = GetAllTargetMeshes();
+            if (_meshFilterIndex >= all.Count) _meshFilterIndex = -1;
+        }
+
         private void RefreshListAndCache()
         {
+            ClampMeshFilterIndex();
+            var activeMeshes = GetActiveMeshes();
+            _model.SetActiveMeshes(activeMeshes);
             _model.RefreshList(searchText, showOnlyIncluded);
             LipSyncExclusionRule.ApplyExclusion(_model.TargetSkinnedMesh, _model.Items);
             LoadFavoritesPrefs();
@@ -452,31 +646,20 @@ namespace DenEmo
         private void AlignToBaseClip()
         {
             var pairs = new HashSet<string>();
-            string currentSmrPath = "";
-            if (_model.TargetSkinnedMesh != null)
-            {
-                var parts = new List<string>();
-                var t = _model.TargetSkinnedMesh.transform;
-                var root = t.root;
-                while (t != null && t != root) { parts.Add(t.name); t = t.parent; }
-                parts.Reverse();
-                currentSmrPath = string.Join("/", parts.ToArray());
-            }
-
             foreach (var b in AnimationUtility.GetCurveBindings(loadedClip))
             {
                 if (b.type != typeof(SkinnedMeshRenderer)) continue;
                 if (!b.propertyName.StartsWith("blendShape.")) continue;
                 var shape = b.propertyName.Substring("blendShape.".Length);
-                if (string.IsNullOrEmpty(shape)) continue;
-                if (string.Equals(b.path, currentSmrPath, StringComparison.Ordinal))
-                    pairs.Add(currentSmrPath + "\n" + shape);
+                if (!string.IsNullOrEmpty(shape))
+                    pairs.Add(b.path + "\n" + shape);
             }
 
             foreach (var item in _model.Items)
             {
                 if (item.IsVrcShape) { item.IsIncluded = false; continue; }
-                item.IsIncluded = pairs.Contains(currentSmrPath + "\n" + item.Name);
+                string path = item.SmrPath ?? "";
+                item.IsIncluded = pairs.Contains(path + "\n" + item.Name);
             }
             UpdateVisibility();
             SaveIncludeFlagsPrefsImmediate();
@@ -506,6 +689,7 @@ namespace DenEmo
                 DragAndDrop.AcceptDrag();
                 _listUI.StopThrottle();
                 _model.SetTarget(foundSmr);
+                ClampMeshFilterIndex();
                 RefreshListAndCache();
                 if (_model.TargetSkinnedMesh != null)
                 {
@@ -520,9 +704,9 @@ namespace DenEmo
         private void SetStatus(string msg, int level, double autoClearSec = 3.0)
         {
             if (level != 0 && autoClearSec == 3.0) autoClearSec = 6.0;
-            statusMessage     = msg;
-            statusLevel       = level;
-            statusSetAt       = EditorApplication.timeSinceStartup;
+            statusMessage      = msg;
+            statusLevel        = level;
+            statusSetAt        = EditorApplication.timeSinceStartup;
             statusAutoClearSec = autoClearSec;
             Repaint();
         }
@@ -533,8 +717,8 @@ namespace DenEmo
             if (!string.IsNullOrEmpty(statusMessage) &&
                 EditorApplication.timeSinceStartup - statusSetAt > statusAutoClearSec)
             {
-                statusMessage     = null;
-                statusLevel       = 0;
+                statusMessage      = null;
+                statusLevel        = 0;
                 statusAutoClearSec = 0;
                 Repaint();
             }
@@ -542,34 +726,63 @@ namespace DenEmo
 
         // ─── Favorites ───────────────────────────────────────────────────────
 
-        private string GetFavoritesKey()
+        private string GetFavoritesKeyForSmr(SkinnedMeshRenderer smr)
         {
-            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
-            string meshPath = AssetDatabase.GetAssetPath(_model.TargetSkinnedMesh.sharedMesh);
-            string guid = string.IsNullOrEmpty(meshPath) ? _model.TargetSkinnedMesh.sharedMesh.name : AssetDatabase.AssetPathToGUID(meshPath);
+            if (smr == null || smr.sharedMesh == null) return null;
+            string meshPath = AssetDatabase.GetAssetPath(smr.sharedMesh);
+            string guid = string.IsNullOrEmpty(meshPath)
+                ? smr.sharedMesh.name
+                : AssetDatabase.AssetPathToGUID(meshPath);
             return "DenEmo_Fav|" + guid;
         }
 
         private void LoadFavoritesPrefs()
         {
-            var key = GetFavoritesKey();
-            if (string.IsNullOrEmpty(key)) return;
-            if (!EditorPrefs.HasKey(key)) return;
-            var s = EditorPrefs.GetString(key, "");
-            if (string.IsNullOrEmpty(s)) return;
-            var names = new HashSet<string>(s.Split(','));
+            var loaded = new HashSet<SkinnedMeshRenderer>();
             foreach (var item in _model.Items)
-                item.IsFavorite = names.Contains(item.Name);
+            {
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr == null || loaded.Contains(smr)) continue;
+
+                var key = GetFavoritesKeyForSmr(smr);
+                if (string.IsNullOrEmpty(key) || !EditorPrefs.HasKey(key)) { loaded.Add(smr); continue; }
+
+                var s = EditorPrefs.GetString(key, "");
+                if (!string.IsNullOrEmpty(s))
+                {
+                    var names = new HashSet<string>(s.Split(','));
+                    foreach (var i in _model.Items)
+                        if ((i.OwnerSmr ?? _model.TargetSkinnedMesh) == smr)
+                            i.IsFavorite = names.Contains(i.Name);
+                }
+                loaded.Add(smr);
+            }
         }
 
         private void SaveFavoritesPrefs()
         {
-            var key = GetFavoritesKey();
-            if (string.IsNullOrEmpty(key)) return;
-            var favorites = new List<string>();
+            var bySmr   = new Dictionary<SkinnedMeshRenderer, List<string>>();
+            var allSmrs = new HashSet<SkinnedMeshRenderer>();
+
             foreach (var item in _model.Items)
-                if (item.IsFavorite) favorites.Add(item.Name);
-            EditorPrefs.SetString(key, string.Join(",", favorites));
+            {
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr == null) continue;
+                allSmrs.Add(smr);
+                if (item.IsFavorite)
+                {
+                    if (!bySmr.ContainsKey(smr)) bySmr[smr] = new List<string>();
+                    bySmr[smr].Add(item.Name);
+                }
+            }
+
+            foreach (var smr in allSmrs)
+            {
+                var key = GetFavoritesKeyForSmr(smr);
+                if (string.IsNullOrEmpty(key)) continue;
+                EditorPrefs.SetString(key,
+                    bySmr.TryGetValue(smr, out var favs) ? string.Join(",", favs) : "");
+            }
         }
 
         private void OnFavoriteChanged(string shapeName, bool isFavorite)
@@ -581,46 +794,83 @@ namespace DenEmo
 
         // ─── Preferences & Snapshots ─────────────────────────────────────────
 
-        private string GetBlendPrefsKey()
+        private string GetBlendPrefsKeyForSmr(SkinnedMeshRenderer smr)
         {
-            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
-            string scene    = _model.TargetObject ? _model.TargetObject.scene.name : "";
-            string meshName = _model.TargetSkinnedMesh.sharedMesh.name;
+            if (smr == null || smr.sharedMesh == null) return null;
+            string scene    = smr.gameObject ? smr.gameObject.scene.name : "";
+            string meshName = smr.sharedMesh.name;
             return $"DenEmo_Values|{scene}|{meshName}";
         }
 
         private void SaveBlendValuesPrefs()
         {
-            var key = GetBlendPrefsKey();
-            if (string.IsNullOrEmpty(key)) return;
-            var parts = new string[_model.Items.Count];
-            for (int i = 0; i < _model.Items.Count; i++)
-                parts[i] = _model.Items[i].Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            EditorPrefs.SetString(key, string.Join(",", parts));
+            var bySmr = new Dictionary<SkinnedMeshRenderer, List<ShapeKeyItem>>();
+            foreach (var item in _model.Items)
+            {
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr == null) continue;
+                if (!bySmr.ContainsKey(smr)) bySmr[smr] = new List<ShapeKeyItem>();
+                bySmr[smr].Add(item);
+            }
+
+            foreach (var kv in bySmr)
+            {
+                var key = GetBlendPrefsKeyForSmr(kv.Key);
+                if (string.IsNullOrEmpty(key)) continue;
+                var parts = new string[kv.Value.Count];
+                for (int i = 0; i < kv.Value.Count; i++)
+                    parts[i] = kv.Value[i].Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                EditorPrefs.SetString(key, string.Join(",", parts));
+            }
         }
 
         private void LoadIncludeFlagsPrefs()
         {
-            var key = GetBlendPrefsKey();
-            if (string.IsNullOrEmpty(key)) return;
-            key += "|IncludeFlags";
-            if (!EditorPrefs.HasKey(key)) return;
-            var s = EditorPrefs.GetString(key);
-            if (string.IsNullOrEmpty(s)) return;
-            var parts = s.Split(',');
-            for (int i = 0; i < parts.Length && i < _model.Items.Count; i++)
-                _model.Items[i].IsIncluded = parts[i] == "1" || parts[i].Equals("true", StringComparison.OrdinalIgnoreCase);
+            var bySmr = new Dictionary<SkinnedMeshRenderer, List<ShapeKeyItem>>();
+            foreach (var item in _model.Items)
+            {
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr == null) continue;
+                if (!bySmr.ContainsKey(smr)) bySmr[smr] = new List<ShapeKeyItem>();
+                bySmr[smr].Add(item);
+            }
+
+            foreach (var kv in bySmr)
+            {
+                var key = GetBlendPrefsKeyForSmr(kv.Key);
+                if (string.IsNullOrEmpty(key)) continue;
+                key += "|IncludeFlags";
+                if (!EditorPrefs.HasKey(key)) continue;
+                var s = EditorPrefs.GetString(key);
+                if (string.IsNullOrEmpty(s)) continue;
+                var parts = s.Split(',');
+                var items = kv.Value;
+                for (int i = 0; i < parts.Length && i < items.Count; i++)
+                    items[i].IsIncluded = parts[i] == "1" || parts[i].Equals("true", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         private void SaveIncludeFlagsPrefsImmediate()
         {
-            var key = GetBlendPrefsKey();
-            if (string.IsNullOrEmpty(key)) return;
-            key += "|IncludeFlags";
-            var parts = new string[_model.Items.Count];
-            for (int i = 0; i < _model.Items.Count; i++)
-                parts[i] = _model.Items[i].IsIncluded ? "1" : "0";
-            EditorPrefs.SetString(key, string.Join(",", parts));
+            var bySmr = new Dictionary<SkinnedMeshRenderer, List<ShapeKeyItem>>();
+            foreach (var item in _model.Items)
+            {
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr == null) continue;
+                if (!bySmr.ContainsKey(smr)) bySmr[smr] = new List<ShapeKeyItem>();
+                bySmr[smr].Add(item);
+            }
+
+            foreach (var kv in bySmr)
+            {
+                var key = GetBlendPrefsKeyForSmr(kv.Key);
+                if (string.IsNullOrEmpty(key)) continue;
+                key += "|IncludeFlags";
+                var parts = new string[kv.Value.Count];
+                for (int i = 0; i < kv.Value.Count; i++)
+                    parts[i] = kv.Value[i].IsIncluded ? "1" : "0";
+                EditorPrefs.SetString(key, string.Join(",", parts));
+            }
             includeFlagsDirty = false;
         }
 
@@ -676,9 +926,10 @@ namespace DenEmo
             int n = Math.Min(snapshotValues.Count, _model.Items.Count);
             for (int i = 0; i < n; i++)
             {
-                _model.Items[i].Value = snapshotValues[i];
-                if (_model.TargetSkinnedMesh)
-                    _model.TargetSkinnedMesh.SetBlendShapeWeight(i, snapshotValues[i]);
+                var item = _model.Items[i];
+                item.Value = snapshotValues[i];
+                var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (smr != null) smr.SetBlendShapeWeight(item.Index, snapshotValues[i]);
             }
             SaveBlendValuesPrefs();
         }

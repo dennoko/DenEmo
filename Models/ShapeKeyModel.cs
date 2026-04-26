@@ -7,23 +7,57 @@ namespace DenEmo.Models
 {
     public class GroupSegment
     {
-        public string Key { get; set; }
-        public int Start { get; set; }
-        public int Length { get; set; }
+        public string Key      { get; set; }
+        public int    Start    { get; set; }
+        public int    Length   { get; set; }
+        public string MeshName { get; set; } // null = single-mesh mode
     }
 
     public class ShapeKeyModel
     {
-        public List<ShapeKeyItem> Items { get; private set; } = new List<ShapeKeyItem>();
-        public List<GroupSegment> GroupSegments { get; private set; } = new List<GroupSegment>();
-        
+        public List<ShapeKeyItem>        Items            { get; private set; } = new List<ShapeKeyItem>();
+        public List<GroupSegment>        GroupSegments    { get; private set; } = new List<GroupSegment>();
+        public List<SkinnedMeshRenderer> DiscoveredMeshes { get; private set; } = new List<SkinnedMeshRenderer>();
+        public List<SkinnedMeshRenderer> ActiveMeshes     { get; private set; } = new List<SkinnedMeshRenderer>();
+
         public SkinnedMeshRenderer TargetSkinnedMesh { get; private set; }
-        public GameObject TargetObject { get; private set; }
+        public GameObject          TargetObject      { get; private set; }
 
         public void SetTarget(SkinnedMeshRenderer smr)
         {
             TargetSkinnedMesh = smr;
-            TargetObject = smr ? smr.gameObject : null;
+            TargetObject      = smr ? smr.gameObject : null;
+            DiscoveredMeshes.Clear();
+            ActiveMeshes.Clear();
+        }
+
+        public void DiscoverMeshes()
+        {
+            DiscoveredMeshes.Clear();
+            if (TargetSkinnedMesh == null) return;
+
+            var root = TargetSkinnedMesh.transform.root;
+            var smrs = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var smr in smrs)
+            {
+                if (smr != null && smr.sharedMesh != null && smr.sharedMesh.blendShapeCount > 0)
+                    DiscoveredMeshes.Add(smr);
+            }
+
+            // プライマリメッシュを先頭に
+            if (DiscoveredMeshes.Contains(TargetSkinnedMesh))
+            {
+                DiscoveredMeshes.Remove(TargetSkinnedMesh);
+                DiscoveredMeshes.Insert(0, TargetSkinnedMesh);
+            }
+        }
+
+        public void SetActiveMeshes(List<SkinnedMeshRenderer> meshes)
+        {
+            ActiveMeshes.Clear();
+            if (meshes != null)
+                foreach (var smr in meshes)
+                    if (smr != null) ActiveMeshes.Add(smr);
         }
 
         public void RefreshList(string searchText, bool showOnlyIncluded)
@@ -31,23 +65,37 @@ namespace DenEmo.Models
             Items.Clear();
             GroupSegments.Clear();
 
-            if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null)
+            foreach (var smr in ActiveMeshes)
             {
-                return;
-            }
+                if (smr == null || smr.sharedMesh == null) continue;
+                var    mesh    = smr.sharedMesh;
+                int    count   = mesh.blendShapeCount;
+                string smrPath = ComputeSmrPath(smr);
 
-            var mesh = TargetSkinnedMesh.sharedMesh;
-            int count = mesh.blendShapeCount;
-
-            for (int i = 0; i < count; i++)
-            {
-                string name = mesh.GetBlendShapeName(i);
-                float value = TargetSkinnedMesh.GetBlendShapeWeight(i);
-                
-                var item = new ShapeKeyItem(i, name, value);
-                item.IsVrcShape = IsVrcShapeName(name);
-                Items.Add(item);
+                for (int i = 0; i < count; i++)
+                {
+                    string name  = mesh.GetBlendShapeName(i);
+                    float  value = smr.GetBlendShapeWeight(i);
+                    var item = new ShapeKeyItem(i, name, value)
+                    {
+                        IsVrcShape = IsVrcShapeName(name),
+                        OwnerSmr   = smr,
+                        SmrPath    = smrPath,
+                    };
+                    Items.Add(item);
+                }
             }
+        }
+
+        public static string ComputeSmrPath(SkinnedMeshRenderer smr)
+        {
+            if (smr == null) return "";
+            var parts = new List<string>();
+            var t    = smr.transform;
+            var root = t.root;
+            while (t != null && t != root) { parts.Add(t.name); t = t.parent; }
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
         }
 
         public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero = false, bool showOnlyFavorites = false)
@@ -55,22 +103,11 @@ namespace DenEmo.Models
             foreach (var item in Items)
             {
                 item.IsVisible = false;
-
-                if (item.IsVrcShape || item.IsLipSyncShape)
-                    continue;
-
-                if (!MatchesAllTokens(item.Name, searchTokens))
-                    continue;
-
-                if (showOnlyIncluded && !item.IsIncluded)
-                    continue;
-
-                if (showOnlyNonZero && Mathf.Approximately(item.Value, 0f))
-                    continue;
-
-                if (showOnlyFavorites && !item.IsFavorite)
-                    continue;
-
+                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (!MatchesAllTokens(item.Name, searchTokens)) continue;
+                if (showOnlyIncluded  && !item.IsIncluded) continue;
+                if (showOnlyNonZero   && Mathf.Approximately(item.Value, 0f)) continue;
+                if (showOnlyFavorites && !item.IsFavorite) continue;
                 item.IsVisible = true;
             }
         }
@@ -78,15 +115,24 @@ namespace DenEmo.Models
         public void BuildGroups()
         {
             GroupSegments.Clear();
-            string curKey = null;
-            int segStart = -1;
-            int segLen = 0;
+            bool multiMesh = HasMultipleMeshes();
+
+            string              curKey   = null;
+            int                 segStart = -1;
+            int                 segLen   = 0;
+            SkinnedMeshRenderer curSmr   = null;
 
             Action flush = () =>
             {
                 if (segLen > 0)
                 {
-                    GroupSegments.Add(new GroupSegment { Key = curKey ?? "Other", Start = segStart, Length = segLen });
+                    GroupSegments.Add(new GroupSegment
+                    {
+                        Key      = curKey ?? "Other",
+                        Start    = segStart,
+                        Length   = segLen,
+                        MeshName = multiMesh ? curSmr?.name : null,
+                    });
                 }
                 curKey = null; segStart = -1; segLen = 0;
             };
@@ -94,10 +140,13 @@ namespace DenEmo.Models
             for (int i = 0; i < Items.Count; i++)
             {
                 var item = Items[i];
-                if (item.IsVrcShape)
+                if (item.IsVrcShape) { flush(); continue; }
+
+                // SMR境界でflush
+                if (curSmr != item.OwnerSmr)
                 {
                     flush();
-                    continue;
+                    curSmr = item.OwnerSmr;
                 }
 
                 string key = GetGroupKey(item.Name);
@@ -120,15 +169,26 @@ namespace DenEmo.Models
             flush();
         }
 
+        private bool HasMultipleMeshes()
+        {
+            SkinnedMeshRenderer first = null;
+            foreach (var item in Items)
+            {
+                if (item.OwnerSmr == null) continue;
+                if (first == null) { first = item.OwnerSmr; continue; }
+                if (item.OwnerSmr != first) return true;
+            }
+            return false;
+        }
+
         public void SyncValuesFromMesh()
         {
-            if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null) return;
-            int count = Mathf.Min(Items.Count, TargetSkinnedMesh.sharedMesh.blendShapeCount);
-            if (count == 0) return;
-            
-            for (int i = 0; i < count; i++)
+            foreach (var item in Items)
             {
-                Items[i].Value = TargetSkinnedMesh.GetBlendShapeWeight(i);
+                var smr = item.OwnerSmr;
+                if (smr == null || smr.sharedMesh == null) continue;
+                if (item.Index >= 0 && item.Index < smr.sharedMesh.blendShapeCount)
+                    item.Value = smr.GetBlendShapeWeight(item.Index);
             }
         }
 
@@ -137,8 +197,8 @@ namespace DenEmo.Models
         {
             if (string.IsNullOrEmpty(name)) return false;
             name = name.Trim();
-            if (name.StartsWith("vrc.", StringComparison.OrdinalIgnoreCase)) return true;
-            if (name.StartsWith(".vrc", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith("vrc.",  StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith(".vrc",  StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
 
@@ -183,14 +243,13 @@ namespace DenEmo.Models
         public static string[] BuildSearchTokens(string text)
         {
             if (string.IsNullOrEmpty(text)) return Array.Empty<string>();
-            return text.Split(new char[] { ' ', '\t', '\u3000' }, StringSplitOptions.RemoveEmptyEntries);
+            return text.Split(new char[] { ' ', '\t', '　' }, StringSplitOptions.RemoveEmptyEntries);
         }
 
         private static bool MatchesAllTokens(string name, string[] tokens)
         {
             if (tokens == null || tokens.Length == 0) return true;
             if (string.IsNullOrEmpty(name)) return false;
-
             var nmLower = name.ToLowerInvariant();
             for (int i = 0; i < tokens.Length; i++)
             {
