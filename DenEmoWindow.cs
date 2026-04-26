@@ -447,6 +447,18 @@ namespace DenEmo
                 DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",
                 "DenEmo_SymmetryMode");
 
+            if (_currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null)
+            {
+                GUILayout.Space(4);
+                bool trackFilter = _animModeUI.TrackFilterEnabled;
+                var trackStyle = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+                if (GUILayout.Button(DenEmoLoc.EnglishMode ? "◆ Track" : "◆ トラック", trackStyle, GUILayout.ExpandWidth(false)))
+                {
+                    _animModeUI.TrackFilterEnabled = !trackFilter;
+                    Repaint();
+                }
+            }
+
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 

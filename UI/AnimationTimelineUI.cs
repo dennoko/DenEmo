@@ -38,12 +38,14 @@ namespace DenEmo.UI
             AnimationPreviewController preview,
             ShapeKeyModel              shapeModel,
             string                     smrPath,
-            bool                       isRecording,
-            InterpolationType          currentInterp,
+            ref bool                   isRecording,
+            ref InterpolationType      currentInterp,
+            ref float                  playbackSpeed,
             EditorWindow               window,
             ref bool                   isPlaying,
             ref double                 playStartRealTime,
-            ref float                  playStartClipTime)
+            ref float                  playStartClipTime,
+            System.Action              startPreview)
         {
             if (clipModel?.Clip == null) return;
             DenEmoTheme.Initialize();
@@ -68,8 +70,8 @@ namespace DenEmo.UI
             DrawRulerAndScrubber(clipModel, preview, window);
             GUILayout.Space(2);
             DrawPlaybackControls(
-                clipModel, preview, isRecording,
-                ref isPlaying, ref playStartRealTime, ref playStartClipTime, window);
+                clipModel, preview, smrPath, ref isRecording, ref currentInterp, ref playbackSpeed, window,
+                ref isPlaying, ref playStartRealTime, ref playStartClipTime, startPreview);
 
             if (!_tracksCollapsed)
             {
@@ -181,9 +183,10 @@ namespace DenEmo.UI
         // ─── Playback controls ────────────────────────────────────────────────
 
         private void DrawPlaybackControls(
-            AnimationClipModel clipModel, AnimationPreviewController preview, bool isRecording,
-            ref bool isPlaying, ref double playStartRealTime, ref float playStartClipTime,
-            EditorWindow window)
+            AnimationClipModel clipModel, AnimationPreviewController preview, string smrPath,
+            ref bool isRecording, ref InterpolationType currentInterp, ref float playbackSpeed,
+            EditorWindow window,
+            ref bool isPlaying, ref double playStartRealTime, ref float playStartClipTime, System.Action startPreview)
         {
             EditorGUILayout.BeginHorizontal();
 
@@ -193,6 +196,18 @@ namespace DenEmo.UI
                 isPlaying = false;
                 clipModel.CurrentTime = 0f;
                 preview.SampleAt(0f);
+                window.Repaint();
+            }
+            // |◆ (prev keyframe)
+            if (GUILayout.Button("|◆", DenEmoTheme.MiniButtonStyle, GUILayout.Width(24)))
+            {
+                isPlaying = false;
+                float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
+                float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+                float prev = -1f;
+                foreach (float kt in allKeys)
+                    if (kt < clipModel.CurrentTime - tol) prev = kt;
+                if (prev >= 0f) { clipModel.CurrentTime = prev; preview.SampleAt(prev); }
                 window.Repaint();
             }
             // < (prev frame)
@@ -224,6 +239,18 @@ namespace DenEmo.UI
                 preview.SampleAt(clipModel.CurrentTime);
                 window.Repaint();
             }
+            // ◆| (next keyframe)
+            if (GUILayout.Button("◆|", DenEmoTheme.MiniButtonStyle, GUILayout.Width(24)))
+            {
+                isPlaying = false;
+                float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
+                float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+                float next = -1f;
+                foreach (float kt in allKeys)
+                    if (kt > clipModel.CurrentTime + tol) { next = kt; break; }
+                if (next >= 0f) { clipModel.CurrentTime = next; preview.SampleAt(next); }
+                window.Repaint();
+            }
             // >| (end)
             if (GUILayout.Button(">|", DenEmoTheme.MiniButtonStyle, GUILayout.Width(24)))
             {
@@ -250,14 +277,81 @@ namespace DenEmo.UI
                 window.Repaint();
             }
 
+            GUILayout.Space(4);
+
+            // Playback speed
+            GUILayout.Label(DenEmoLoc.EnglishMode ? "×:" : "速:", DenEmoTheme.CaptionStyle, GUILayout.Width(18));
+            float newSpeed = EditorGUILayout.FloatField(playbackSpeed, GUILayout.Width(32));
+            if (!Mathf.Approximately(newSpeed, playbackSpeed))
+                playbackSpeed = Mathf.Clamp(newSpeed, 0.1f, 4f);
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+
+            EditorGUILayout.BeginHorizontal();
+
+            // FPS
+            GUILayout.Label("FPS:", DenEmoTheme.CaptionStyle, GUILayout.Width(28));
+            float newFps = EditorGUILayout.FloatField(clipModel.FPS, GUILayout.Width(40));
+            if (!Mathf.Approximately(newFps, clipModel.FPS) && newFps > 0f)
+            {
+                Undo.RecordObject(clipModel.Clip, "Change FPS");
+                clipModel.FPS = newFps;
+                clipModel.Clip.frameRate = newFps;
+                EditorUtility.SetDirty(clipModel.Clip);
+            }
+
+            GUILayout.Space(8);
+
+            // Length
+            GUILayout.Label(DenEmoLoc.EnglishMode ? "Len:" : "長さ:", DenEmoTheme.CaptionStyle, GUILayout.Width(30));
+            float newLen = EditorGUILayout.FloatField(clipModel.ClipLength, GUILayout.Width(40));
+            if (!Mathf.Approximately(newLen, clipModel.ClipLength) && newLen > 0f)
+                clipModel.ClipLength = newLen;
+
+            GUILayout.Space(8);
+
+            // Interpolation
+            GUILayout.Label(DenEmoLoc.EnglishMode ? "Interp:" : "補完:", DenEmoTheme.CaptionStyle, GUILayout.Width(40));
+            currentInterp = (InterpolationType)GUILayout.Toolbar(
+                (int)currentInterp,
+                new[] { "Step", "Linear", "Ease" },
+                DenEmoTheme.MiniButtonStyle,
+                GUILayout.ExpandWidth(false));
+
             GUILayout.FlexibleSpace();
 
-            // REC indicator (toggle handled in AnimationModeUI)
+            // ✕◆ Clear: delete all keyframes at the current time across all tracks
+            if (GUILayout.Button(DenEmoLoc.EnglishMode ? "✕◆ Clear f" : "✕◆ フレーム削除", DenEmoTheme.MiniButtonStyle))
+            {
+                preview.DeleteAllKeyframesAtTime(smrPath, clipModel.CurrentTime);
+                preview.SampleAt(clipModel.CurrentTime);
+                window.Repaint();
+            }
+
+            GUILayout.Space(4);
+
+            // ↺ Loop: copy first keyframe value of every track to the clip end
+            if (GUILayout.Button(DenEmoLoc.EnglishMode ? "↺ Loop" : "↺ ループ", DenEmoTheme.MiniButtonStyle, GUILayout.Width(62)))
+            {
+                preview.AddLoopKey(smrPath, clipModel.ClipLength, currentInterp);
+                preview.SampleAt(clipModel.CurrentTime);
+                window.Repaint();
+            }
+
+            GUILayout.Space(4);
+
+            // REC toggle
             EnsureRecStyles();
-            GUILayout.Label(
-                isRecording ? "● REC" : "○ REC",
-                isRecording ? _recOnStyle : _recOffStyle,
-                GUILayout.ExpandWidth(false));
+            if (GUILayout.Button(isRecording ? "● REC" : "○ REC",
+                isRecording ? _recOnStyle : _recOffStyle, GUILayout.Width(58)))
+            {
+                isRecording = !isRecording;
+                startPreview?.Invoke();
+                window.Repaint();
+            }
 
             EditorGUILayout.EndHorizontal();
         }
@@ -306,8 +400,21 @@ namespace DenEmo.UI
 
             // Shape name label
             GUI.Label(
-                new Rect(rowRect.x + 4, rowRect.y + 2, TRACK_LABEL_WIDTH - 8, rowRect.height - 4),
+                new Rect(rowRect.x + 4, rowRect.y + 2, TRACK_LABEL_WIDTH - 24, rowRect.height - 4),
                 shapeName, DenEmoTheme.CaptionStyle);
+
+            if (GUI.Button(new Rect(rowRect.x + TRACK_LABEL_WIDTH - 20, rowRect.y + 2, 16, 16), "✕", DenEmoTheme.MiniButtonStyle))
+            {
+                if (EditorUtility.DisplayDialog(
+                    DenEmoLoc.EnglishMode ? "Delete Track" : "トラックの削除",
+                    DenEmoLoc.EnglishMode ? $"Delete all keyframes for '{shapeName}'?" : $"'{shapeName}'のすべてのキーフレームを削除しますか？",
+                    DenEmoLoc.EnglishMode ? "Yes" : "はい",
+                    DenEmoLoc.EnglishMode ? "No" : "いいえ"))
+                {
+                    preview.DeleteAllKeyframesForShape(shapeName, smrPath);
+                    window.Repaint();
+                }
+            }
 
             // Current-time cursor line
             if (Event.current.type == EventType.Repaint)

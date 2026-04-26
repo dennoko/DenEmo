@@ -94,5 +94,24 @@ namespace DenEmo.Models
             }
             return new float[0];
         }
+
+        /// <summary>Returns all unique keyframe times across all tracks, sorted ascending.</summary>
+        public float[] GetAllKeyTimes(string smrPath = null)
+        {
+            if (Clip == null) return new float[0];
+            var timeSet = new HashSet<float>();
+            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
+            {
+                if (b.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!b.propertyName.StartsWith("blendShape.")) continue;
+                if (smrPath != null && b.path != smrPath) continue;
+                var curve = AnimationUtility.GetEditorCurve(Clip, b);
+                if (curve == null) continue;
+                foreach (var key in curve.keys) timeSet.Add(key.time);
+            }
+            var result = new List<float>(timeSet);
+            result.Sort();
+            return result.ToArray();
+        }
     }
 }

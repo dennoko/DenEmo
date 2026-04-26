@@ -191,6 +191,13 @@ namespace DenEmo.UI
                 var left  = kvp.Value.L;
                 var right = kvp.Value.R;
 
+                if (animContext?.TrackShapeNames != null)
+                {
+                    bool lInTrack = left  != null && animContext.TrackShapeNames.Contains(left.Name);
+                    bool rInTrack = right != null && animContext.TrackShapeNames.Contains(right.Name);
+                    if (!lInTrack && !rInTrack) continue;
+                }
+
                 if (left != null && right != null && Mathf.Abs(left.Value - right.Value) <= 0.001f)
                     DrawMergedRow(kvp.Key, left, right, spaceLeft, model, animContext);
                 else
@@ -200,7 +207,11 @@ namespace DenEmo.UI
                 }
             }
 
-            foreach (var s in singles) DrawSingleRow(s, spaceLeft, model, animContext);
+            foreach (var s in singles)
+            {
+                if (animContext?.TrackShapeNames != null && !animContext.TrackShapeNames.Contains(s.Name)) continue;
+                DrawSingleRow(s, spaceLeft, model, animContext);
+            }
         }
 
         private void DrawNormalSegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window, AnimationDrawContext animContext)
@@ -209,6 +220,7 @@ namespace DenEmo.UI
             {
                 var item = model.Items[i];
                 if (!item.IsVisible || item.IsLipSyncShape) continue;
+                if (animContext?.TrackShapeNames != null && !animContext.TrackShapeNames.Contains(item.Name)) continue;
                 DrawSingleRow(item, spaceLeft, model, animContext);
             }
         }

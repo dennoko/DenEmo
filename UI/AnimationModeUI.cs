@@ -22,6 +22,12 @@ namespace DenEmo.UI
         public Action<ShapeKeyItem, ShapeKeyModel, float> OnValueChanged;
         /// <summary>Called when the user clicks the ◆/◇ keyframe toggle button.</summary>
         public Action<ShapeKeyItem, ShapeKeyModel> OnKeyframeToggle;
+        /// <summary>When non-null, only shapes in this set are shown in the list.</summary>
+        public HashSet<string> TrackShapeNames;
+        /// <summary>True when the track-only filter is active.</summary>
+        public bool TrackFilterEnabled;
+        /// <summary>Toggles the track-only filter.</summary>
+        public Action OnToggleTrackFilter;
     }
 
     // ─── AnimationModeUI ─────────────────────────────────────────────────────
@@ -39,13 +45,27 @@ namespace DenEmo.UI
 
         // ─── State ────────────────────────────────────────────────────────────
 
-        public bool               IsRecording  { get; private set; }
-        public InterpolationType  CurrentInterp { get; private set; } = InterpolationType.Ease;
+        public bool               IsRecording  { get; set; }
+        public InterpolationType  CurrentInterp { get; set; } = InterpolationType.Ease;
 
         private bool   _isPlaying;
         private double _playStartRealTime;
         private float  _playStartClipTime;
         private string _smrPath = "";
+        private bool   _trackFilterEnabled;
+        private float  _playbackSpeed = 1f;
+
+        public float PlaybackSpeed
+        {
+            get => _playbackSpeed;
+            set => _playbackSpeed = Mathf.Clamp(value, 0.1f, 4f);
+        }
+
+        public bool TrackFilterEnabled
+        {
+            get => _trackFilterEnabled;
+            set => _trackFilterEnabled = value;
+        }
 
         // Cached styles
         private GUIStyle _recOnStyle;
@@ -73,14 +93,15 @@ namespace DenEmo.UI
             if (!Preview.IsActive) return;
 
             double elapsed = EditorApplication.timeSinceStartup - _playStartRealTime;
-            float  t       = _playStartClipTime + (float)elapsed;
+            float  t       = _playStartClipTime + (float)elapsed * _playbackSpeed;
 
             if (t >= ClipModel.ClipLength)
             {
-                // Loop
+                // Loop: carry the overshoot into the next cycle so no time is lost
+                float overshoot    = t - ClipModel.ClipLength;
                 _playStartRealTime = EditorApplication.timeSinceStartup;
-                _playStartClipTime = 0f;
-                t                  = 0f;
+                _playStartClipTime = overshoot;
+                t                  = overshoot;
             }
 
             ClipModel.CurrentTime = t;
@@ -148,57 +169,6 @@ namespace DenEmo.UI
                 return;
             }
 
-            GUILayout.Space(4);
-
-            // ── FPS + Length + REC ───────────────────────────────────────────
-            EditorGUILayout.BeginHorizontal();
-
-            GUILayout.Label("FPS:", DenEmoTheme.CaptionStyle, GUILayout.Width(28));
-            float newFps = EditorGUILayout.FloatField(ClipModel.FPS, GUILayout.Width(48));
-            if (!Mathf.Approximately(newFps, ClipModel.FPS) && newFps > 0f)
-            {
-                Undo.RecordObject(ClipModel.Clip, "Change FPS");
-                ClipModel.FPS           = newFps;
-                ClipModel.Clip.frameRate = newFps;
-                EditorUtility.SetDirty(ClipModel.Clip);
-            }
-
-            GUILayout.Space(10);
-            GUILayout.Label(DenEmoLoc.T("ui.animMode.length.label"), DenEmoTheme.CaptionStyle,
-                GUILayout.Width(DenEmoLoc.EnglishMode ? 56 : 56));
-            float newLen = EditorGUILayout.FloatField(ClipModel.ClipLength, GUILayout.Width(52));
-            if (!Mathf.Approximately(newLen, ClipModel.ClipLength) && newLen > 0f)
-                ClipModel.ClipLength = newLen;
-
-            GUILayout.FlexibleSpace();
-
-            // REC toggle
-            EnsureRecStyles();
-            if (GUILayout.Button(IsRecording ? "● REC" : "○ REC",
-                IsRecording ? _recOnStyle : _recOffStyle, GUILayout.Width(58)))
-            {
-                IsRecording = !IsRecording;
-                if (IsRecording && !Preview.IsActive && shapeModel.TargetSkinnedMesh != null)
-                    StartPreview(shapeModel);
-                window.Repaint();
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            GUILayout.Space(4);
-
-            // ── Interpolation preset ─────────────────────────────────────────
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(DenEmoLoc.T("ui.animMode.interp.label"), DenEmoTheme.CaptionStyle,
-                GUILayout.Width(DenEmoLoc.EnglishMode ? 52 : 44));
-            CurrentInterp = (InterpolationType)GUILayout.Toolbar(
-                (int)CurrentInterp,
-                new[] { "Step", "Linear", "Ease" },
-                DenEmoTheme.MiniButtonStyle,
-                GUILayout.ExpandWidth(false));
-            GUILayout.FlexibleSpace();
-            EditorGUILayout.EndHorizontal();
-
             DenEmoTheme.EndSection();
         }
 
@@ -207,19 +177,36 @@ namespace DenEmo.UI
         public void DrawTimeline(ShapeKeyModel shapeModel, EditorWindow window)
         {
             if (ClipModel.Clip == null) return;
+            bool isRec = IsRecording;
+            InterpolationType interp = CurrentInterp;
+            float speed = _playbackSpeed;
             TimelineUI.Draw(
                 ClipModel, Preview, shapeModel, _smrPath,
-                IsRecording, CurrentInterp, window,
-                ref _isPlaying, ref _playStartRealTime, ref _playStartClipTime);
+                ref isRec, ref interp, ref speed, window,
+                ref _isPlaying, ref _playStartRealTime, ref _playStartClipTime,
+                () => {
+                    if (isRec && !Preview.IsActive && shapeModel.TargetSkinnedMesh != null)
+                        StartPreview(shapeModel);
+                });
+            IsRecording = isRec;
+            CurrentInterp = interp;
+            _playbackSpeed = Mathf.Clamp(speed, 0.1f, 4f);
         }
 
         // ─── Animation draw context ───────────────────────────────────────────
 
         public AnimationDrawContext BuildDrawContext(ShapeKeyModel shapeModel)
         {
+            var trackNames = _trackFilterEnabled
+                ? new HashSet<string>(ClipModel.GetShapeNamesWithKeys(_smrPath))
+                : null;
+
             return new AnimationDrawContext
             {
-                IsRecording = IsRecording,
+                IsRecording       = IsRecording,
+                TrackFilterEnabled = _trackFilterEnabled,
+                TrackShapeNames   = trackNames,
+                OnToggleTrackFilter = () => _trackFilterEnabled = !_trackFilterEnabled,
 
                 HasKeyframeAtCurrentTime = (shapeName) =>
                     ClipModel.HasKeyframeAt(shapeName, ClipModel.CurrentTime, _smrPath),
@@ -227,8 +214,10 @@ namespace DenEmo.UI
                 OnValueChanged = (item, model, newValue) =>
                 {
                     item.Value = newValue;
-                    if (IsRecording && ClipModel.Clip != null)
+                    if (ClipModel.Clip != null &&
+                        (IsRecording || ClipModel.HasKeyframeAt(item.Name, ClipModel.CurrentTime, _smrPath)))
                     {
+                        // Recording mode or slider moved while at an existing keyframe → update the key directly
                         Preview.RecordKeyframe(item.Name, _smrPath, ClipModel.CurrentTime, newValue, CurrentInterp);
                         Preview.SampleAt(ClipModel.CurrentTime);
                     }
