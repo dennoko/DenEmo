@@ -785,13 +785,14 @@ namespace DenEmo
         {
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
             var mesh = _model.TargetSkinnedMesh.sharedMesh;
-            var l2w = _model.TargetSkinnedMesh.transform.localToWorldMatrix;
+            var smrTransform = _model.TargetSkinnedMesh.transform;
+            var localToWorldMatrix = smrTransform.localToWorldMatrix;
             int meshId = mesh.GetInstanceID();
 
             bool cacheInvalid = vertexGuideWorldPositions == null
                 || vertexGuideWorldPositions.Length != mesh.vertexCount
                 || vertexGuideMeshInstanceId != meshId
-                || vertexGuideLocalToWorld != l2w;
+                || vertexGuideLocalToWorld != localToWorldMatrix;
 
             if (!cacheInvalid) return vertexGuideWorldPositions;
 
@@ -806,10 +807,10 @@ namespace DenEmo
 
             vertexGuideWorldPositions = new Vector3[vertices.Length];
             for (int i = 0; i < vertices.Length; i++)
-                vertexGuideWorldPositions[i] = _model.TargetSkinnedMesh.transform.TransformPoint(vertices[i]);
+                vertexGuideWorldPositions[i] = smrTransform.TransformPoint(vertices[i]);
 
             vertexGuideMeshInstanceId = meshId;
-            vertexGuideLocalToWorld = l2w;
+            vertexGuideLocalToWorld = localToWorldMatrix;
             return vertexGuideWorldPositions;
         }
 
