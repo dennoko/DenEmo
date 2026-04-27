@@ -39,6 +39,7 @@ Tools to quickly find specific shape keys among many.
 -   **✓ Enabled**: Display only shape keys marked for saving (checked).
 -   **≠0 Non-zero**: Display only shape keys with a value other than 0.
 -   **↔ Symmetry**: Merges shape keys ending in `...L` and `...R` into a single row for simultaneous adjustment.
+-   **● Filter by Vertex**: After pressing the button, click one vertex in SceneView to show only shape keys that actually move that vertex (you can cancel while waiting for selection).
 
 ### Blendshape List
 -   **Sliders**: Adjust values (0–100).

@@ -67,6 +67,10 @@ public static class DenEmoLoc
         // Filter
         ["ui.filter.showIncluded"] = "有効なシェイプのみ表示",
         ["ui.filter.showIncluded.tip"] = "チェックが入っている（保存対象の）シェイプだけを一覧に表示します。",
+        ["ui.filter.vertex"] = "● 頂点で絞り込み",
+        ["ui.filter.vertex.active"] = "● 頂点:{0}",
+        ["ui.filter.vertex.cancel"] = "× キャンセル",
+        ["ui.filter.vertex.guide"] = "頂点を1つクリックして絞り込み（Esc/キャンセルで中止）",
 
     // Symmetry
     ["ui.symmetry.label"] = "左右同期編集",
@@ -166,6 +170,10 @@ public static class DenEmoLoc
         // Filter
         ["ui.filter.showIncluded"] = "Show only enabled shapes",
         ["ui.filter.showIncluded.tip"] = "List only shapes that are checked (will be saved).",
+        ["ui.filter.vertex"] = "● Filter by Vertex",
+        ["ui.filter.vertex.active"] = "● Vertex:{0}",
+        ["ui.filter.vertex.cancel"] = "× Cancel",
+        ["ui.filter.vertex.guide"] = "Click one vertex to filter (Esc/Cancel to stop)",
 
     // Symmetry
     ["ui.symmetry.label"] = "Symmetry edit",

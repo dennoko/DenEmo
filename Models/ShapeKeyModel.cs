@@ -14,6 +14,11 @@ namespace DenEmo.Models
 
     public class ShapeKeyModel
     {
+        private const float DefaultVertexMovementThreshold = 0.000001f;
+        private Vector3[] _blendShapeDeltaVertices;
+        private Vector3[] _blendShapeDeltaNormals;
+        private Vector3[] _blendShapeDeltaTangents;
+
         public List<ShapeKeyItem> Items { get; private set; } = new List<ShapeKeyItem>();
         public List<GroupSegment> GroupSegments { get; private set; } = new List<GroupSegment>();
         
@@ -52,6 +57,11 @@ namespace DenEmo.Models
 
         public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero = false, bool showOnlyFavorites = false)
         {
+            UpdateVisibility(searchTokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites, null);
+        }
+
+        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero, bool showOnlyFavorites, HashSet<int> vertexMovedShapeIndices)
+        {
             foreach (var item in Items)
             {
                 item.IsVisible = false;
@@ -71,8 +81,53 @@ namespace DenEmo.Models
                 if (showOnlyFavorites && !item.IsFavorite)
                     continue;
 
+                if (vertexMovedShapeIndices != null && !vertexMovedShapeIndices.Contains(item.Index))
+                    continue;
+
                 item.IsVisible = true;
             }
+        }
+
+        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float movementThreshold = DefaultVertexMovementThreshold)
+        {
+            var result = new HashSet<int>();
+            if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null) return result;
+
+            var mesh = TargetSkinnedMesh.sharedMesh;
+            int vertexCount = mesh.vertexCount;
+            if (vertexIndex < 0 || vertexIndex >= vertexCount) return result;
+
+            int blendShapeCount = mesh.blendShapeCount;
+            if (blendShapeCount <= 0) return result;
+
+            EnsureBlendShapeFrameBuffers(vertexCount);
+            float thresholdSquared = movementThreshold * movementThreshold;
+
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeCount; blendShapeIndex++)
+            {
+                int frameCount = mesh.GetBlendShapeFrameCount(blendShapeIndex);
+                for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+                {
+                    mesh.GetBlendShapeFrameVertices(blendShapeIndex, frameIndex, _blendShapeDeltaVertices, _blendShapeDeltaNormals, _blendShapeDeltaTangents);
+                    if (_blendShapeDeltaVertices[vertexIndex].sqrMagnitude > thresholdSquared)
+                    {
+                        result.Add(blendShapeIndex);
+                        break;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private void EnsureBlendShapeFrameBuffers(int vertexCount)
+        {
+            if (_blendShapeDeltaVertices == null || _blendShapeDeltaVertices.Length != vertexCount)
+                _blendShapeDeltaVertices = new Vector3[vertexCount];
+            if (_blendShapeDeltaNormals == null || _blendShapeDeltaNormals.Length != vertexCount)
+                _blendShapeDeltaNormals = new Vector3[vertexCount];
+            if (_blendShapeDeltaTangents == null || _blendShapeDeltaTangents.Length != vertexCount)
+                _blendShapeDeltaTangents = new Vector3[vertexCount];
         }
 
         public void BuildGroups()
