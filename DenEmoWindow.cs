@@ -737,6 +737,9 @@ namespace DenEmo
             Handles.EndGUI();
 
             var prevColor = Handles.color;
+            var prevZTest = Handles.zTest;
+            Handles.zTest = UnityEngine.Rendering.CompareFunction.LessEqual;
+            
             int pickedIndex = -1;
             Vector3 camPos = sceneView.camera.transform.position;
 
@@ -747,8 +750,10 @@ namespace DenEmo
                 if (vertexGuideWorldNormals != null && vertexGuideWorldNormals.Length > i)
                 {
                     Vector3 normal = vertexGuideWorldNormals[i];
-                    Vector3 viewDir = camPos - world;
-                    if (Vector3.Dot(normal, viewDir) <= 0f) continue;
+                    Vector3 viewDir = sceneView.camera.orthographic 
+                        ? -sceneView.camera.transform.forward 
+                        : (camPos - world).normalized;
+                    if (Vector3.Dot(normal, viewDir) <= 0.1f) continue;
                 }
 
                 float size = HandleUtility.GetHandleSize(world) * VertexGuideHandleSizeMultiplier;
@@ -760,6 +765,7 @@ namespace DenEmo
                 }
             }
             Handles.color = prevColor;
+            Handles.zTest = prevZTest;
 
             if (pickedIndex >= 0)
             {
