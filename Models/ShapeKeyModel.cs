@@ -14,6 +14,8 @@ namespace DenEmo.Models
 
     public class ShapeKeyModel
     {
+        private const float DefaultVertexMovementThreshold = 0.000001f;
+
         public List<ShapeKeyItem> Items { get; private set; } = new List<ShapeKeyItem>();
         public List<GroupSegment> GroupSegments { get; private set; } = new List<GroupSegment>();
         
@@ -83,7 +85,7 @@ namespace DenEmo.Models
             }
         }
 
-        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float movementThreshold = 0.000001f)
+        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float movementThreshold = DefaultVertexMovementThreshold)
         {
             var result = new HashSet<int>();
             if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null) return result;

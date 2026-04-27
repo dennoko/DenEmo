@@ -15,6 +15,8 @@ namespace DenEmo
 
         private enum EditorMode { Pose, Animation }
         private EditorMode _currentMode = EditorMode.Pose;
+        private const float VertexGuideHandleSizeMultiplier = 0.015f;
+        private static readonly Color VertexGuideColor = new Color(0.24f, 0.72f, 1.0f, 0.95f);
 
         // ─── Pose mode state ──────────────────────────────────────────────────
         [MenuItem("Tools/DenEmo")]
@@ -734,8 +736,8 @@ namespace DenEmo
             for (int i = 0; i < worldPositions.Length; i++)
             {
                 Vector3 world = worldPositions[i];
-                float size = HandleUtility.GetHandleSize(world) * 0.015f;
-                Handles.color = i == selectedVertexIndex ? Color.yellow : new Color(0.24f, 0.72f, 1.0f, 0.95f);
+                float size = HandleUtility.GetHandleSize(world) * VertexGuideHandleSizeMultiplier;
+                Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
                 if (Handles.Button(world, Quaternion.identity, size, size, Handles.DotHandleCap))
                 {
                     pickedIndex = i;
