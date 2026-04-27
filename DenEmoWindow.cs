@@ -824,12 +824,21 @@ namespace DenEmo
 
             if (!cacheInvalid) return;
 
-            // NOTE: Do not use the displayed/deformed scene mesh directly.
-            // We draw guides from sharedMesh vertices to avoid drift with non-destructive tools.
-            var vertices = mesh.vertices;
-            var normals = mesh.normals;
+            Mesh bakedMesh = new Mesh();
+            _model.TargetSkinnedMesh.BakeMesh(bakedMesh);
+            var vertices = bakedMesh.vertices;
+            var normals = bakedMesh.normals;
+
+            // NDMF等で動的にメッシュが差し替えられて頂点数が一致しない場合のフォールバック
+            if (vertices == null || vertices.Length != mesh.vertexCount)
+            {
+                vertices = mesh.vertices;
+                normals = mesh.normals;
+            }
+
             if (vertices == null || vertices.Length == 0)
             {
+                DestroyImmediate(bakedMesh);
                 vertexGuideWorldPositions = null;
                 vertexGuideWorldNormals = null;
                 return;
@@ -845,6 +854,8 @@ namespace DenEmo
                 if (hasNormals)
                     vertexGuideWorldNormals[i] = smrTransform.TransformDirection(normals[i]);
             }
+
+            DestroyImmediate(bakedMesh);
 
             vertexGuideMeshInstanceId = meshId;
             vertexGuideLocalToWorld = localToWorldMatrix;
