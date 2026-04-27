@@ -89,27 +89,50 @@ namespace DenEmo.Core
 
             var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding) ?? new AnimationCurve();
 
-            float tol      = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
-            int   existing = FindKeyAtTime(curve, time, tol);
+            float tol     = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+            float clipLen = _clipModel.ClipLength;
+
+            bool shouldAutoLoop = false;
+            if (clipLen > 0f && Mathf.Abs(time) <= tol)
+            {
+                int endKeyIdx = FindKeyAtTime(curve, clipLen, tol);
+                
+                bool onlyHasTimeZeroKeys = true;
+                foreach (var k in curve.keys)
+                {
+                    if (Mathf.Abs(k.time) > tol) { onlyHasTimeZeroKeys = false; break; }
+                }
+
+                if (endKeyIdx >= 0 || curve.keys.Length == 0 || onlyHasTimeZeroKeys)
+                {
+                    shouldAutoLoop = true;
+                }
+            }
+
+            WriteSingleKey(curve, time, value, interp, tol);
+
+            if (shouldAutoLoop)
+            {
+                WriteSingleKey(curve, clipLen, value, interp, tol);
+            }
+
+            AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
+            EditorUtility.SetDirty(_clipModel.Clip);
+            _cacheDirty = true;
+        }
+
+        private void WriteSingleKey(AnimationCurve curve, float time, float value, InterpolationType interp, float tol)
+        {
+            int existing = FindKeyAtTime(curve, time, tol);
             if (existing >= 0) curve.RemoveKey(existing);
 
             int idx = curve.AddKey(new Keyframe(time, value));
             if (idx < 0)
             {
                 idx = FindKeyAtTime(curve, time, 0f);
-                if (idx < 0)
-                {
-                    AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
-                    EditorUtility.SetDirty(_clipModel.Clip);
-                    _cacheDirty = true;
-                    return;
-                }
+                if (idx < 0) return;
             }
-
             ApplyTangentMode(curve, idx, interp);
-            AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
-            EditorUtility.SetDirty(_clipModel.Clip);
-            _cacheDirty = true;
         }
 
         /// <summary>Deletes the keyframe closest to the given time for the given blendshape.</summary>
@@ -177,28 +200,7 @@ namespace DenEmo.Core
                 DeleteKeyframe(shapeName, smrPath, time);
         }
 
-        /// <summary>
-        /// Copies the first keyframe value of every track to clipLength, creating a seamless loop.
-        /// Collects shapes before writing to avoid mutating the binding list mid-iteration.
-        /// </summary>
-        public void AddLoopKey(string smrPath, float clipLength, InterpolationType interp)
-        {
-            if (_clipModel?.Clip == null) return;
 
-            var shapes = new List<(string name, float value)>();
-            foreach (var b in AnimationUtility.GetCurveBindings(_clipModel.Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer)) continue;
-                if (!b.propertyName.StartsWith("blendShape.")) continue;
-                if (b.path != (smrPath ?? "")) continue;
-                var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, b);
-                if (curve == null || curve.keys.Length == 0) continue;
-                shapes.Add((b.propertyName.Substring("blendShape.".Length), curve.keys[0].value));
-            }
-
-            foreach (var (name, value) in shapes)
-                RecordKeyframe(name, smrPath, clipLength, value, interp);
-        }
 
         /// <summary>Changes the interpolation mode of the keyframe closest to the given time.</summary>
         public void ChangeInterpolation(string shapeName, string smrPath, float time, InterpolationType interp)
