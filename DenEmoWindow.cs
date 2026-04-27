@@ -452,7 +452,11 @@ namespace DenEmo
                 GUILayout.Space(4);
                 bool trackFilter = _animModeUI.TrackFilterEnabled;
                 var trackStyle = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
-                if (GUILayout.Button(DenEmoLoc.EnglishMode ? "◆ Track" : "◆ トラック", trackStyle, GUILayout.ExpandWidth(false)))
+                var trackLabel = DenEmoLoc.EnglishMode ? "◆ Keyed Only" : "◆ キー有りのみ";
+                var trackTip = DenEmoLoc.EnglishMode
+                    ? "Show only shape keys that have tracks/keyframes in the current clip"
+                    : "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示";
+                if (GUILayout.Button(new GUIContent(trackLabel, trackTip), trackStyle, GUILayout.ExpandWidth(false)))
                 {
                     _animModeUI.TrackFilterEnabled = !trackFilter;
                     Repaint();
