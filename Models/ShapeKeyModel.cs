@@ -52,6 +52,11 @@ namespace DenEmo.Models
 
         public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero = false, bool showOnlyFavorites = false)
         {
+            UpdateVisibility(searchTokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites, null);
+        }
+
+        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero, bool showOnlyFavorites, HashSet<int> vertexMovedShapeIndices)
+        {
             foreach (var item in Items)
             {
                 item.IsVisible = false;
@@ -71,8 +76,45 @@ namespace DenEmo.Models
                 if (showOnlyFavorites && !item.IsFavorite)
                     continue;
 
+                if (vertexMovedShapeIndices != null && !vertexMovedShapeIndices.Contains(item.Index))
+                    continue;
+
                 item.IsVisible = true;
             }
+        }
+
+        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float epsilon = 0.000001f)
+        {
+            var result = new HashSet<int>();
+            if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null) return result;
+
+            var mesh = TargetSkinnedMesh.sharedMesh;
+            int vertexCount = mesh.vertexCount;
+            if (vertexIndex < 0 || vertexIndex >= vertexCount) return result;
+
+            int blendShapeCount = mesh.blendShapeCount;
+            if (blendShapeCount <= 0) return result;
+
+            var deltaVertices = new Vector3[vertexCount];
+            var deltaNormals = new Vector3[vertexCount];
+            var deltaTangents = new Vector3[vertexCount];
+            float eps2 = epsilon * epsilon;
+
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeCount; blendShapeIndex++)
+            {
+                int frameCount = mesh.GetBlendShapeFrameCount(blendShapeIndex);
+                for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+                {
+                    mesh.GetBlendShapeFrameVertices(blendShapeIndex, frameIndex, deltaVertices, deltaNormals, deltaTangents);
+                    if (deltaVertices[vertexIndex].sqrMagnitude > eps2)
+                    {
+                        result.Add(blendShapeIndex);
+                        break;
+                    }
+                }
+            }
+
+            return result;
         }
 
         public void BuildGroups()
