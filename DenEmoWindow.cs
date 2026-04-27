@@ -756,9 +756,9 @@ namespace DenEmo
                 }
 
                 float handleSize = HandleUtility.GetHandleSize(world);
-                // 遠くにあるときは小さく、近くにあるときは大きく見えるように、ワールド空間で固定サイズにする
-                // ただし極端に見えなくならないように少しだけ画面サイズ（handleSize）をブレンドする
-                float size = Mathf.Lerp(0.008f, handleSize * VertexGuideHandleSizeMultiplier, 0.2f);
+                // 遠くにあるときは小さく、近くにあるときは大きく見えるように、ワールド空間ベースの固定サイズにする
+                // 以前のサイズが大きすぎたため、ベースサイズと画面サイズブレンドの係数を大幅に縮小
+                float size = 0.002f + handleSize * 0.002f;
                 
                 // Z-fighting（めり込み）を防ぐためのオフセットは、深度精度に依存するためカメラ距離(handleSize)に比例させる
                 Vector3 drawPos = world + viewDir * (handleSize * 0.02f);
