@@ -824,8 +824,19 @@ namespace DenEmo
 
             if (!cacheInvalid) return;
 
+            SkinnedMeshRenderer targetToBake = _model.TargetSkinnedMesh;
+            Transform bakeTransform = smrTransform;
+
+            // NDMFのプレビューオブジェクトが存在すれば優先する
+            SkinnedMeshRenderer proxySmr = GetNDMFProxySMR(_model.TargetSkinnedMesh);
+            if (proxySmr != null)
+            {
+                targetToBake = proxySmr;
+                bakeTransform = proxySmr.transform;
+            }
+
             Mesh bakedMesh = new Mesh();
-            _model.TargetSkinnedMesh.BakeMesh(bakedMesh);
+            targetToBake.BakeMesh(bakedMesh);
             var vertices = bakedMesh.vertices;
             var normals = bakedMesh.normals;
 
@@ -834,6 +845,7 @@ namespace DenEmo
             {
                 vertices = mesh.vertices;
                 normals = mesh.normals;
+                bakeTransform = smrTransform;
             }
 
             if (vertices == null || vertices.Length == 0)
@@ -850,15 +862,54 @@ namespace DenEmo
 
             for (int i = 0; i < vertices.Length; i++)
             {
-                vertexGuideWorldPositions[i] = smrTransform.TransformPoint(vertices[i]);
+                vertexGuideWorldPositions[i] = bakeTransform.TransformPoint(vertices[i]);
                 if (hasNormals)
-                    vertexGuideWorldNormals[i] = smrTransform.TransformDirection(normals[i]);
+                    vertexGuideWorldNormals[i] = bakeTransform.TransformDirection(normals[i]);
             }
 
             DestroyImmediate(bakedMesh);
 
             vertexGuideMeshInstanceId = meshId;
             vertexGuideLocalToWorld = localToWorldMatrix;
+        }
+
+        private System.Type GetNDMFPreviewManagerType()
+        {
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType("nadena.dev.ndmf.editor.PreviewManager");
+                if (type != null) return type;
+            }
+            return null;
+        }
+
+        private SkinnedMeshRenderer GetNDMFProxySMR(SkinnedMeshRenderer originalSmr)
+        {
+            if (originalSmr == null) return null;
+            var type = GetNDMFPreviewManagerType();
+            if (type == null) return null;
+
+            var instanceProp = type.GetProperty("Instance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy);
+            if (instanceProp == null) return null;
+
+            var instance = instanceProp.GetValue(null);
+            if (instance == null) return null;
+
+            var getProxyMethod = type.GetMethod("GetProxy", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (getProxyMethod == null) return null;
+
+            var root = originalSmr.transform.root.gameObject;
+            var proxyRoot = getProxyMethod.Invoke(instance, new object[] { root }) as GameObject;
+            if (proxyRoot == null) return null;
+
+            // プレビューツリーから同名のSMRを探す
+            var smrs = proxyRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var smr in smrs)
+            {
+                if (smr.name == originalSmr.name) return smr;
+            }
+
+            return null;
         }
 
         private void ClearVertexGuideCache()
