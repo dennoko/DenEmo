@@ -102,5 +102,47 @@ namespace DenEmo.UI
             clipModel.CurrentTime = Mathf.Clamp(t, 0f, clipModel.ClipLength);
             preview.SampleAt(clipModel.CurrentTime);
         }
+
+        private void DrawKeyframeDeleteButtons(
+            AnimationClipModel clipModel, AnimationPreviewController preview, string smrPath, EditorWindow window)
+        {
+            float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
+            if (allKeys == null || allKeys.Length == 0) return;
+
+            Rect rowRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+            {
+                EditorGUI.DrawRect(rowRect, DenEmoTheme.Surface0);
+                float cy = rowRect.y;
+                EditorGUI.DrawRect(new Rect(rowRect.x + TRACK_LABEL_WIDTH, cy, rowRect.width - TRACK_LABEL_WIDTH, 1), DenEmoTheme.Outline);
+            }
+
+            float trackW = rowRect.width - TRACK_LABEL_WIDTH;
+            float trackX = rowRect.x + TRACK_LABEL_WIDTH;
+
+            EnsureKfLabelStyle();
+            
+            foreach (float kTime in allKeys)
+            {
+                float norm = clipModel.ClipLength > 0f ? kTime / clipModel.ClipLength : 0f;
+                float kx = trackX + norm * trackW;
+                
+                Rect btnRect = new Rect(kx - 8, rowRect.y + 4, 16, 16);
+                
+                if (GUI.Button(btnRect, new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete all keys at this frame" : "このフレームの全キーを削除"), DenEmoTheme.MiniButtonStyle))
+                {
+                    if (EditorUtility.DisplayDialog(
+                        DenEmoLoc.EnglishMode ? "Delete Frame Keys" : "フレームキーの削除",
+                        DenEmoLoc.EnglishMode ? $"Delete all keyframes at {kTime:F2}s?" : $"{kTime:F2}秒のすべてのキーフレームを削除しますか？",
+                        DenEmoLoc.EnglishMode ? "Yes" : "はい",
+                        DenEmoLoc.EnglishMode ? "No" : "いいえ"))
+                    {
+                        preview.DeleteAllKeyframesAtTime(smrPath, kTime);
+                        preview.SampleAt(clipModel.CurrentTime);
+                        window.Repaint();
+                    }
+                }
+            }
+        }
     }
 }

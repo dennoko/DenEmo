@@ -27,6 +27,8 @@ namespace DenEmo.Core
 
         public bool IsActive => _isActive;
 
+        public void SetCacheDirty() => _cacheDirty = true;
+
         // ─── Preview lifecycle ────────────────────────────────────────────────
 
         public void Start(AnimationClipModel clipModel, ShapeKeyModel shapeModel)
@@ -92,29 +94,7 @@ namespace DenEmo.Core
             float tol     = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
             float clipLen = _clipModel.ClipLength;
 
-            bool shouldAutoLoop = false;
-            if (clipLen > 0f && Mathf.Abs(time) <= tol)
-            {
-                int endKeyIdx = FindKeyAtTime(curve, clipLen, tol);
-                
-                bool onlyHasTimeZeroKeys = true;
-                foreach (var k in curve.keys)
-                {
-                    if (Mathf.Abs(k.time) > tol) { onlyHasTimeZeroKeys = false; break; }
-                }
-
-                if (endKeyIdx >= 0 || curve.keys.Length == 0 || onlyHasTimeZeroKeys)
-                {
-                    shouldAutoLoop = true;
-                }
-            }
-
             WriteSingleKey(curve, time, value, interp, tol);
-
-            if (shouldAutoLoop)
-            {
-                WriteSingleKey(curve, clipLen, value, interp, tol);
-            }
 
             AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
             EditorUtility.SetDirty(_clipModel.Clip);
@@ -200,41 +180,7 @@ namespace DenEmo.Core
                 DeleteKeyframe(shapeName, smrPath, time);
         }
 
-        /// <summary>Copies the first keyframe (time=0) to the end frame for all tracks to create a loop.</summary>
-        public void AddLoopKey(string smrPath, float clipLength, InterpolationType interp)
-        {
-            if (_clipModel?.Clip == null) return;
-            if (clipLength <= 0f) return;
 
-            Undo.RecordObject(_clipModel.Clip, "Add Loop Key");
-            bool changed = false;
-
-            float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
-
-            foreach (var binding in AnimationUtility.GetCurveBindings(_clipModel.Clip))
-            {
-                if (binding.type != typeof(SkinnedMeshRenderer)) continue;
-                if (!binding.propertyName.StartsWith("blendShape.")) continue;
-                if (binding.path != (smrPath ?? "")) continue;
-
-                var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding);
-                if (curve == null || curve.keys.Length == 0) continue;
-
-                int firstKeyIdx = FindKeyAtTime(curve, 0f, tol);
-                if (firstKeyIdx < 0) continue;
-
-                float val = curve.keys[firstKeyIdx].value;
-                WriteSingleKey(curve, clipLength, val, interp, tol);
-                AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
-                changed = true;
-            }
-
-            if (changed)
-            {
-                EditorUtility.SetDirty(_clipModel.Clip);
-                _cacheDirty = true;
-            }
-        }
         /// <summary>Changes the interpolation mode of the keyframe closest to the given time.</summary>
         public void ChangeInterpolation(string shapeName, string smrPath, float time, InterpolationType interp)
         {
@@ -315,7 +261,33 @@ namespace DenEmo.Core
                 if (index < 0 || index >= count) continue;
 
                 var curve = AnimationUtility.GetEditorCurve(clip, binding);
-                if (curve != null) _curveCache[index] = curve;
+                if (curve != null)
+                {
+                    if (_clipModel.SmoothLoopEnabled && curve.keys.Length > 0 && _clipModel.ClipLength > 0f)
+                    {
+                        var loopCurve = new AnimationCurve(curve.keys);
+                        float valZero = loopCurve.Evaluate(0f);
+                        float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+                        int endIdx = FindKeyAtTime(loopCurve, _clipModel.ClipLength, tol);
+                        if (endIdx >= 0)
+                        {
+                            loopCurve.RemoveKey(endIdx);
+                        }
+                        int newIdx = loopCurve.AddKey(new Keyframe(_clipModel.ClipLength, valZero));
+                        // Try to preserve interpolation from the start key if possible
+                        int startIdx = FindKeyAtTime(loopCurve, 0f, tol);
+                        if (startIdx >= 0)
+                        {
+                            AnimationUtility.SetKeyLeftTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve, startIdx));
+                            AnimationUtility.SetKeyRightTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyRightTangentMode(loopCurve, startIdx));
+                        }
+                        _curveCache[index] = loopCurve;
+                    }
+                    else
+                    {
+                        _curveCache[index] = curve;
+                    }
+                }
             }
         }
 

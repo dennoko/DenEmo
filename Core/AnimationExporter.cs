@@ -203,11 +203,12 @@ namespace DenEmo.Core
         /// If no asset exists yet one is created.
         /// Returns null on success, an error message string on failure.
         /// </summary>
-        public static string SaveMultiFrameClip(AnimationClip clip, string path)
+        public static string SaveMultiFrameClip(AnimationClipModel clipModel, string path)
         {
-            if (clip == null)                      return DenEmoLoc.T("dlg.apply.noClip");
-            if (string.IsNullOrEmpty(path))        return DenEmoLoc.T("dlg.apply.noClip");
+            if (clipModel == null || clipModel.Clip == null) return DenEmoLoc.T("dlg.apply.noClip");
+            if (string.IsNullOrEmpty(path))                  return DenEmoLoc.T("dlg.apply.noClip");
 
+            var clip = clipModel.Clip;
             var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
 
             if (existing == clip)
@@ -222,11 +223,7 @@ namespace DenEmo.Core
                 Undo.RecordObject(existing, "Save Animation Clip");
                 existing.ClearCurves();
                 existing.frameRate = clip.frameRate;
-                foreach (var b in AnimationUtility.GetCurveBindings(clip))
-                {
-                    var curve = AnimationUtility.GetEditorCurve(clip, b);
-                    if (curve != null) AnimationUtility.SetEditorCurve(existing, b, curve);
-                }
+                ApplyCurvesWithOptionalLoop(clip, existing, clipModel);
                 EditorUtility.SetDirty(existing);
                 AssetDatabase.SaveAssets();
             }
@@ -238,7 +235,11 @@ namespace DenEmo.Core
                 {
                     try { Directory.CreateDirectory(dir); } catch { }
                 }
-                AssetDatabase.CreateAsset(clip, path);
+                
+                var newClip = new AnimationClip { frameRate = clip.frameRate };
+                ApplyCurvesWithOptionalLoop(clip, newClip, clipModel);
+                
+                AssetDatabase.CreateAsset(newClip, path);
                 AssetDatabase.SaveAssets();
             }
 
@@ -249,6 +250,50 @@ namespace DenEmo.Core
                 Selection.activeObject = asset;
             }
             return null;
+        }
+
+        private static void ApplyCurvesWithOptionalLoop(AnimationClip source, AnimationClip target, AnimationClipModel clipModel)
+        {
+            foreach (var b in AnimationUtility.GetCurveBindings(source))
+            {
+                var curve = AnimationUtility.GetEditorCurve(source, b);
+                if (curve != null)
+                {
+                    if (clipModel.SmoothLoopEnabled && curve.keys.Length > 0 && clipModel.ClipLength > 0f)
+                    {
+                        var loopCurve = new AnimationCurve(curve.keys);
+                        float valZero = loopCurve.Evaluate(0f);
+                        float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+                        
+                        int endIdx = -1;
+                        for (int i = 0; i < loopCurve.keys.Length; i++)
+                            if (Mathf.Abs(loopCurve.keys[i].time - clipModel.ClipLength) <= tol) { endIdx = i; break; }
+                            
+                        if (endIdx >= 0)
+                        {
+                            loopCurve.RemoveKey(endIdx);
+                        }
+                        
+                        int newIdx = loopCurve.AddKey(new Keyframe(clipModel.ClipLength, valZero));
+                        
+                        int startIdx = -1;
+                        for (int i = 0; i < loopCurve.keys.Length; i++)
+                            if (Mathf.Abs(loopCurve.keys[i].time) <= tol) { startIdx = i; break; }
+                            
+                        if (startIdx >= 0)
+                        {
+                            AnimationUtility.SetKeyLeftTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve, startIdx));
+                            AnimationUtility.SetKeyRightTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyRightTangentMode(loopCurve, startIdx));
+                        }
+                        
+                        AnimationUtility.SetEditorCurve(target, b, loopCurve);
+                    }
+                    else
+                    {
+                        AnimationUtility.SetEditorCurve(target, b, curve);
+                    }
+                }
+            }
         }
 
         public static string ApplyAnimationToMesh(AnimationClip clip, ShapeKeyModel model)

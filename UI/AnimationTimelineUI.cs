@@ -106,6 +106,8 @@ namespace DenEmo.UI
                 DrawKeyframeTracks(clipModel, preview, shapeModel, smrPath, currentInterp, window);
             }
 
+            DrawKeyframeDeleteButtons(clipModel, preview, smrPath, window);
+
             EditorGUILayout.EndVertical();
 
             GUILayout.EndVertical();

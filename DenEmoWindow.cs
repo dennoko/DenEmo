@@ -462,22 +462,6 @@ namespace DenEmo
                 DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",
                 "DenEmo_SymmetryMode");
 
-            if (_currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null)
-            {
-                GUILayout.Space(4);
-                bool trackFilter = _animModeUI.TrackFilterEnabled;
-                var trackStyle = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
-                var trackLabel = DenEmoLoc.EnglishMode ? "◆ Keyed Only" : "◆ キー有りのみ";
-                var trackTip = DenEmoLoc.EnglishMode
-                    ? "Show only shape keys that have tracks/keyframes in the current clip"
-                    : "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示";
-                if (GUILayout.Button(new GUIContent(trackLabel, trackTip), trackStyle, GUILayout.ExpandWidth(false)))
-                {
-                    _animModeUI.TrackFilterEnabled = !trackFilter;
-                    Repaint();
-                }
-            }
-
             GUILayout.Space(4);
             if (vertexPickMode)
             {
@@ -508,6 +492,22 @@ namespace DenEmo
                     GUILayout.Space(2);
                     if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
                         ClearVertexFilter();
+                }
+            }
+
+            if (_currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null)
+            {
+                GUILayout.Space(4);
+                bool trackFilter = _animModeUI.TrackFilterEnabled;
+                var trackStyle = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+                var trackLabel = DenEmoLoc.EnglishMode ? "◆ Keyed Only" : "◆ キー有りのみ";
+                var trackTip = DenEmoLoc.EnglishMode
+                    ? "Show only shape keys that have tracks/keyframes in the current clip"
+                    : "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示";
+                if (GUILayout.Button(new GUIContent(trackLabel, trackTip), trackStyle, GUILayout.ExpandWidth(false)))
+                {
+                    _animModeUI.TrackFilterEnabled = !trackFilter;
+                    Repaint();
                 }
             }
 

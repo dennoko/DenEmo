@@ -12,6 +12,7 @@ namespace DenEmo.Models
         public float CurrentTime  { get; set; }
         public float ClipLength   { get; set; } = 1f;
         public float FPS          { get; set; } = 60f;
+        public bool  SmoothLoopEnabled { get; set; } = false;
 
         public int CurrentFrame => Mathf.RoundToInt(CurrentTime * FPS);
         public int TotalFrames  => Mathf.RoundToInt(ClipLength  * FPS);

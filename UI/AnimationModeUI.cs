@@ -267,7 +267,7 @@ namespace DenEmo.UI
                 if (string.IsNullOrEmpty(path)) return;
             }
 
-            string err = AnimationExporter.SaveMultiFrameClip(ClipModel.Clip, path);
+            string err = AnimationExporter.SaveMultiFrameClip(ClipModel, path);
             if (err != null) setStatus(err, 3);
             else             setStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
         }

@@ -25,6 +25,8 @@ namespace DenEmo.UI
             GUILayout.Space(6);
             EditorGUILayout.BeginHorizontal(GUILayout.Height(20));
 
+            GUILayout.FlexibleSpace();
+
             GUILayout.Label("FPS:", _timelineLabelStyle, GUILayout.Width(28), GUILayout.Height(20));
             float newFps = EditorGUILayout.FloatField(clipModel.FPS, GUILayout.Width(40), GUILayout.Height(20));
             if (!Mathf.Approximately(newFps, clipModel.FPS) && newFps > 0f)
@@ -62,26 +64,6 @@ namespace DenEmo.UI
 
             GUILayout.FlexibleSpace();
 
-            if (GUILayout.Button(
-                new GUIContent(DenEmoLoc.EnglishMode ? "✕ Clear Frame" : "✕ フレーム削除", DenEmoLoc.EnglishMode ? "Delete all keys at current frame" : "現在フレームのキーを全削除"),
-                _clearBtnStyle, GUILayout.Height(20)))
-            {
-                preview.DeleteAllKeyframesAtTime(smrPath, clipModel.CurrentTime);
-                preview.SampleAt(clipModel.CurrentTime);
-                window.Repaint();
-            }
-
-            GUILayout.Space(8);
-
-            if (GUILayout.Button(
-                new GUIContent(DenEmoLoc.EnglishMode ? "↺ Loop" : "↺ ループ", DenEmoLoc.EnglishMode ? "Copy first key to end frame" : "先頭キーを末尾フレームへ複製"),
-                _clearBtnStyle, GUILayout.Height(20), GUILayout.Width(62)))
-            {
-                preview.AddLoopKey(smrPath, clipModel.ClipLength, currentInterp);
-                preview.SampleAt(clipModel.CurrentTime);
-                window.Repaint();
-            }
-
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(6);
             EditorGUILayout.EndVertical();
@@ -90,12 +72,12 @@ namespace DenEmo.UI
 
             GUILayout.Space(12);
 
-            // ─── Row 2: Transport & Actions ───
+            // ─── Row 2: Transport ───
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
 
             // Playback buttons in a cohesive toolbar container
-            EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle);
+            EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle, GUILayout.ExpandWidth(false));
 
             if (GUILayout.Button(
                 new GUIContent("|<", DenEmoLoc.EnglishMode ? "Go to start frame" : "先頭フレームへ移動"),
@@ -190,13 +172,16 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
 
-            GUILayout.Space(24);
+            GUILayout.Space(8);
 
-            // Frame input & Speed
-            EditorGUILayout.BeginVertical();
-            GUILayout.Space(5); // Match top padding of ToolbarStyle
-            EditorGUILayout.BeginHorizontal(GUILayout.Height(22));
+            // ─── Row 3: Current State & Options ───
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+
+            EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle, GUILayout.ExpandWidth(false));
 
             GUILayout.Label(DenEmoLoc.EnglishMode ? "Frame:" : "フレーム:", _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(22));
             int curFrame = clipModel.CurrentFrame;
@@ -219,22 +204,54 @@ namespace DenEmo.UI
 
             GUILayout.Space(16);
 
-            if (GUILayout.Button(
-                new GUIContent(isRecording ? "🔴 Auto-Key" : "⚪ Auto-Key", DenEmoLoc.EnglishMode ? "Toggle recording mode" : "録画モード切替"),
-                isRecording ? _recOnStyle : _recOffStyle, GUILayout.Height(22), GUILayout.Width(84)))
+            bool newSmoothLoop = GUILayout.Toggle(
+                clipModel.SmoothLoopEnabled,
+                new GUIContent(
+                    DenEmoLoc.EnglishMode ? " Loop Support" : " ループ対応",
+                    DenEmoLoc.EnglishMode ? "Aligns the last value to the first to connect smoothly" : "なめらかに繋げるために最後の値を最初に揃える機能"),
+                GUILayout.Height(22));
+            if (newSmoothLoop != clipModel.SmoothLoopEnabled)
+            {
+                clipModel.SmoothLoopEnabled = newSmoothLoop;
+                preview.SetCacheDirty();
+                preview.SampleAt(clipModel.CurrentTime);
+                window.Repaint();
+            }
+
+            GUILayout.Space(16);
+
+            var prevColor = GUI.backgroundColor;
+            if (isRecording) GUI.backgroundColor = new Color(1f, 0.4f, 0.4f);
+            
+            Rect recBtnRect = GUILayoutUtility.GetRect(new GUIContent("🔴 REC"), isRecording ? _recOnStyle : _recOffStyle, GUILayout.Height(22), GUILayout.Width(64));
+            
+            if (Event.current.type == EventType.Repaint && !isRecording)
+            {
+                Color borderColor = new Color(0.8f, 0.2f, 0.2f, 0.8f);
+                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.y, recBtnRect.width, 1), borderColor);
+                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.yMax - 1, recBtnRect.width, 1), borderColor);
+                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.y, 1, recBtnRect.height), borderColor);
+                EditorGUI.DrawRect(new Rect(recBtnRect.xMax - 1, recBtnRect.y, 1, recBtnRect.height), borderColor);
+            }
+            
+            if (GUI.Button(recBtnRect,
+                new GUIContent("🔴 REC", DenEmoLoc.EnglishMode ? "Toggle recording mode" : "録画モード切替"),
+                isRecording ? _recOnStyle : _recOffStyle))
             {
                 isRecording = !isRecording;
                 startPreview?.Invoke();
                 window.Repaint();
             }
+            
+            GUI.backgroundColor = prevColor;
 
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
             GUILayout.Space(8);
+
         }
     }
 }
