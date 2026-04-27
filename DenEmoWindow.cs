@@ -42,6 +42,9 @@ namespace DenEmo
         private bool vertexFilterActive   = false;
         private int  selectedVertexIndex  = -1;
         private HashSet<int> vertexMovedShapeIndices = null;
+        private Vector3[] vertexGuideWorldPositions = null;
+        private int vertexGuideMeshInstanceId = 0;
+        private Matrix4x4 vertexGuideLocalToWorld = Matrix4x4.zero;
 
         private bool lastShowOnlyIncluded  = false;
         private bool lastShowOnlyNonZero   = false;
@@ -138,6 +141,7 @@ namespace DenEmo
             _listUI.StopThrottle();
             _animModeUI.OnDisable();
             vertexPickMode = false;
+            ClearVertexGuideCache();
 
             if (includeFlagsDirty) SaveIncludeFlagsPrefsImmediate();
 
@@ -473,6 +477,7 @@ namespace DenEmo
                 if (GUILayout.Button(DenEmoLoc.T("ui.filter.vertex.cancel"), DenEmoTheme.ChipOnStyle, GUILayout.ExpandWidth(false)))
                 {
                     vertexPickMode = false;
+                    ClearVertexGuideCache();
                     SceneView.RepaintAll();
                     Repaint();
                 }
@@ -486,6 +491,7 @@ namespace DenEmo
                 if (GUILayout.Button(vertexFilterLabel, vertexStyle, GUILayout.ExpandWidth(false)))
                 {
                     vertexPickMode = true;
+                    ClearVertexGuideCache();
                     SceneView.RepaintAll();
                     Repaint();
                 }
@@ -713,9 +719,8 @@ namespace DenEmo
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
             DenEmoTheme.Initialize();
 
-            var mesh = _model.TargetSkinnedMesh.sharedMesh;
-            var vertices = mesh.vertices;
-            if (vertices == null || vertices.Length == 0) return;
+            var worldPositions = GetVertexGuideWorldPositions();
+            if (worldPositions == null || worldPositions.Length == 0) return;
 
             Handles.BeginGUI();
             GUI.Label(
@@ -726,11 +731,9 @@ namespace DenEmo
 
             var prevColor = Handles.color;
             int pickedIndex = -1;
-            for (int i = 0; i < vertices.Length; i++)
+            for (int i = 0; i < worldPositions.Length; i++)
             {
-                // NOTE: Do not use the displayed/deformed scene mesh directly.
-                // We draw guides from sharedMesh vertices to avoid drift with non-destructive tools.
-                Vector3 world = _model.TargetSkinnedMesh.transform.TransformPoint(vertices[i]);
+                Vector3 world = worldPositions[i];
                 float size = HandleUtility.GetHandleSize(world) * 0.015f;
                 Handles.color = i == selectedVertexIndex ? Color.yellow : new Color(0.24f, 0.72f, 1.0f, 0.95f);
                 if (Handles.Button(world, Quaternion.identity, size, size, Handles.DotHandleCap))
@@ -747,6 +750,7 @@ namespace DenEmo
                 vertexMovedShapeIndices = _model.CollectShapeIndicesMovingVertex(selectedVertexIndex);
                 vertexFilterActive = true;
                 vertexPickMode = false;
+                ClearVertexGuideCache();
                 UpdateVisibility();
                 SceneView.RepaintAll();
                 Repaint();
@@ -756,6 +760,7 @@ namespace DenEmo
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
             {
                 vertexPickMode = false;
+                ClearVertexGuideCache();
                 SceneView.RepaintAll();
                 Repaint();
                 Event.current.Use();
@@ -768,9 +773,49 @@ namespace DenEmo
             vertexFilterActive = false;
             selectedVertexIndex = -1;
             vertexMovedShapeIndices = null;
+            ClearVertexGuideCache();
             UpdateVisibility();
             SceneView.RepaintAll();
             Repaint();
+        }
+
+        private Vector3[] GetVertexGuideWorldPositions()
+        {
+            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
+            var mesh = _model.TargetSkinnedMesh.sharedMesh;
+            var l2w = _model.TargetSkinnedMesh.transform.localToWorldMatrix;
+            int meshId = mesh.GetInstanceID();
+
+            bool cacheInvalid = vertexGuideWorldPositions == null
+                || vertexGuideWorldPositions.Length != mesh.vertexCount
+                || vertexGuideMeshInstanceId != meshId
+                || vertexGuideLocalToWorld != l2w;
+
+            if (!cacheInvalid) return vertexGuideWorldPositions;
+
+            // NOTE: Do not use the displayed/deformed scene mesh directly.
+            // We draw guides from sharedMesh vertices to avoid drift with non-destructive tools.
+            var vertices = mesh.vertices;
+            if (vertices == null || vertices.Length == 0)
+            {
+                vertexGuideWorldPositions = null;
+                return null;
+            }
+
+            vertexGuideWorldPositions = new Vector3[vertices.Length];
+            for (int i = 0; i < vertices.Length; i++)
+                vertexGuideWorldPositions[i] = _model.TargetSkinnedMesh.transform.TransformPoint(vertices[i]);
+
+            vertexGuideMeshInstanceId = meshId;
+            vertexGuideLocalToWorld = l2w;
+            return vertexGuideWorldPositions;
+        }
+
+        private void ClearVertexGuideCache()
+        {
+            vertexGuideWorldPositions = null;
+            vertexGuideMeshInstanceId = 0;
+            vertexGuideLocalToWorld = Matrix4x4.zero;
         }
 
         private void SetStatus(string msg, int level, double autoClearSec = 3.0)

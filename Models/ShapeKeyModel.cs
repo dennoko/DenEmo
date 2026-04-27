@@ -83,7 +83,7 @@ namespace DenEmo.Models
             }
         }
 
-        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float epsilon = 0.000001f)
+        public HashSet<int> CollectShapeIndicesMovingVertex(int vertexIndex, float movementThreshold = 0.000001f)
         {
             var result = new HashSet<int>();
             if (TargetSkinnedMesh == null || TargetSkinnedMesh.sharedMesh == null) return result;
@@ -98,7 +98,7 @@ namespace DenEmo.Models
             var deltaVertices = new Vector3[vertexCount];
             var deltaNormals = new Vector3[vertexCount];
             var deltaTangents = new Vector3[vertexCount];
-            float eps2 = epsilon * epsilon;
+            float thresholdSquared = movementThreshold * movementThreshold;
 
             for (int blendShapeIndex = 0; blendShapeIndex < blendShapeCount; blendShapeIndex++)
             {
@@ -106,7 +106,7 @@ namespace DenEmo.Models
                 for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
                 {
                     mesh.GetBlendShapeFrameVertices(blendShapeIndex, frameIndex, deltaVertices, deltaNormals, deltaTangents);
-                    if (deltaVertices[vertexIndex].sqrMagnitude > eps2)
+                    if (deltaVertices[vertexIndex].sqrMagnitude > thresholdSquared)
                     {
                         result.Add(blendShapeIndex);
                         break;
