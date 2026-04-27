@@ -194,7 +194,7 @@ namespace DenEmo.UI
 
             GUILayout.Space(8);
 
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "Interp:" : "補完:", DenEmoTheme.CaptionStyle, GUILayout.Width(32));
+            GUILayout.Label(DenEmoLoc.EnglishMode ? "Interp:" : "補間:", DenEmoTheme.CaptionStyle, GUILayout.Width(32));
             InterpolationType newInterp = (InterpolationType)GUILayout.Toolbar(
                 (int)currentInterp,
                 new[] { "Step", "Linear", "Ease" },
