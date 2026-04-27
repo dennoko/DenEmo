@@ -873,40 +873,40 @@ namespace DenEmo
             vertexGuideLocalToWorld = localToWorldMatrix;
         }
 
-        private System.Type GetNDMFPreviewManagerType()
-        {
-            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType("nadena.dev.ndmf.editor.PreviewManager");
-                if (type != null) return type;
-            }
-            return null;
-        }
-
         private SkinnedMeshRenderer GetNDMFProxySMR(SkinnedMeshRenderer originalSmr)
         {
             if (originalSmr == null) return null;
-            var type = GetNDMFPreviewManagerType();
-            if (type == null) return null;
-
-            var instanceProp = type.GetProperty("Instance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy);
-            if (instanceProp == null) return null;
-
-            var instance = instanceProp.GetValue(null);
-            if (instance == null) return null;
-
-            var getProxyMethod = type.GetMethod("GetProxy", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-            if (getProxyMethod == null) return null;
-
-            var root = originalSmr.transform.root.gameObject;
-            var proxyRoot = getProxyMethod.Invoke(instance, new object[] { root }) as GameObject;
-            if (proxyRoot == null) return null;
-
-            // プレビューツリーから同名のSMRを探す
-            var smrs = proxyRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            foreach (var smr in smrs)
+            
+            System.Type sessionType = null;
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (smr.name == originalSmr.name) return smr;
+                if (assembly.GetName().Name == "nadena.dev.ndmf")
+                {
+                    sessionType = assembly.GetType("nadena.dev.ndmf.preview.PreviewSession");
+                    break;
+                }
+            }
+            if (sessionType == null) return null;
+
+            var currentProp = sessionType.GetProperty("Current", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (currentProp == null) return null;
+
+            var session = currentProp.GetValue(null);
+            if (session == null) return null;
+
+            var mapProp = sessionType.GetProperty("OriginalToProxyRenderer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (mapProp == null) return null;
+
+            var map = mapProp.GetValue(session);
+            if (map != null)
+            {
+                var tryGetValueMethod = map.GetType().GetMethod("TryGetValue");
+                if (tryGetValueMethod != null)
+                {
+                    var args = new object[] { originalSmr, null };
+                    bool success = (bool)tryGetValueMethod.Invoke(map, args);
+                    if (success) return args[1] as SkinnedMeshRenderer;
+                }
             }
 
             return null;
