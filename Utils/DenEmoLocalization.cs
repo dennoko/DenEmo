@@ -67,6 +67,10 @@ public static class DenEmoLoc
         // Filter
         ["ui.filter.showIncluded"] = "有効なシェイプのみ表示",
         ["ui.filter.showIncluded.tip"] = "チェックが入っている（保存対象の）シェイプだけを一覧に表示します。",
+        ["ui.filter.vertex"] = "● 頂点で絞り込み",
+        ["ui.filter.vertex.active"] = "● 頂点:{0}",
+        ["ui.filter.vertex.cancel"] = "× キャンセル",
+        ["ui.filter.vertex.guide"] = "頂点を1つクリックして絞り込み（Esc/キャンセルで中止）",
 
     // Symmetry
     ["ui.symmetry.label"] = "左右同期編集",
@@ -110,6 +114,15 @@ public static class DenEmoLoc
         ["save.panel.title"] = "アニメーションを保存",
         ["save.panel.defaultName"] = "blendshape_anim",
         ["save.panel.hint"] = "生成されたアニメーションを保存",
+
+        // Animation mode
+        ["ui.animMode.clip.label"] = "クリップ",
+        ["ui.animMode.clip.new"]   = "新規",
+        ["ui.animMode.clip.hint"]  = "クリップを選択するか、「新規」で作成してください。",
+        ["ui.animMode.length.label"] = "長さ(s):",
+        ["ui.animMode.interp.label"] = "補間:",
+        ["ui.animMode.tab.pose"]     = "ポーズ",
+        ["ui.animMode.tab.anim"]     = "アニメーション",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -157,6 +170,10 @@ public static class DenEmoLoc
         // Filter
         ["ui.filter.showIncluded"] = "Show only enabled shapes",
         ["ui.filter.showIncluded.tip"] = "List only shapes that are checked (will be saved).",
+        ["ui.filter.vertex"] = "● Filter by Vertex",
+        ["ui.filter.vertex.active"] = "● Vertex:{0}",
+        ["ui.filter.vertex.cancel"] = "× Cancel",
+        ["ui.filter.vertex.guide"] = "Click one vertex to filter (Esc/Cancel to stop)",
 
     // Symmetry
     ["ui.symmetry.label"] = "Symmetry edit",
@@ -200,6 +217,15 @@ public static class DenEmoLoc
         ["save.panel.title"] = "Save Animation",
         ["save.panel.defaultName"] = "blendshape_anim",
         ["save.panel.hint"] = "Save generated animation",
+
+        // Animation mode
+        ["ui.animMode.clip.label"] = "Clip",
+        ["ui.animMode.clip.new"]   = "New",
+        ["ui.animMode.clip.hint"]  = "Select a clip or create a new one.",
+        ["ui.animMode.length.label"] = "Length(s):",
+        ["ui.animMode.interp.label"] = "Interp:",
+        ["ui.animMode.tab.pose"]     = "POSE",
+        ["ui.animMode.tab.anim"]     = "ANIMATION",
     };
 
     public static string T(string key)

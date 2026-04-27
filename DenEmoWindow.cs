@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -11,6 +11,14 @@ namespace DenEmo
 {
     public class DenEmoWindow : EditorWindow
     {
+        // ─── Mode ─────────────────────────────────────────────────────────────
+
+        private enum EditorMode { Pose, Animation }
+        private EditorMode _currentMode = EditorMode.Pose;
+        private const float VertexGuideHandleSizeMultiplier = 0.015f;
+        private static readonly Color VertexGuideColor = new Color(0.24f, 0.72f, 1.0f, 0.95f);
+
+        // ─── Pose mode state ──────────────────────────────────────────────────
         [MenuItem("dennokoworks/DenEmo")]
         public static void ShowWindow()
         {
@@ -18,8 +26,9 @@ namespace DenEmo
             w.minSize = new Vector2(380, 400);
         }
 
-        private ShapeKeyModel  _model  = new ShapeKeyModel();
-        private ShapeKeyListUI _listUI = new ShapeKeyListUI();
+        private ShapeKeyModel   _model      = new ShapeKeyModel();
+        private ShapeKeyListUI  _listUI     = new ShapeKeyListUI();
+        private AnimationModeUI _animModeUI = new AnimationModeUI();
 
         private string saveFolder  = "Assets/Generated_Animations";
         private string searchText  = string.Empty;
@@ -31,6 +40,14 @@ namespace DenEmo
         private bool symmetryMode       = false;
         private bool autoBackup         = true;
         private bool overwriteSaveEnabled = false;
+        private bool vertexPickMode       = false;
+        private bool vertexFilterActive   = false;
+        private int  selectedVertexIndex  = -1;
+        private HashSet<int> vertexMovedShapeIndices = null;
+        private Vector3[] vertexGuideWorldPositions = null;
+        private Vector3[] vertexGuideWorldNormals = null;
+        private int vertexGuideMeshInstanceId = 0;
+        private Matrix4x4 vertexGuideLocalToWorld = Matrix4x4.zero;
 
         private bool lastShowOnlyIncluded  = false;
         private bool lastShowOnlyNonZero   = false;
@@ -110,8 +127,27 @@ namespace DenEmo
             }
 
             Undo.undoRedoPerformed += OnUndoRedo;
+            EditorApplication.update += OnEditorUpdate;
+            SceneView.duringSceneGui += OnSceneGUI;
             SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
             LoadCollapsedGroupsPrefs();
+
+            // Restore mode
+            _currentMode = (EditorMode)DenEmoProjectPrefs.GetInt("DenEmo_Mode", 0);
+
+            // Restore animation clip reference
+            var animClipGuid = DenEmoProjectPrefs.GetString("DenEmo_AnimClipGuid", "");
+            if (!string.IsNullOrEmpty(animClipGuid))
+            {
+                var animClipPath = AssetDatabase.GUIDToAssetPath(animClipGuid);
+                if (!string.IsNullOrEmpty(animClipPath))
+                {
+                    var animClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(animClipPath);
+                    if (animClip != null) _animModeUI.ClipModel.SetClip(animClip);
+                }
+            }
+
+            _animModeUI.OnEnable(_model);
 
             _listUI.OnIncludeFlagsChanged = () =>
             {
@@ -126,7 +162,12 @@ namespace DenEmo
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
+            EditorApplication.update -= OnEditorUpdate;
+            SceneView.duringSceneGui -= OnSceneGUI;
             _listUI.StopThrottle();
+            _animModeUI.OnDisable();
+            vertexPickMode = false;
+            ClearVertexGuideCache();
 
             if (includeFlagsDirty) SaveIncludeFlagsPrefsImmediate();
 
@@ -148,6 +189,7 @@ namespace DenEmo
             DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",          autoBackup);
             DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled",overwriteSaveEnabled);
             DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter",           _meshFilterIndex);
+            DenEmoProjectPrefs.SetInt("DenEmo_Mode", (int)_currentMode);
 
             if (overwriteTargetClip != null)
             {
@@ -160,6 +202,18 @@ namespace DenEmo
                 DenEmoProjectPrefs.SetString("DenEmo_OverwriteClipGuid", "");
             }
 
+            // Save animation clip reference
+            if (_animModeUI.ClipModel.Clip != null)
+            {
+                var animClipPath = AssetDatabase.GetAssetPath(_animModeUI.ClipModel.Clip);
+                DenEmoProjectPrefs.SetString("DenEmo_AnimClipGuid",
+                    string.IsNullOrEmpty(animClipPath) ? "" : AssetDatabase.AssetPathToGUID(animClipPath));
+            }
+            else
+            {
+                DenEmoProjectPrefs.SetString("DenEmo_AnimClipGuid", "");
+            }
+
             if (snapshotValues != null && snapshotValues.Count > 0)
             {
                 var parts = new string[snapshotValues.Count];
@@ -170,6 +224,12 @@ namespace DenEmo
 
             SaveBlendValuesPrefs();
             SaveCollapsedGroupsPrefs();
+        }
+
+        private void OnEditorUpdate()
+        {
+            if (_currentMode == EditorMode.Animation)
+                _animModeUI.OnUpdate(this);
         }
 
         private void OnUndoRedo()
@@ -188,6 +248,8 @@ namespace DenEmo
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
 
             DenEmoCommonUI.DrawHeader(this);
+            DrawModeTabBar();
+            HandleDragAndDrop();
 
             bool hasTarget = DrawTargetMeshSection();
             if (!hasTarget)
@@ -198,12 +260,25 @@ namespace DenEmo
                 return;
             }
 
-            DrawAnimationSourceSection();
-            DrawSearchFilterSection();
+            if (_currentMode == EditorMode.Pose)
+            {
+                DrawAnimationSourceSection();
+                DrawSearchFilterSection();
+                _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
+                DrawFooterSection();
+            }
+            else
+            {
+                _animModeUI.DrawAnimationClipSection(_model, saveFolder, this);
+                _animModeUI.DrawTimeline(_model, this);
+                DrawSearchFilterSection();
+                var animContext = _animModeUI.ClipModel.Clip != null
+                    ? _animModeUI.BuildDrawContext(_model)
+                    : null;
+                _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this, animContext);
+                DrawAnimationSaveSection();
+            }
 
-            _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
-
-            DrawFooterSection();
             DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
             
             HandleDragAndDrop();
@@ -230,6 +305,52 @@ namespace DenEmo
             }
         }
 
+        // ─── Mode tab bar ─────────────────────────────────────────────────────
+
+        private void DrawModeTabBar()
+        {
+            EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle);
+            GUILayout.FlexibleSpace();
+
+            var poseStyle = _currentMode == EditorMode.Pose      ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+            var animStyle = _currentMode == EditorMode.Animation  ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.pose"), poseStyle))
+                SwitchMode(EditorMode.Pose);
+            GUILayout.Space(2);
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.anim"), animStyle))
+                SwitchMode(EditorMode.Animation);
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(2);
+        }
+
+        private void SwitchMode(EditorMode mode)
+        {
+            if (_currentMode == mode) return;
+
+            if (_currentMode == EditorMode.Animation)
+            {
+                // Leaving animation mode: stop preview and restore snapshot
+                _animModeUI.StopPreview();
+                if (snapshotValues != null && snapshotValues.Count > 0)
+                    RestoreSnapshot();
+            }
+
+            _currentMode = mode;
+
+            if (_currentMode == EditorMode.Animation)
+            {
+                // Entering animation mode: save current state as snapshot
+                CreateSnapshot(false);
+                if (_animModeUI.ClipModel.Clip != null && _model.TargetSkinnedMesh != null)
+                    _animModeUI.StartPreview(_model);
+            }
+
+            Repaint();
+        }
+
         // ─── Sections ────────────────────────────────────────────────────────
 
         private bool DrawTargetMeshSection()
@@ -246,6 +367,11 @@ namespace DenEmo
             {
                 _listUI.StopThrottle();
                 _model.SetTarget(newSmr);
+                vertexPickMode = false;
+                vertexFilterActive = false;
+                selectedVertexIndex = -1;
+                vertexMovedShapeIndices = null;
+                ClearVertexGuideCache();
                 ClampMeshFilterIndex();
                 RefreshListAndCache();
                 if (_model.TargetSkinnedMesh != null)
@@ -253,6 +379,8 @@ namespace DenEmo
                     CreateSnapshot(false);
                     SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
                 }
+                if (_currentMode == EditorMode.Animation)
+                    _animModeUI.OnTargetChanged(_model);
                 Repaint();
             }
             if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
@@ -469,15 +597,63 @@ namespace DenEmo
                 DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",
                 "DenEmo_SymmetryMode");
 
-            // 対象メッシュフィルター
+            GUILayout.Space(4);
+            if (vertexPickMode)
+            {
+                if (GUILayout.Button(DenEmoLoc.T("ui.filter.vertex.cancel"), DenEmoTheme.ChipOnStyle, GUILayout.ExpandWidth(false)))
+                {
+                    vertexPickMode = false;
+                    ClearVertexGuideCache();
+                    SceneView.RepaintAll();
+                    Repaint();
+                }
+            }
+            else
+            {
+                string vertexFilterLabel = vertexFilterActive
+                    ? DenEmoLoc.Tf("ui.filter.vertex.active", selectedVertexIndex)
+                    : DenEmoLoc.T("ui.filter.vertex");
+                var vertexStyle = vertexFilterActive ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+                if (GUILayout.Button(vertexFilterLabel, vertexStyle, GUILayout.ExpandWidth(false)))
+                {
+                    vertexPickMode = true;
+                    ClearVertexGuideCache();
+                    SceneView.RepaintAll();
+                    Repaint();
+                }
+
+                if (vertexFilterActive)
+                {
+                    GUILayout.Space(2);
+                    if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
+                        ClearVertexFilter();
+                }
+            }
+
+            if (_currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null)
+            {
+                GUILayout.Space(4);
+                bool trackFilter = _animModeUI.TrackFilterEnabled;
+                var trackStyle = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+                var trackLabel = DenEmoLoc.EnglishMode ? "◆ Keyed Only" : "◆ キー有りのみ";
+                var trackTip = DenEmoLoc.EnglishMode
+                    ? "Show only shape keys that have tracks/keyframes in the current clip"
+                    : "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示";
+                if (GUILayout.Button(new GUIContent(trackLabel, trackTip), trackStyle, GUILayout.ExpandWidth(false)))
+                {
+                    _animModeUI.TrackFilterEnabled = !trackFilter;
+                    Repaint();
+                }
+            }
+
             var allTargets = GetAllTargetMeshes();
-            if (allTargets.Count > 0)
+            if (allTargets.Count > 1)
             {
                 GUILayout.Space(6);
                 GUILayout.Label("Mesh:", DenEmoTheme.CaptionStyle, GUILayout.Width(38));
 
-                var meshOpts    = BuildMeshFilterOptions(allTargets);
-                int displayIdx  = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
+                var meshOpts      = BuildMeshFilterOptions(allTargets);
+                int displayIdx    = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
                 int newDisplayIdx = EditorGUILayout.Popup(displayIdx, meshOpts, GUILayout.MinWidth(70), GUILayout.ExpandWidth(false));
                 int newFilterIdx  = newDisplayIdx <= 0 ? -1 : newDisplayIdx - 1;
 
@@ -590,6 +766,27 @@ namespace DenEmo
             DenEmoTheme.EndSection();
         }
 
+        private void DrawAnimationSaveSection()
+        {
+            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE ANIMATION" : "アニメーション保存");
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(6);
+
+            if (GUILayout.Button(
+                DenEmoLoc.EnglishMode ? "Save Animation" : "アニメーションを保存",
+                DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
+            {
+                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl));
+            }
+
+            GUILayout.Space(6);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(6);
+
+            DenEmoTheme.EndSection();
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────
 
         // 明示的に指定されたターゲットメッシュの一覧（プライマリ + 追加）
@@ -633,6 +830,8 @@ namespace DenEmo
             LoadFavoritesPrefs();
             LoadIncludeFlagsPrefs();
             _model.BuildGroups();
+            if (vertexFilterActive && selectedVertexIndex >= 0)
+                vertexMovedShapeIndices = _model.CollectShapeIndicesMovingVertex(selectedVertexIndex);
             CreateSnapshot(true);
             UpdateVisibility();
         }
@@ -640,7 +839,13 @@ namespace DenEmo
         private void UpdateVisibility()
         {
             var tokens = ShapeKeyModel.BuildSearchTokens(searchText);
-            _model.UpdateVisibility(tokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites);
+            _model.UpdateVisibility(
+                tokens,
+                showOnlyIncluded,
+                showOnlyNonZero,
+                showOnlyFavorites,
+                vertexFilterActive ? vertexMovedShapeIndices : null,
+                symmetryMode);
         }
 
         private void AlignToBaseClip()
@@ -689,6 +894,11 @@ namespace DenEmo
                 DragAndDrop.AcceptDrag();
                 _listUI.StopThrottle();
                 _model.SetTarget(foundSmr);
+                vertexPickMode = false;
+                vertexFilterActive = false;
+                selectedVertexIndex = -1;
+                vertexMovedShapeIndices = null;
+                ClearVertexGuideCache();
                 ClampMeshFilterIndex();
                 RefreshListAndCache();
                 if (_model.TargetSkinnedMesh != null)
@@ -696,9 +906,210 @@ namespace DenEmo
                     CreateSnapshot(false);
                     SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
                 }
+                if (_currentMode == EditorMode.Animation)
+                    _animModeUI.OnTargetChanged(_model);
                 Repaint();
             }
             evt.Use();
+        }
+
+        private void OnSceneGUI(SceneView sceneView)
+        {
+            if (!vertexPickMode) return;
+            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
+            DenEmoTheme.Initialize();
+
+            UpdateVertexGuideCache();
+            if (vertexGuideWorldPositions == null || vertexGuideWorldPositions.Length == 0) return;
+
+            Handles.BeginGUI();
+            GUI.Label(
+                new Rect(16, 16, 520, 22),
+                DenEmoLoc.T("ui.filter.vertex.guide"),
+                DenEmoTheme.SecondaryTextStyle);
+            Handles.EndGUI();
+
+            var prevColor = Handles.color;
+            var prevZTest = Handles.zTest;
+            Handles.zTest = UnityEngine.Rendering.CompareFunction.LessEqual;
+            
+            int pickedIndex = -1;
+            Vector3 camPos = sceneView.camera.transform.position;
+            bool isOrtho = sceneView.camera.orthographic;
+            Vector3 orthoDir = -sceneView.camera.transform.forward;
+
+            for (int i = 0; i < vertexGuideWorldPositions.Length; i++)
+            {
+                Vector3 world = vertexGuideWorldPositions[i];
+                Vector3 viewDir = isOrtho ? orthoDir : (camPos - world).normalized;
+
+                if (vertexGuideWorldNormals != null && vertexGuideWorldNormals.Length > i)
+                {
+                    if (Vector3.Dot(vertexGuideWorldNormals[i], viewDir) <= 0f) continue;
+                }
+
+                float handleSize = HandleUtility.GetHandleSize(world);
+                // 遠くにあるときは小さく、近くにあるときは大きく見えるように、ワールド空間ベースの固定サイズにする
+                // 以前のサイズが大きすぎたため、ベースサイズと画面サイズブレンドの係数を大幅に縮小
+                float size = 0.0002f + handleSize * 0.0002f;
+                
+                // Z-fighting（めり込み）を防ぐためのオフセットは、深度精度に依存するためカメラ距離(handleSize)に比例させる
+                Vector3 drawPos = world + viewDir * (handleSize * 0.002f);
+
+                Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
+                if (Handles.Button(drawPos, Quaternion.identity, size, size, Handles.DotHandleCap))
+                {
+                    pickedIndex = i;
+                    break;
+                }
+            }
+            Handles.color = prevColor;
+            Handles.zTest = prevZTest;
+
+            if (pickedIndex >= 0)
+            {
+                selectedVertexIndex = pickedIndex;
+                vertexMovedShapeIndices = _model.CollectShapeIndicesMovingVertex(selectedVertexIndex);
+                vertexFilterActive = true;
+                vertexPickMode = false;
+                ClearVertexGuideCache();
+                UpdateVisibility();
+                SceneView.RepaintAll();
+                Repaint();
+                Event.current.Use();
+            }
+
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
+            {
+                vertexPickMode = false;
+                ClearVertexGuideCache();
+                SceneView.RepaintAll();
+                Repaint();
+                Event.current.Use();
+            }
+        }
+
+        private void ClearVertexFilter()
+        {
+            vertexPickMode = false;
+            vertexFilterActive = false;
+            selectedVertexIndex = -1;
+            vertexMovedShapeIndices = null;
+            ClearVertexGuideCache();
+            UpdateVisibility();
+            SceneView.RepaintAll();
+            Repaint();
+        }
+
+        private void UpdateVertexGuideCache()
+        {
+            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
+            var mesh = _model.TargetSkinnedMesh.sharedMesh;
+            var smrTransform = _model.TargetSkinnedMesh.transform;
+            var localToWorldMatrix = smrTransform.localToWorldMatrix;
+            int meshId = mesh.GetInstanceID();
+
+            bool cacheInvalid = vertexGuideWorldPositions == null
+                || vertexGuideWorldPositions.Length != mesh.vertexCount
+                || vertexGuideMeshInstanceId != meshId
+                || vertexGuideLocalToWorld != localToWorldMatrix;
+
+            if (!cacheInvalid) return;
+
+            SkinnedMeshRenderer targetToBake = _model.TargetSkinnedMesh;
+            Transform bakeTransform = smrTransform;
+
+            // NDMFのプレビューオブジェクトが存在すれば優先する
+            SkinnedMeshRenderer proxySmr = GetNDMFProxySMR(_model.TargetSkinnedMesh);
+            if (proxySmr != null)
+            {
+                targetToBake = proxySmr;
+                bakeTransform = proxySmr.transform;
+            }
+
+            Mesh bakedMesh = new Mesh();
+            targetToBake.BakeMesh(bakedMesh);
+            var vertices = bakedMesh.vertices;
+            var normals = bakedMesh.normals;
+
+            // NDMF等で動的にメッシュが差し替えられて頂点数が一致しない場合のフォールバック
+            if (vertices == null || vertices.Length != mesh.vertexCount)
+            {
+                vertices = mesh.vertices;
+                normals = mesh.normals;
+                bakeTransform = smrTransform;
+            }
+
+            if (vertices == null || vertices.Length == 0)
+            {
+                DestroyImmediate(bakedMesh);
+                vertexGuideWorldPositions = null;
+                vertexGuideWorldNormals = null;
+                return;
+            }
+
+            vertexGuideWorldPositions = new Vector3[vertices.Length];
+            vertexGuideWorldNormals = new Vector3[vertices.Length];
+            bool hasNormals = normals != null && normals.Length == vertices.Length;
+
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertexGuideWorldPositions[i] = bakeTransform.TransformPoint(vertices[i]);
+                if (hasNormals)
+                    vertexGuideWorldNormals[i] = bakeTransform.TransformDirection(normals[i]);
+            }
+
+            DestroyImmediate(bakedMesh);
+
+            vertexGuideMeshInstanceId = meshId;
+            vertexGuideLocalToWorld = localToWorldMatrix;
+        }
+
+        private SkinnedMeshRenderer GetNDMFProxySMR(SkinnedMeshRenderer originalSmr)
+        {
+            if (originalSmr == null) return null;
+            
+            System.Type sessionType = null;
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetName().Name == "nadena.dev.ndmf")
+                {
+                    sessionType = assembly.GetType("nadena.dev.ndmf.preview.PreviewSession");
+                    break;
+                }
+            }
+            if (sessionType == null) return null;
+
+            var currentProp = sessionType.GetProperty("Current", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (currentProp == null) return null;
+
+            var session = currentProp.GetValue(null);
+            if (session == null) return null;
+
+            var mapProp = sessionType.GetProperty("OriginalToProxyRenderer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (mapProp == null) return null;
+
+            var map = mapProp.GetValue(session);
+            if (map != null)
+            {
+                var tryGetValueMethod = map.GetType().GetMethod("TryGetValue");
+                if (tryGetValueMethod != null)
+                {
+                    var args = new object[] { originalSmr, null };
+                    bool success = (bool)tryGetValueMethod.Invoke(map, args);
+                    if (success) return args[1] as SkinnedMeshRenderer;
+                }
+            }
+
+            return null;
+        }
+
+        private void ClearVertexGuideCache()
+        {
+            vertexGuideWorldPositions = null;
+            vertexGuideWorldNormals = null;
+            vertexGuideMeshInstanceId = 0;
+            vertexGuideLocalToWorld = Matrix4x4.zero;
         }
 
         private void SetStatus(string msg, int level, double autoClearSec = 3.0)

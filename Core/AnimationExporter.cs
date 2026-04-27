@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -160,6 +160,94 @@ namespace DenEmo.Core
                 key[0] = new Keyframe(0f,      current);
                 key[1] = new Keyframe(0.0001f, current);
                 AnimationUtility.SetEditorCurve(clip, binding, new AnimationCurve(key));
+            }
+        }
+
+        public static string SaveMultiFrameClip(AnimationClipModel clipModel, string path)
+        {
+            if (clipModel == null || clipModel.Clip == null) return DenEmoLoc.T("dlg.apply.noClip");
+            if (string.IsNullOrEmpty(path))                  return DenEmoLoc.T("dlg.apply.noClip");
+
+            var clip = clipModel.Clip;
+            var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+
+            if (existing == clip)
+            {
+                EditorUtility.SetDirty(clip);
+                AssetDatabase.SaveAssets();
+            }
+            else if (existing != null)
+            {
+                Undo.RecordObject(existing, "Save Animation Clip");
+                existing.ClearCurves();
+                existing.frameRate = clip.frameRate;
+                ApplyCurvesWithOptionalLoop(clip, existing, clipModel);
+                EditorUtility.SetDirty(existing);
+                AssetDatabase.SaveAssets();
+            }
+            else
+            {
+                string dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    try { Directory.CreateDirectory(dir); } catch { }
+                }
+
+                var newClip = new AnimationClip { frameRate = clip.frameRate };
+                ApplyCurvesWithOptionalLoop(clip, newClip, clipModel);
+
+                AssetDatabase.CreateAsset(newClip, path);
+                AssetDatabase.SaveAssets();
+            }
+
+            var asset = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (asset != null)
+            {
+                EditorGUIUtility.PingObject(asset);
+                Selection.activeObject = asset;
+            }
+            return null;
+        }
+
+        private static void ApplyCurvesWithOptionalLoop(AnimationClip source, AnimationClip target, AnimationClipModel clipModel)
+        {
+            foreach (var b in AnimationUtility.GetCurveBindings(source))
+            {
+                var curve = AnimationUtility.GetEditorCurve(source, b);
+                if (curve != null)
+                {
+                    if (clipModel.SmoothLoopEnabled && curve.keys.Length > 0 && clipModel.ClipLength > 0f)
+                    {
+                        var loopCurve = new AnimationCurve(curve.keys);
+                        float valZero = loopCurve.Evaluate(0f);
+                        float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+
+                        int endIdx = -1;
+                        for (int i = 0; i < loopCurve.keys.Length; i++)
+                            if (Mathf.Abs(loopCurve.keys[i].time - clipModel.ClipLength) <= tol) { endIdx = i; break; }
+
+                        if (endIdx >= 0)
+                            loopCurve.RemoveKey(endIdx);
+
+                        int newIdx = loopCurve.AddKey(new Keyframe(clipModel.ClipLength, valZero));
+
+                        int startIdx = -1;
+                        for (int i = 0; i < loopCurve.keys.Length; i++)
+                            if (Mathf.Abs(loopCurve.keys[i].time) <= tol) { startIdx = i; break; }
+
+                        if (startIdx >= 0)
+                        {
+                            AnimationUtility.SetKeyLeftTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve, startIdx));
+                            AnimationUtility.SetKeyRightTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyRightTangentMode(loopCurve, startIdx));
+                        }
+
+                        AnimationUtility.SetEditorCurve(target, b, loopCurve);
+                    }
+                    else
+                    {
+                        AnimationUtility.SetEditorCurve(target, b, curve);
+                    }
+                }
             }
         }
 

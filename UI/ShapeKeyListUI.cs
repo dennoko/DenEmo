@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -7,7 +7,7 @@ using DenEmo.Core;
 
 namespace DenEmo.UI
 {
-    public class ShapeKeyListUI
+    public partial class ShapeKeyListUI
     {
         private const double APPLY_INTERVAL_SEC = 0.05;
         private bool   _throttleActive = false;
@@ -18,7 +18,7 @@ namespace DenEmo.UI
             = new Dictionary<string, (SkinnedMeshRenderer, int, float)>();
 
         private bool          isSliderDragging = false;
-        private ShapeKeyItem  _draggingItem    = null;
+        private int   currentDraggingIndex = -1;
 
         public Action                  OnIncludeFlagsChanged;
         public Action<string, bool>    OnFavoriteChanged;
@@ -59,7 +59,7 @@ namespace DenEmo.UI
 
         // ─── DrawList ─────────────────────────────────────────────────────────
 
-        public void DrawList(ShapeKeyModel model, ref Vector2 scroll, bool treatAsGroupUI, HashSet<string> collapsedGroups, bool symmetryMode, EditorWindow window)
+        public void DrawList(ShapeKeyModel model, ref Vector2 scroll, bool treatAsGroupUI, HashSet<string> collapsedGroups, bool symmetryMode, EditorWindow window, AnimationDrawContext animContext = null)
         {
             DenEmoTheme.Initialize();
             ApplyPending();
@@ -126,8 +126,8 @@ namespace DenEmo.UI
                     if (collapsedGroups.Contains(collapseKey)) continue;
                 }
 
-                if (symmetryMode) DrawSymmetrySegment(model, start, end, treatAsGroup, window);
-                else              DrawNormalSegment(model, start, end, treatAsGroup, window);
+                if (symmetryMode) DrawSymmetrySegment(model, start, end, treatAsGroup, window, animContext);
+                else              DrawNormalSegment(model, start, end, treatAsGroup, window, animContext);
             }
 
             if (!anyVisible && model.Items.Count > 0)
@@ -196,219 +196,5 @@ namespace DenEmo.UI
             GUI.Label(countRect, $"{enabledCount}/{visibleCount}  {suffix}", DenEmoTheme.CaptionStyle);
         }
 
-        // ─── Segment Drawing ──────────────────────────────────────────────────
-
-        private void DrawSymmetrySegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window)
-        {
-            var itemsDict = new Dictionary<string, (ShapeKeyItem L, ShapeKeyItem R)>();
-            var singles   = new List<ShapeKeyItem>();
-
-            for (int i = start; i < end; ++i)
-            {
-                var item = model.Items[i];
-                if (item.IsVrcShape || item.IsLipSyncShape || !item.IsVisible) continue;
-
-                if (SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side))
-                {
-                    if (side == LRSide.L)
-                    {
-                        itemsDict[baseName] = itemsDict.TryGetValue(baseName, out var existing)
-                            ? (item, existing.R) : (item, null);
-                    }
-                    else if (side == LRSide.R)
-                    {
-                        itemsDict[baseName] = itemsDict.TryGetValue(baseName, out var existing)
-                            ? (existing.L, item) : (null, item);
-                    }
-                    else singles.Add(item);
-                }
-                else singles.Add(item);
-            }
-
-            foreach (var kvp in itemsDict)
-            {
-                var left  = kvp.Value.L;
-                var right = kvp.Value.R;
-                if (left != null && right != null && Mathf.Abs(left.Value - right.Value) <= 0.001f)
-                    DrawMergedRow(kvp.Key, left, right, spaceLeft, model);
-                else
-                {
-                    if (left  != null) DrawSingleRow(left,  spaceLeft, model);
-                    if (right != null) DrawSingleRow(right, spaceLeft, model);
-                }
-            }
-
-            foreach (var s in singles) DrawSingleRow(s, spaceLeft, model);
-        }
-
-        private void DrawNormalSegment(ShapeKeyModel model, int start, int end, bool spaceLeft, EditorWindow window)
-        {
-            for (int i = start; i < end; i++)
-            {
-                var item = model.Items[i];
-                if (!item.IsVisible || item.IsLipSyncShape) continue;
-                DrawSingleRow(item, spaceLeft, model);
-            }
-        }
-
-        // ─── 行描画 ───────────────────────────────────────────────────────────
-
-        private void DrawMergedRow(string baseName, ShapeKeyItem left, ShapeKeyItem right, bool spaceLeft, ShapeKeyModel model)
-        {
-            var smr = left.OwnerSmr ?? model.TargetSkinnedMesh;
-
-            EditorGUILayout.BeginHorizontal();
-            if (spaceLeft) GUILayout.Space(20);
-
-            DrawFavButton(left, model);
-
-            bool bothInc = left.IsIncluded && right.IsIncluded;
-            bool newInc  = EditorGUILayout.Toggle(bothInc, GUILayout.Width(16));
-            if (newInc != bothInc)
-            {
-                left.IsIncluded  = newInc;
-                right.IsIncluded = newInc;
-                OnIncludeFlagsChanged?.Invoke();
-            }
-
-            float nameWidth = Mathf.Min(200f, EditorGUIUtility.currentViewWidth * 0.32f);
-            EditorGUILayout.LabelField(baseName + "_LR", DenEmoTheme.SecondaryTextStyle, GUILayout.Width(nameWidth));
-
-            if (GUILayout.Button("0", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
-            {
-                if (smr != null) Undo.RecordObject(smr, "Reset Shape Key");
-                left.Value  = 0f; right.Value = 0f;
-                if (smr != null)
-                {
-                    smr.SetBlendShapeWeight(left.Index,  0f);
-                    smr.SetBlendShapeWeight(right.Index, 0f);
-                }
-            }
-
-            float oldValue = left.Value;
-            int   sliderId = GUIUtility.GetControlID(FocusType.Passive);
-            EditorGUI.BeginChangeCheck();
-            float newValue = EditorGUILayout.Slider(oldValue, 0f, 100f);
-            bool  changed  = EditorGUI.EndChangeCheck();
-            bool  isHot    = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
-
-            if (changed && isHot && (!isSliderDragging || _draggingItem != left))
-            {
-                if (smr != null) Undo.RecordObject(smr, "Change Shape Key");
-                isSliderDragging = true;
-                _draggingItem    = left;
-            }
-
-            if (changed)
-            {
-                if (!isHot && !isSliderDragging && smr != null)
-                    Undo.RecordObject(smr, "Change Shape Key");
-                left.Value  = newValue;
-                right.Value = newValue;
-                if (smr != null)
-                {
-                    if (isHot || isSliderDragging)
-                    {
-                        QueuePendingApply(left,  newValue);
-                        QueuePendingApply(right, newValue);
-                    }
-                    else
-                    {
-                        smr.SetBlendShapeWeight(left.Index,  newValue);
-                        smr.SetBlendShapeWeight(right.Index, newValue);
-                    }
-                }
-            }
-
-            if (isSliderDragging && _draggingItem == left && !isHot)
-            {
-                isSliderDragging = false; _draggingItem = null; StopThrottle();
-                if (smr != null)
-                {
-                    smr.SetBlendShapeWeight(left.Index,  left.Value);
-                    smr.SetBlendShapeWeight(right.Index, right.Value);
-                }
-            }
-
-            EditorGUILayout.EndHorizontal();
-            GUILayout.Space(5f);
-        }
-
-        private void DrawSingleRow(ShapeKeyItem item, bool spaceLeft, ShapeKeyModel model)
-        {
-            var smr = item.OwnerSmr ?? model.TargetSkinnedMesh;
-
-            EditorGUILayout.BeginHorizontal();
-            if (spaceLeft) GUILayout.Space(20);
-
-            DrawFavButton(item, model);
-
-            bool newInc = EditorGUILayout.Toggle(item.IsIncluded, GUILayout.Width(16));
-            if (newInc != item.IsIncluded)
-            {
-                item.IsIncluded = newInc;
-                OnIncludeFlagsChanged?.Invoke();
-            }
-
-            float nameWidth = Mathf.Min(200f, EditorGUIUtility.currentViewWidth * 0.32f);
-            var nameStyle = item.IsIncluded ? DenEmoTheme.SecondaryTextStyle : DenEmoTheme.CaptionStyle;
-            EditorGUILayout.LabelField(item.Name, nameStyle, GUILayout.Width(nameWidth));
-
-            if (GUILayout.Button("0", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
-            {
-                if (item.Value != 0f)
-                {
-                    if (smr != null) Undo.RecordObject(smr, "Reset Shape Key");
-                    item.Value = 0f;
-                    if (smr != null) smr.SetBlendShapeWeight(item.Index, 0f);
-                }
-            }
-
-            float oldValue = item.Value;
-            int   sliderId = GUIUtility.GetControlID(FocusType.Passive);
-            EditorGUI.BeginChangeCheck();
-            float newValue = EditorGUILayout.Slider(oldValue, 0f, 100f);
-            bool  changed  = EditorGUI.EndChangeCheck();
-            bool  isHot    = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
-
-            if (changed && isHot && (!isSliderDragging || _draggingItem != item))
-            {
-                if (smr != null) Undo.RecordObject(smr, "Change Shape Key");
-                isSliderDragging = true;
-                _draggingItem    = item;
-            }
-
-            if (changed)
-            {
-                if (!isHot && !isSliderDragging && smr != null)
-                    Undo.RecordObject(smr, "Change Shape Key");
-                item.Value = newValue;
-                if (smr != null)
-                {
-                    if (isHot || isSliderDragging) QueuePendingApply(item, newValue);
-                    else smr.SetBlendShapeWeight(item.Index, newValue);
-                }
-            }
-
-            if (isSliderDragging && _draggingItem == item && !isHot)
-            {
-                isSliderDragging = false; _draggingItem = null; StopThrottle();
-                if (smr != null) smr.SetBlendShapeWeight(item.Index, item.Value);
-            }
-
-            EditorGUILayout.EndHorizontal();
-            GUILayout.Space(5f);
-        }
-
-        private void DrawFavButton(ShapeKeyItem item, ShapeKeyModel model)
-        {
-            var style = item.IsFavorite ? DenEmoTheme.FavOnStyle : DenEmoTheme.FavOffStyle;
-            string icon = item.IsFavorite ? "★" : "☆";
-            if (GUILayout.Button(icon, style, GUILayout.Width(18), GUILayout.Height(18)))
-            {
-                item.IsFavorite = !item.IsFavorite;
-                OnFavoriteChanged?.Invoke(item.Name, item.IsFavorite);
-            }
-        }
     }
 }
