@@ -45,6 +45,7 @@ namespace DenEmo
         private int  selectedVertexIndex  = -1;
         private HashSet<int> vertexMovedShapeIndices = null;
         private Vector3[] vertexGuideWorldPositions = null;
+        private Vector3[] vertexGuideWorldNormals = null;
         private int vertexGuideMeshInstanceId = 0;
         private Matrix4x4 vertexGuideLocalToWorld = Matrix4x4.zero;
 
@@ -725,8 +726,8 @@ namespace DenEmo
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
             DenEmoTheme.Initialize();
 
-            var worldPositions = GetVertexGuideWorldPositions();
-            if (worldPositions == null || worldPositions.Length == 0) return;
+            UpdateVertexGuideCache();
+            if (vertexGuideWorldPositions == null || vertexGuideWorldPositions.Length == 0) return;
 
             Handles.BeginGUI();
             GUI.Label(
@@ -737,9 +738,19 @@ namespace DenEmo
 
             var prevColor = Handles.color;
             int pickedIndex = -1;
-            for (int i = 0; i < worldPositions.Length; i++)
+            Vector3 camPos = sceneView.camera.transform.position;
+
+            for (int i = 0; i < vertexGuideWorldPositions.Length; i++)
             {
-                Vector3 world = worldPositions[i];
+                Vector3 world = vertexGuideWorldPositions[i];
+
+                if (vertexGuideWorldNormals != null && vertexGuideWorldNormals.Length > i)
+                {
+                    Vector3 normal = vertexGuideWorldNormals[i];
+                    Vector3 viewDir = camPos - world;
+                    if (Vector3.Dot(normal, viewDir) <= 0f) continue;
+                }
+
                 float size = HandleUtility.GetHandleSize(world) * VertexGuideHandleSizeMultiplier;
                 Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
                 if (Handles.Button(world, Quaternion.identity, size, size, Handles.DotHandleCap))
@@ -785,9 +796,9 @@ namespace DenEmo
             Repaint();
         }
 
-        private Vector3[] GetVertexGuideWorldPositions()
+        private void UpdateVertexGuideCache()
         {
-            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return null;
+            if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
             var mesh = _model.TargetSkinnedMesh.sharedMesh;
             var smrTransform = _model.TargetSkinnedMesh.transform;
             var localToWorldMatrix = smrTransform.localToWorldMatrix;
@@ -798,29 +809,38 @@ namespace DenEmo
                 || vertexGuideMeshInstanceId != meshId
                 || vertexGuideLocalToWorld != localToWorldMatrix;
 
-            if (!cacheInvalid) return vertexGuideWorldPositions;
+            if (!cacheInvalid) return;
 
             // NOTE: Do not use the displayed/deformed scene mesh directly.
             // We draw guides from sharedMesh vertices to avoid drift with non-destructive tools.
             var vertices = mesh.vertices;
+            var normals = mesh.normals;
             if (vertices == null || vertices.Length == 0)
             {
                 vertexGuideWorldPositions = null;
-                return null;
+                vertexGuideWorldNormals = null;
+                return;
             }
 
             vertexGuideWorldPositions = new Vector3[vertices.Length];
+            vertexGuideWorldNormals = new Vector3[vertices.Length];
+            bool hasNormals = normals != null && normals.Length == vertices.Length;
+
             for (int i = 0; i < vertices.Length; i++)
+            {
                 vertexGuideWorldPositions[i] = smrTransform.TransformPoint(vertices[i]);
+                if (hasNormals)
+                    vertexGuideWorldNormals[i] = smrTransform.TransformDirection(normals[i]);
+            }
 
             vertexGuideMeshInstanceId = meshId;
             vertexGuideLocalToWorld = localToWorldMatrix;
-            return vertexGuideWorldPositions;
         }
 
         private void ClearVertexGuideCache()
         {
             vertexGuideWorldPositions = null;
+            vertexGuideWorldNormals = null;
             vertexGuideMeshInstanceId = 0;
             vertexGuideLocalToWorld = Matrix4x4.zero;
         }
