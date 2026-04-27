@@ -742,23 +742,27 @@ namespace DenEmo
             
             int pickedIndex = -1;
             Vector3 camPos = sceneView.camera.transform.position;
+            bool isOrtho = sceneView.camera.orthographic;
+            Vector3 orthoDir = -sceneView.camera.transform.forward;
 
             for (int i = 0; i < vertexGuideWorldPositions.Length; i++)
             {
                 Vector3 world = vertexGuideWorldPositions[i];
+                Vector3 viewDir = isOrtho ? orthoDir : (camPos - world).normalized;
 
                 if (vertexGuideWorldNormals != null && vertexGuideWorldNormals.Length > i)
                 {
-                    Vector3 normal = vertexGuideWorldNormals[i];
-                    Vector3 viewDir = sceneView.camera.orthographic 
-                        ? -sceneView.camera.transform.forward 
-                        : (camPos - world).normalized;
-                    if (Vector3.Dot(normal, viewDir) <= 0.1f) continue;
+                    if (Vector3.Dot(vertexGuideWorldNormals[i], viewDir) <= 0f) continue;
                 }
 
-                float size = HandleUtility.GetHandleSize(world) * VertexGuideHandleSizeMultiplier;
+                float handleSize = HandleUtility.GetHandleSize(world);
+                float size = handleSize * VertexGuideHandleSizeMultiplier;
+                
+                // Z-fighting（めり込み）を防ぐため、カメラ方向に少しオフセット（距離補正）をかける
+                Vector3 drawPos = world + viewDir * (handleSize * 0.02f);
+
                 Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
-                if (Handles.Button(world, Quaternion.identity, size, size, Handles.DotHandleCap))
+                if (Handles.Button(drawPos, Quaternion.identity, size, size, Handles.DotHandleCap))
                 {
                     pickedIndex = i;
                     break;
