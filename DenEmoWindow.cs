@@ -756,9 +756,11 @@ namespace DenEmo
                 }
 
                 float handleSize = HandleUtility.GetHandleSize(world);
-                float size = handleSize * VertexGuideHandleSizeMultiplier;
+                // 遠くにあるときは小さく、近くにあるときは大きく見えるように、ワールド空間で固定サイズにする
+                // ただし極端に見えなくならないように少しだけ画面サイズ（handleSize）をブレンドする
+                float size = Mathf.Lerp(0.008f, handleSize * VertexGuideHandleSizeMultiplier, 0.2f);
                 
-                // Z-fighting（めり込み）を防ぐため、カメラ方向に少しオフセット（距離補正）をかける
+                // Z-fighting（めり込み）を防ぐためのオフセットは、深度精度に依存するためカメラ距離(handleSize)に比例させる
                 Vector3 drawPos = world + viewDir * (handleSize * 0.02f);
 
                 Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
