@@ -646,7 +646,8 @@ namespace DenEmo
                 showOnlyIncluded,
                 showOnlyNonZero,
                 showOnlyFavorites,
-                vertexFilterActive ? vertexMovedShapeIndices : null);
+                vertexFilterActive ? vertexMovedShapeIndices : null,
+                symmetryMode);
         }
 
         private void AlignToBaseClip()
@@ -758,10 +759,10 @@ namespace DenEmo
                 float handleSize = HandleUtility.GetHandleSize(world);
                 // 遠くにあるときは小さく、近くにあるときは大きく見えるように、ワールド空間ベースの固定サイズにする
                 // 以前のサイズが大きすぎたため、ベースサイズと画面サイズブレンドの係数を大幅に縮小
-                float size = 0.002f + handleSize * 0.002f;
+                float size = 0.0002f + handleSize * 0.0002f;
                 
                 // Z-fighting（めり込み）を防ぐためのオフセットは、深度精度に依存するためカメラ距離(handleSize)に比例させる
-                Vector3 drawPos = world + viewDir * (handleSize * 0.02f);
+                Vector3 drawPos = world + viewDir * (handleSize * 0.002f);
 
                 Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
                 if (Handles.Button(drawPos, Quaternion.identity, size, size, Handles.DotHandleCap))

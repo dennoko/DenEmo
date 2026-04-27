@@ -57,10 +57,10 @@ namespace DenEmo.Models
 
         public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero = false, bool showOnlyFavorites = false)
         {
-            UpdateVisibility(searchTokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites, null);
+            UpdateVisibility(searchTokens, showOnlyIncluded, showOnlyNonZero, showOnlyFavorites, null, false);
         }
 
-        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero, bool showOnlyFavorites, HashSet<int> vertexMovedShapeIndices)
+        public void UpdateVisibility(string[] searchTokens, bool showOnlyIncluded, bool showOnlyNonZero, bool showOnlyFavorites, HashSet<int> vertexMovedShapeIndices, bool symmetryMode)
         {
             foreach (var item in Items)
             {
@@ -85,6 +85,29 @@ namespace DenEmo.Models
                     continue;
 
                 item.IsVisible = true;
+            }
+
+            if (symmetryMode)
+            {
+                var pairVisible = new Dictionary<string, bool>();
+                foreach (var item in Items)
+                {
+                    if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                    if (Core.SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side) && side != Core.LRSide.None)
+                    {
+                        if (item.IsVisible) pairVisible[baseName] = true;
+                    }
+                }
+                
+                foreach (var item in Items)
+                {
+                    if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                    if (Core.SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side) && side != Core.LRSide.None)
+                    {
+                        if (pairVisible.ContainsKey(baseName) && pairVisible[baseName])
+                            item.IsVisible = true;
+                    }
+                }
             }
         }
 
