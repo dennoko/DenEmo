@@ -109,7 +109,7 @@ namespace DenEmo.UI
             float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
             if (allKeys == null || allKeys.Length == 0) return;
 
-            Rect rowRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
+            Rect rowRect = GUILayoutUtility.GetRect(0, 32, GUILayout.ExpandWidth(true));
             if (Event.current.type == EventType.Repaint)
             {
                 EditorGUI.DrawRect(rowRect, DenEmoTheme.Surface0);
@@ -127,7 +127,20 @@ namespace DenEmo.UI
                 float norm = clipModel.ClipLength > 0f ? kTime / clipModel.ClipLength : 0f;
                 float kx = trackX + norm * trackW;
                 
-                Rect btnRect = new Rect(kx - 8, rowRect.y + 4, 16, 16);
+                Rect dragRect = new Rect(kx - 8, rowRect.y + 2, 16, 12);
+                EditorGUIUtility.AddCursorRect(dragRect, MouseCursor.SlideArrow);
+                
+                var style = new GUIStyle(DenEmoTheme.CaptionStyle)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 10,
+                    normal = { textColor = DenEmoTheme.TextSecondary }
+                };
+                GUI.Label(dragRect, "＝", style);
+
+                HandleKeyframeDrag(dragRect, kTime, null, clipModel, preview, smrPath, window, trackX, trackW);
+
+                Rect btnRect = new Rect(kx - 8, rowRect.y + 14, 16, 16);
                 
                 if (GUI.Button(btnRect, new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete all keys at this frame" : "このフレームの全キーを削除"), DenEmoTheme.MiniButtonStyle))
                 {
@@ -141,6 +154,66 @@ namespace DenEmo.UI
                         preview.SampleAt(clipModel.CurrentTime);
                         window.Repaint();
                     }
+                }
+            }
+        }
+
+        private void HandleKeyframeDrag(
+            Rect hitRect, float kTime, string shapeName, AnimationClipModel clipModel, 
+            AnimationPreviewController preview, string smrPath, EditorWindow window, 
+            float trackX, float trackW, bool seekOnDown = false)
+        {
+            Event e = Event.current;
+            int frame = Mathf.RoundToInt(kTime * clipModel.FPS);
+
+            if (e.type == EventType.MouseDown && hitRect.Contains(e.mousePosition) && e.button == 0)
+            {
+                _isDraggingKeyframe = true;
+                _draggingOldFrame = frame;
+                _draggingShapeName = shapeName;
+                GUI.FocusControl(null);
+                if (seekOnDown)
+                {
+                    clipModel.CurrentTime = kTime;
+                    preview.SampleAt(kTime);
+                    window.Repaint();
+                }
+                e.Use();
+            }
+            else if (e.type == EventType.MouseDrag && _isDraggingKeyframe && _draggingOldFrame == frame && _draggingShapeName == shapeName)
+            {
+                float mouseX = e.mousePosition.x;
+                float norm = Mathf.Clamp01((mouseX - trackX) / trackW);
+                int targetFrame = Mathf.RoundToInt(norm * clipModel.ClipLength * clipModel.FPS);
+
+                if (targetFrame != _draggingOldFrame)
+                {
+                    bool moved = false;
+                    if (shapeName == null)
+                    {
+                        moved = preview.MoveAllTracksKeyframes(smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
+                    }
+                    else
+                    {
+                        moved = preview.MoveSingleTrackKeyframes(shapeName, smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
+                    }
+
+                    if (moved)
+                    {
+                        _draggingOldFrame = targetFrame;
+                        clipModel.CurrentTime = (float)targetFrame / clipModel.FPS;
+                        preview.SampleAt(clipModel.CurrentTime);
+                        window.Repaint();
+                    }
+                }
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp && _isDraggingKeyframe && e.button == 0)
+            {
+                if (_draggingOldFrame == frame && _draggingShapeName == shapeName)
+                {
+                    _isDraggingKeyframe = false;
+                    e.Use();
                 }
             }
         }

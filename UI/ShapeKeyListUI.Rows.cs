@@ -55,11 +55,11 @@ namespace DenEmo.UI
             bool changed = EditorGUI.EndChangeCheck();
             bool isHot = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
 
-            if (animContext == null && changed && isHot && (!isSliderDragging || currentDraggingIndex != left.Index))
+            if (animContext == null && changed && isHot && (!isSliderDragging || _currentDraggingKey != MakeDragKey(left)))
             {
                 if (smr != null) Undo.RecordObject(smr, "Change Shape Key");
                 isSliderDragging = true;
-                currentDraggingIndex = left.Index;
+                _currentDraggingKey = MakeDragKey(left);
             }
 
             if (changed)
@@ -83,9 +83,9 @@ namespace DenEmo.UI
                 }
             }
 
-            if (animContext == null && isSliderDragging && currentDraggingIndex == left.Index && !isHot)
+            if (animContext == null && isSliderDragging && _currentDraggingKey == MakeDragKey(left) && !isHot)
             {
-                isSliderDragging = false; currentDraggingIndex = -1; StopThrottle();
+                isSliderDragging = false; _currentDraggingKey = null; StopThrottle();
                 if (smr != null)
                 {
                     smr.SetBlendShapeWeight(left.Index, left.Value);
@@ -157,11 +157,11 @@ namespace DenEmo.UI
             bool changed = EditorGUI.EndChangeCheck();
             bool isHot = GUIUtility.hotControl == sliderId || GUIUtility.hotControl == sliderId + 1;
 
-            if (animContext == null && changed && isHot && (!isSliderDragging || currentDraggingIndex != item.Index))
+            if (animContext == null && changed && isHot && (!isSliderDragging || _currentDraggingKey != MakeDragKey(item)))
             {
                 if (smr != null) Undo.RecordObject(smr, "Change Shape Key");
                 isSliderDragging = true;
-                currentDraggingIndex = item.Index;
+                _currentDraggingKey = MakeDragKey(item);
             }
 
             if (changed)
@@ -183,9 +183,9 @@ namespace DenEmo.UI
                 }
             }
 
-            if (animContext == null && isSliderDragging && currentDraggingIndex == item.Index && !isHot)
+            if (animContext == null && isSliderDragging && _currentDraggingKey == MakeDragKey(item) && !isHot)
             {
-                isSliderDragging = false; currentDraggingIndex = -1; StopThrottle();
+                isSliderDragging = false; _currentDraggingKey = null; StopThrottle();
                 if (smr != null) smr.SetBlendShapeWeight(item.Index, item.Value);
             }
 
@@ -218,5 +218,8 @@ namespace DenEmo.UI
                 OnFavoriteChanged?.Invoke(item.Name, item.IsFavorite);
             }
         }
+
+        private static string MakeDragKey(ShapeKeyItem item)
+            => (item.OwnerSmr != null ? item.OwnerSmr.GetInstanceID().ToString() : "0") + "_" + item.Index;
     }
 }

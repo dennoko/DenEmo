@@ -29,6 +29,12 @@ namespace DenEmo.UI
         private Vector2 _tracksScroll;
         private bool    _tracksCollapsed;
 
+        // Keyframe dragging state
+        private bool   _isDraggingKeyframe;
+        private int    _draggingOldFrame = -1;
+        private string _draggingShapeName; // null means "All Tracks"
+
+
         // Cached styles (re-created when null after domain reload)
         private GUIStyle _kfLabelStyle;
         private GUIStyle _recOnStyle;
@@ -140,21 +146,27 @@ namespace DenEmo.UI
 
         private void EnsureRecStyles()
         {
-            if (_recOnStyle == null)
+            if (_recOnStyle == null || _recOnStyle.normal.background == null)
             {
                 _recOnStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle)
                 {
                     fontStyle = FontStyle.Bold,
                     fixedHeight = 0
                 };
+                _recOnStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, Color.red);
+                _recOnStyle.hover.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, Color.red);
+                _recOnStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), Color.red);
                 _recOnStyle.normal.textColor = Color.red;
                 _recOnStyle.hover.textColor = new Color(1f, 0.4f, 0.4f);
                 _recOnStyle.active.textColor = Color.red;
             }
-            if (_recOffStyle == null)
+            if (_recOffStyle == null || _recOffStyle.normal.background == null)
             {
                 _recOffStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle);
                 _recOffStyle.fixedHeight = 0;
+                _recOffStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, Color.red);
+                _recOffStyle.hover.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, Color.red);
+                _recOffStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), Color.red);
             }
         }
     }

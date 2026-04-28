@@ -180,6 +180,195 @@ namespace DenEmo.Core
                 DeleteKeyframe(shapeName, smrPath, time);
         }
 
+        /// <summary>Moves keyframes on a single track with ripple push behavior.</summary>
+        public bool MoveSingleTrackKeyframes(string shapeName, string smrPath, int oldFrame, int newFrame, int totalFrames)
+        {
+            if (_clipModel?.Clip == null) return false;
+            if (oldFrame == newFrame) return true;
+
+            var binding = MakeBinding(shapeName, smrPath);
+            var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding);
+            if (curve == null) return false;
+
+            float fps = _clipModel.FPS > 0f ? _clipModel.FPS : 60f;
+            int dir = newFrame > oldFrame ? 1 : -1;
+            int steps = Mathf.Abs(newFrame - oldFrame);
+
+            bool changed = false;
+
+            for (int step = 0; step < steps; step++)
+            {
+                var keys = curve.keys;
+                var chain = new List<int>();
+                
+                int startIndex = -1;
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    if (Mathf.RoundToInt(keys[i].time * fps) == oldFrame) { startIndex = i; break; }
+                }
+                
+                if (startIndex < 0) break; // Not found, stop moving
+                
+                chain.Add(startIndex);
+                int currentFrame = oldFrame;
+                int currIdx = startIndex;
+                
+                while (true)
+                {
+                    int nextIdx = currIdx + dir;
+                    if (nextIdx >= 0 && nextIdx < keys.Length && Mathf.RoundToInt(keys[nextIdx].time * fps) == currentFrame + dir)
+                    {
+                        currIdx = nextIdx;
+                        currentFrame += dir;
+                        chain.Add(currIdx);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                
+                int targetFrame = currentFrame + dir;
+                if (targetFrame < 0 || targetFrame > totalFrames) return false; // Blocked
+
+                if (!changed)
+                {
+                    Undo.RecordObject(_clipModel.Clip, "Move Keyframes");
+                    changed = true;
+                }
+
+                // Move keys from the end of the chain (furthest in direction) to the start
+                for (int i = chain.Count - 1; i >= 0; i--)
+                {
+                    int idx = chain[i];
+                    var k = keys[idx];
+                    k.time = (Mathf.RoundToInt(k.time * fps) + dir) / fps;
+                    curve.MoveKey(idx, k);
+                }
+
+                oldFrame += dir;
+            }
+
+            if (changed)
+            {
+                AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
+                EditorUtility.SetDirty(_clipModel.Clip);
+                _cacheDirty = true;
+            }
+            return true;
+        }
+
+        /// <summary>Moves keyframes across all tracks at a given frame with ripple push behavior.</summary>
+        public bool MoveAllTracksKeyframes(string smrPath, int oldFrame, int newFrame, int totalFrames)
+        {
+            if (_clipModel?.Clip == null) return false;
+            if (oldFrame == newFrame) return true;
+
+            float fps = _clipModel.FPS > 0f ? _clipModel.FPS : 60f;
+            int dir = newFrame > oldFrame ? 1 : -1;
+            int steps = Mathf.Abs(newFrame - oldFrame);
+
+            var bindings = new List<EditorCurveBinding>();
+            var curves = new List<AnimationCurve>();
+            foreach (var b in AnimationUtility.GetCurveBindings(_clipModel.Clip))
+            {
+                if (b.type == typeof(SkinnedMeshRenderer) && b.propertyName.StartsWith("blendShape.") && b.path == (smrPath ?? ""))
+                {
+                    bindings.Add(b);
+                    curves.Add(AnimationUtility.GetEditorCurve(_clipModel.Clip, b));
+                }
+            }
+
+            bool changed = false;
+
+            for (int step = 0; step < steps; step++)
+            {
+                bool blocked = false;
+                var allChains = new List<List<int>>();
+
+                for (int c = 0; c < curves.Count; c++)
+                {
+                    var curve = curves[c];
+                    var keys = curve.keys;
+                    var chain = new List<int>();
+                    
+                    int startIndex = -1;
+                    for (int i = 0; i < keys.Length; i++)
+                    {
+                        if (Mathf.RoundToInt(keys[i].time * fps) == oldFrame) { startIndex = i; break; }
+                    }
+                    
+                    if (startIndex >= 0)
+                    {
+                        chain.Add(startIndex);
+                        int currentFrame = oldFrame;
+                        int currIdx = startIndex;
+                        
+                        while (true)
+                        {
+                            int nextIdx = currIdx + dir;
+                            if (nextIdx >= 0 && nextIdx < keys.Length && Mathf.RoundToInt(keys[nextIdx].time * fps) == currentFrame + dir)
+                            {
+                                currIdx = nextIdx;
+                                currentFrame += dir;
+                                chain.Add(currIdx);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        
+                        int targetFrame = currentFrame + dir;
+                        if (targetFrame < 0 || targetFrame > totalFrames)
+                        {
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    allChains.Add(chain);
+                }
+
+                if (blocked) return false;
+
+                if (!changed)
+                {
+                    Undo.RecordObject(_clipModel.Clip, "Move All Keyframes");
+                    changed = true;
+                }
+
+                for (int c = 0; c < curves.Count; c++)
+                {
+                    var curve = curves[c];
+                    var keys = curve.keys;
+                    var chain = allChains[c];
+                    if (chain.Count == 0) continue;
+
+                    for (int i = chain.Count - 1; i >= 0; i--)
+                    {
+                        int idx = chain[i];
+                        var k = keys[idx];
+                        k.time = (Mathf.RoundToInt(k.time * fps) + dir) / fps;
+                        curve.MoveKey(idx, k);
+                    }
+                }
+
+                oldFrame += dir;
+            }
+
+            if (changed)
+            {
+                for (int c = 0; c < curves.Count; c++)
+                {
+                    AnimationUtility.SetEditorCurve(_clipModel.Clip, bindings[c], curves[c]);
+                }
+                EditorUtility.SetDirty(_clipModel.Clip);
+                _cacheDirty = true;
+            }
+            return true;
+        }
+
+
 
         /// <summary>Changes the interpolation mode of the keyframe closest to the given time.</summary>
         public void ChangeInterpolation(string shapeName, string smrPath, float time, InterpolationType interp)

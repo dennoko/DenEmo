@@ -249,7 +249,6 @@ namespace DenEmo
 
             DenEmoCommonUI.DrawHeader(this);
             DrawModeTabBar();
-            HandleDragAndDrop();
 
             bool hasTarget = DrawTargetMeshSection();
             if (!hasTarget)
@@ -476,27 +475,30 @@ namespace DenEmo
                 EditorGUILayout.EndHorizontal();
             }
 
-            // 新規追加用の空スロットを常に表示
-            EditorGUILayout.BeginHorizontal();
-            EditorGUI.BeginChangeCheck();
-            var newSmr = EditorGUILayout.ObjectField(
-                new GUIContent("  +"),
-                null, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
-            if (EditorGUI.EndChangeCheck())
+            // 新規追加用の空スロットはプライマリメッシュ設定時のみ表示
+            if (_model.TargetSkinnedMesh != null)
             {
-                if (newSmr != null)
+                EditorGUILayout.BeginHorizontal();
+                EditorGUI.BeginChangeCheck();
+                var newSmr = EditorGUILayout.ObjectField(
+                    new GUIContent("  +"),
+                    null, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
+                if (EditorGUI.EndChangeCheck())
                 {
-                    _additionalTargets.Add(newSmr);
-                    changed = true;
+                    if (newSmr != null)
+                    {
+                        _additionalTargets.Add(newSmr);
+                        changed = true;
+                    }
                 }
+
+                // 幅を揃えるためのダミー✕ボタン
+                using (new EditorGUI.DisabledGroupScope(true))
+                {
+                    GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20));
+                }
+                EditorGUILayout.EndHorizontal();
             }
-            
-            // 幅を揃えるためのダミー✕ボタン
-            using (new EditorGUI.DisabledGroupScope(true))
-            {
-                GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20));
-            }
-            EditorGUILayout.EndHorizontal();
 
             // 更新ボタン行
             EditorGUILayout.BeginHorizontal();

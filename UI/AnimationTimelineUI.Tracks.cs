@@ -114,14 +114,8 @@ namespace DenEmo.UI
                     GUI.Label(new Rect(kx - 8, ky - 8, 16, 16), "◆", style);
                 }
 
-                if (Event.current.type == EventType.MouseDown && hitR.Contains(Event.current.mousePosition))
-                {
-                    GUI.FocusControl(null);
-                    clipModel.CurrentTime = kTime;
-                    preview.SampleAt(kTime);
-                    window.Repaint();
-                    Event.current.Use();
-                }
+                EditorGUIUtility.AddCursorRect(hitR, MouseCursor.SlideArrow);
+                HandleKeyframeDrag(hitR, kTime, shapeName, clipModel, preview, smrPath, window, trackX, trackW, true);
 
                 if (Event.current.type == EventType.ContextClick && hitR.Contains(Event.current.mousePosition))
                 {

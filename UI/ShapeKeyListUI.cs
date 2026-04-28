@@ -17,8 +17,8 @@ namespace DenEmo.UI
         private Dictionary<string, (SkinnedMeshRenderer smr, int idx, float value)> _pendingApplies
             = new Dictionary<string, (SkinnedMeshRenderer, int, float)>();
 
-        private bool          isSliderDragging = false;
-        private int   currentDraggingIndex = -1;
+        private bool   isSliderDragging    = false;
+        private string _currentDraggingKey  = null;
 
         public Action                  OnIncludeFlagsChanged;
         public Action<string, bool>    OnFavoriteChanged;

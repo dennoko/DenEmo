@@ -156,7 +156,7 @@ namespace DenEmo.UI
 
             // ── Buttons ──────────────────────────────────────────────────────
 
-            ActionButtonStyle = new GUIStyle(GUI.skin.button);
+            ActionButtonStyle = new GUIStyle();
             ActionButtonStyle.normal.background  = _texAccentCard;
             ActionButtonStyle.normal.textColor   = TextPrimary;
             ActionButtonStyle.hover.background   = MakeTex(Color.Lerp(Surface2, Color.white, 0.07f));
@@ -169,7 +169,7 @@ namespace DenEmo.UI
             ActionButtonStyle.fixedHeight = 32;
             ActionButtonStyle.alignment  = TextAnchor.MiddleCenter;
 
-            SecondaryButtonStyle = new GUIStyle(GUI.skin.button);
+            SecondaryButtonStyle = new GUIStyle();
             SecondaryButtonStyle.normal.background = MakeBorderedTex(Surface1, Outline);
             SecondaryButtonStyle.normal.textColor  = TextSecondary;
             SecondaryButtonStyle.hover.background  = _texAccentCard;
@@ -187,22 +187,26 @@ namespace DenEmo.UI
             MiniButtonStyle.active.textColor  = TextPrimary;
 
             // フィルターチップ（トグルボタン）
-            ChipOnStyle = new GUIStyle(GUI.skin.button);
-            ChipOnStyle.normal.background  = MakeBorderedTex(new Color(0.2f, 0.35f, 0.55f, 1f), new Color(0.3f, 0.5f, 0.8f, 1f));
+            ChipOnStyle = new GUIStyle();
+            ChipOnStyle.normal.background  = MakeBorderedTex(Surface2, Accent);
             ChipOnStyle.normal.textColor   = TextPrimary;
-            ChipOnStyle.hover.background   = MakeBorderedTex(new Color(0.25f, 0.4f, 0.6f, 1f), new Color(0.3f, 0.5f, 0.8f, 1f));
+            ChipOnStyle.hover.background   = MakeBorderedTex(Color.Lerp(Surface2, Accent, 0.1f), Accent);
             ChipOnStyle.hover.textColor    = TextPrimary;
+            ChipOnStyle.active.background  = MakeBorderedTex(Color.Lerp(Surface2, Accent, 0.2f), Accent);
+            ChipOnStyle.active.textColor   = TextPrimary;
             ChipOnStyle.border     = new RectOffset(1, 1, 1, 1);
             ChipOnStyle.fontSize   = 10;
             ChipOnStyle.fixedHeight = 20;
             ChipOnStyle.padding    = new RectOffset(6, 6, 2, 2);
             ChipOnStyle.alignment  = TextAnchor.MiddleCenter;
 
-            ChipOffStyle = new GUIStyle(GUI.skin.button);
+            ChipOffStyle = new GUIStyle();
             ChipOffStyle.normal.background  = MakeBorderedTex(Surface1, Outline);
             ChipOffStyle.normal.textColor   = TextTertiary;
             ChipOffStyle.hover.background   = MakeBorderedTex(Surface2, Outline);
             ChipOffStyle.hover.textColor    = TextSecondary;
+            ChipOffStyle.active.background  = MakeTex(Color.Lerp(Surface1, Color.white, 0.10f));
+            ChipOffStyle.active.textColor   = TextPrimary;
             ChipOffStyle.border     = new RectOffset(1, 1, 1, 1);
             ChipOffStyle.fontSize   = 10;
             ChipOffStyle.fixedHeight = 20;
@@ -294,7 +298,7 @@ namespace DenEmo.UI
             return tex;
         }
 
-        private static Texture2D MakeBorderedTex(Color fillColor, Color borderColor)
+        internal static Texture2D MakeBorderedTex(Color fillColor, Color borderColor)
         {
             const int size = 3;
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
