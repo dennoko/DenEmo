@@ -1,87 +1,290 @@
 # DenEmo Usage Guide
 
-DenEmo is a Unity Editor extension designed to efficiently adjust shape keys (blendshapes) and create facial expression poses or animations.
-With its intuitive UI, it dramatically improves the workflow for avatar facial expression modification and animation production, especially for VRChat.
+DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). It has two modes: **Pose** for single-frame expressions, and **Animation** for time-based clips.
+
+Open DenEmo from the Unity menu bar: `dennokoworks > DenEmo`.
 
 ---
 
-## 1. Basic Workflow
+## Header
 
-The tool consists of two primary modes. You can switch between them using the tabs at the top.
-
-1.  **POSE Mode**: Create a single-frame expression (pose) and export it as an .anim file.
-2.  **ANIMATION Mode**: Use the timeline to create expressions that change over time (animations).
+The **EN / JA** button in the top-right corner switches the UI language. Your choice is saved automatically.
 
 ---
 
-## 2. Target Mesh Selection (Common)
+## Target Mesh (common to both modes)
 
-In the **"TARGET MESH"** section at the top, specify the mesh (SkinnedMeshRenderer) you want to adjust.
+The **TARGET MESH** section is always shown at the top. Select the mesh (SkinnedMeshRenderer) you want to edit here before doing anything else.
 
--   **Mesh Field**: Drag and drop a face mesh from the hierarchy or use the circle button to select one.
--   **Refresh Button**: Reloads the list if the blendshape configuration of the mesh has changed.
+### Primary Mesh
+
+Drag a GameObject from the Hierarchy or use the object picker to set the primary mesh. Click ✕ to clear it.
+
+### Additional Meshes
+
+Some avatars split their face across multiple meshes (e.g., separate eyebrow or teeth meshes). Drag each extra SkinnedMeshRenderer into a `+` slot below the primary field. Each additional mesh can be removed with its own ✕ button. All registered meshes share one combined shape key list.
+
+> Example: Your VRChat avatar has `Body` and `Brow` as separate face meshes. Set `Body` as the primary mesh and drag `Brow` into the `+` slot. Both appear in the list together.
+
+### Refresh
+
+Press **Refresh** after adding blendshapes to a mesh in another tool, or whenever the list seems out of date. It re-reads all registered meshes and rebuilds the list.
 
 ---
 
-## 3. Pose Mode
+## Pose Mode
 
-The main mode for creating static facial expression poses.
+Pose Mode is for building a single expression frame and exporting it as an `.anim` file. This is the typical workflow for creating gesture animations in VRChat.
 
 ### ANIMATION SOURCE
-Functions for utilizing existing animation files (.anim).
--   **Load Animation**: Applies the values at 0s from the specified clip to the current mesh.
--   **Align Animation File Keys**: Automatically sets the "Save Target (checkbox)" to only those blendshapes contained in the specified clip. This allows you to easily create variations with the same structure as existing animations.
 
-### SEARCH & FILTER
-Tools to quickly find specific shape keys among many.
--   **🔍 Search Bar**: Search by name. Supports multi-word AND searches using spaces.
--   **★ Fav**: Register frequently used shape keys as favorites and display only them.
--   **✓ Enabled**: Display only shape keys marked for saving (checked).
--   **≠0 Non-zero**: Display only shape keys with a value other than 0.
--   **↔ Symmetry**: Merges shape keys ending in `...L` and `...R` into a single row for simultaneous adjustment.
--   **● Filter by Vertex**: After pressing the button, click one vertex in SceneView to show only shape keys that actually move that vertex (you can cancel while waiting for selection).
+This section lets you pull shape key values or checkbox settings from an existing animation clip — useful for editing or extending animations you already have.
 
-### Blendshape List
--   **Sliders**: Adjust values (0–100).
--   **Checkboxes**: Select whether to save that shape key into the animation file.
--   **Snapshot**: Temporarily saves all current values to memory.
--   **Restore Snapshot**: Instantly reverts to the saved snapshot state.
+**Clip field**
+Reference any `.anim` file here to use it as a source.
 
-### SAVE SETTINGS
--   **Save To (default)**: Specify the default folder for new animations.
--   **Enable Overwrite Save**: When enabled, saves directly to the specified existing clip.
--   **Auto Backup on Overwrite**: Copies the original file to a `_backups/` folder before overwriting.
+**Load Animation**
+Reads the shape key values at 0 s from the selected clip and applies them to all sliders. The sliders update immediately so you can continue editing from that state.
+
+> Example: You want to modify an existing "smile" expression. Load the clip and the sliders jump to the saved values. Adjust from there and save a new file.
+
+**Align Animation Keys**
+Checks or unchecks the save-target checkboxes based on which shape keys appear in the selected clip. Shape keys that the clip uses get checked; all others get unchecked. Slider values are not changed.
+
+> Example: Your avatar has 200 shape keys but the reference "smile" clip only uses 12. After aligning, only those 12 will be exported — keeping your new animation clean and free of unintended shape keys.
 
 ---
 
-## 4. Animation Mode
+### SEARCH & FILTER
 
-A mode for creating animations with a time progression. *Note: Some features are currently under development.*
+These chips and the search field narrow down the shape key list. Combine multiple filters freely.
+
+**🔍 Keyword**
+Type to filter by name. Multiple words separated by spaces are treated as AND conditions. Press ✕ to clear.
+
+> Example: Type `mouth open` to show only shape keys whose names contain both words.
+
+**★ Fav**
+Shows only shape keys you have starred. Click the ★ or ☆ button on any row to toggle the favorite flag.
+
+> Example: Star the 8–10 shape keys you use on every expression so you can isolate them instantly without searching.
+
+**✓ Enabled**
+Shows only shape keys whose save checkbox is currently checked.
+
+> Example: Before saving, switch to this view to confirm exactly which shape keys will be written to the file.
+
+**≠0 Non-zero**
+Shows only shape keys with a slider value other than zero.
+
+> Example: After loading a reference animation, use this filter to see which shape keys the expression actually moves.
+
+**↔ Symmetry**
+Pairs shape keys ending in `...L` and `...R` into a single combined row. The shared slider drives both sides at once. When the L and R values differ, they fall back to separate rows automatically.
+
+> Example: `cheek_puff.L` and `cheek_puff.R` appear as one row. Turn Symmetry off if you need to set one side to a different value.
+
+**● Vertex Filter**
+Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✕ to clear.
+
+> Example: A vertex on the upper lip is deforming in an unexpected way. Click it in the SceneView to find which shape keys affect that specific point.
+
+**Mesh filter (popup)**
+Appears only when two or more meshes are registered. Select **All** to see every shape key together, or pick one mesh name to see only that mesh's shape keys.
+
+---
+
+### SHAPE KEYS List
+
+The main editing area. Each row represents one shape key.
+
+**★ / ☆**
+Toggles the favorite flag for that shape key.
+
+**Checkbox**
+Determines whether this shape key is included in the exported `.anim` file. Checked keys are written; unchecked keys are ignored on save even if their value is non-zero.
+
+**Name**
+The shape key name as defined in the mesh. Checked items appear in a brighter style to distinguish them at a glance.
+
+**[0]**
+Resets the slider to zero without changing the save checkbox.
+
+**Slider (0–100)**
+Drag to adjust the blendshape weight. Supports Unity Undo/Redo (Ctrl+Z).
+
+### Groups
+
+Shape keys are automatically grouped by name prefix (e.g., all `mouth_*` keys form one group). The group header shows a collapse arrow (▶ / ▼), a checked/visible count, and a checkbox that checks or unchecks the entire group at once.
+
+> Example: Your avatar has 40 mouth-related shape keys. Collapse the `mouth` group when you are only working on the eyebrows.
+
+### Snapshot and Restore Snapshot
+
+**Snapshot** saves the current slider values for all shape keys to memory. **Restore Snapshot** instantly reverts all sliders to that saved state.
+
+> Example: You have a complex expression dialed in. Take a Snapshot, then experiment freely. If the experiment fails, Restore Snapshot brings back the working state in one click.
+
+---
+
+### SAVE SETTINGS
+
+Controls how the finished expression is exported.
+
+**Save To**
+The folder where new `.anim` files are created. Type a path directly or click **Browse** to pick a folder.
+
+**Enable Overwrite Save**
+When enabled, a target clip field appears below. Saving writes directly to that existing file rather than creating a new one.
+
+**Auto Backup on Overwrite**
+When overwrite is enabled, this option copies the current file to a `_backups/` subfolder before overwriting it. Keep this on to avoid losing previous versions.
+
+**Save Animation**
+Exports all checked shape keys with their current slider values. If Overwrite Save is enabled and a target is set, it overwrites that file. Otherwise it creates a new file in the Save To folder.
+
+> Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, enable Overwrite Save pointing at the first file (with Auto Backup on) — the original is preserved in `_backups/` and the file is updated in place.
+
+---
+
+## Animation Mode
+
+Animation Mode lets you create shape key animations that change over time. You record keyframes at different points on the timeline and the tool generates the curves automatically.
 
 ### ANIMATION CLIP
--   Select a clip to edit or click the **"New"** button to create a fresh one.
 
-### Timeline
--   **Play/Stop**: Preview the clip's animation.
--   **Record (REC)**: When in recording mode (red), moving a slider will automatically set a keyframe at the current playback time.
--   **FPS / Length**: Set the frame rate and duration of the clip.
--   **Interp**: Choose the interpolation method between keyframes (Ease / Linear / Step).
+**Clip field**
+Select an existing `.anim` file to edit it. The timeline and list update to reflect that clip's keyframes.
 
-### Operations in the List
-In Animation Mode, a **◆ (Keyframe)** icon appears to the right of each shape key.
--   **◆ (Filled)**: A keyframe exists at the current time.
--   **◇ (Outline)**: No keyframe exists at the current time.
--   Clicking the icon allows you to directly add or delete a keyframe at the current playback time.
+**New**
+Opens a save dialog and creates a blank `.anim` file. The new clip is immediately loaded and ready to record into.
+
+> Example: Start a "wink" animation by pressing New, saving the file, then recording keyframes using the timeline.
+
+---
+
+### TIMELINE
+
+The timeline shows the playback position, transport controls, and a visual track area for every animated shape key. It can be detached from the main window.
+
+**↗ Detach / ↘ Attach**
+Detach opens the timeline in a separate floating window for more screen space. Closing the separate window (or pressing ↘ Attach inside it) returns the timeline to the main DenEmo window.
+
+#### Global Settings
+
+**FPS**
+Frame rate of the clip. Changing it rescales the frame numbers shown in the ruler.
+
+**Len (s)**
+Total duration of the clip in seconds.
+
+**All Keys Interp**
+Changes the interpolation method for all existing keyframes at once.
+
+| Option | Behavior |
+|--------|----------|
+| Step | Values snap instantly at the keyframe with no transition |
+| Linear | Values change at a constant rate between keyframes |
+| Ease | Values ease in and out for a natural feel |
+
+> Example: Use Step for a blink that should happen instantly. Use Ease for a smile that flows in smoothly.
+
+#### Transport Controls
+
+| Button | Action |
+|--------|--------|
+| `\|<` | Jump to the first frame |
+| `\|◆` | Jump to the previous keyframe |
+| `<` | Step one frame backward |
+| `▶` / `■` | Start or stop playback (loops continuously) |
+| `>` | Step one frame forward |
+| `◆\|` | Jump to the next keyframe |
+| `>\|` | Jump to the last frame |
+
+#### State and Options
+
+**Frame**
+The current playhead position as a frame number. Edit directly to jump to a specific frame.
+
+**Speed**
+Playback speed multiplier (0.1× – 4×). Affects preview only; it does not change the clip.
+
+**Loop Support**
+Copies the first frame's keyframe values to the end of the clip so the animation loops without a visible jump. Toggle off to remove those extra keys.
+
+> Example: A looping idle expression needs to connect seamlessly at the end. Enable Loop Support so the last frame transitions smoothly back to the first.
+
+**🔴 REC**
+Toggles recording mode. When active (red background), dragging any shape key slider automatically stamps a keyframe at the current playhead position. When off, sliders still move the mesh in the preview but do not create keyframes.
+
+> Example: Move the playhead to frame 10, enable REC, drag the `mouth_smile` slider to 80. A keyframe is recorded. Move to frame 25, drag it back to 0. The animation now smoothly transitions from smile to neutral between frames 10 and 25.
+
+#### Timeline Area
+
+**Ruler**
+Shows frame numbers above the track area. Tick density adjusts automatically based on clip length and window width.
+
+**Scrubber**
+The thin bar just below the ruler. Click or drag anywhere on it to move the playhead. The mesh preview updates in real time.
+
+**Keyframe Tracks**
+One track row appears for each shape key that has at least one keyframe. Each row contains:
+
+- **Shape key name** — the name of the animated shape key.
+- **◆ button** — adds or updates a keyframe at the current playhead time, using the shape's current slider value.
+- **✕ button** — deletes the entire track (all keyframes) for that shape key after confirmation.
+- **◆ diamonds on the track** — each diamond is one keyframe. Drag a diamond left or right to move it to a different frame. Right-click a diamond for a context menu: delete that keyframe, or change its interpolation to Step, Linear, or Ease.
+
+The label column width can be resized by dragging the vertical divider between the label and the track area.
+
+**Frame delete row (bottom)**
+Below all tracks, each frame that has any keyframe shows a ✕ button. Pressing it deletes all keyframes across all tracks at that frame — removing a complete pose from one point in time.
+
+---
+
+### SEARCH & FILTER (Animation Mode)
+
+All filters from Pose Mode are available. One additional chip appears when a clip is loaded:
+
+**◆ Keyed Only**
+Hides shape keys that have no keyframes in the current clip. Use this to focus the list on only the shapes that are actually animated.
+
+---
+
+### SHAPE KEYS List (Animation Mode)
+
+Identical to the Pose Mode list with one addition per row:
+
+**◆ / ◇ (Keyframe button)**
+Appears at the far right of each row. ◆ (filled) means a keyframe exists at the current playhead time. ◇ (outline) means no keyframe exists at this time. Clicking the icon toggles it: ◇ stamps a keyframe at the current time; ◆ removes it.
+
+> Example: You want the mouth to be fully closed at frame 0 without using REC. Move to frame 0, set the mouth slider to 0, click ◇ to stamp the keyframe. Done.
+
+---
+
+### SAVE ANIMATION
+
+**Save Animation**
+Writes the current clip's keyframes to the `.anim` file. If the clip was loaded from an existing file, it overwrites that file. If the clip was just created with **New** and has not been saved to disk yet, a file save dialog appears.
+
+> Example: After recording a full wink sequence, press Save Animation to finalize the file and make it available in the Project window.
 
 ---
 
 ## FAQ
 
-#### Q. Why should I use "Align saved keys to existing animation"?
-A. Avatars often contain many shape keys that are not for facial expressions (e.g., for gimmicks). If these are included in your animation, they can cause unintended behavior or conflicts. Aligning to a known good animation ensures only the necessary keys are exported.
+**Q. Why use "Align Animation Keys" instead of unchecking shape keys manually?**
 
-#### Q. Is Undo supported?
-A. Yes, slider adjustments, checkbox toggles, and applying animations all support Unity's Undo/Redo system.
+A. Avatars often contain shape keys for gimmicks, physics toggles, or other non-expression systems. If these end up in your animation, they can interfere with other animations or avatar features. Aligning to a reference clip excludes all of them in one step, with no manual counting needed.
 
-#### Q. How can I fine-tune only one side in Symmetry mode?
-A. Temporarily disable Symmetry mode to adjust sides independently.
+**Q. Does DenEmo support Undo?**
+
+A. Yes. Slider adjustments, checkbox toggles, and loading animation values all participate in Unity's Undo/Redo system (Ctrl+Z / Ctrl+Y).
+
+**Q. How do I adjust only one side when ↔ Symmetry is on?**
+
+A. Turn off the ↔ Symmetry chip, adjust the individual L or R row, then turn Symmetry back on. The L and R values will remain independent until they happen to become equal again.
+
+**Q. Can I work in Animation Mode without looking at the timeline?**
+
+A. Yes. Detach the timeline with ↗ Detach, minimize or move that window out of the way, and use only the ◆/◇ buttons in the shape key list combined with REC mode. The timeline still records keyframes correctly in the background.

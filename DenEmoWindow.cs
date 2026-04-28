@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -23,7 +23,7 @@ namespace DenEmo
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoWindow>("DenEmo");
-            w.minSize = new Vector2(1900, 400);
+            w.minSize = new Vector2(480, 400);
         }
 
         private ShapeKeyModel   _model      = new ShapeKeyModel();
