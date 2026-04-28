@@ -17,7 +17,7 @@ namespace DenEmo.UI
         private const float SCRUBBER_HEIGHT   = 14f;
         private const float CONTROLS_HEIGHT   = 36f;
         private const float TRACK_ROW_HEIGHT  = 24f;
-        private const float TRACK_LABEL_WIDTH = 150f;
+        private const float RIGHT_PADDING     = 16f;
         private const float DIAMOND_SIZE      = 5f;
         private const float MAX_TRACKS_HEIGHT = 160f;
         private const float SMALL_BUTTON_WIDTH = 28f;
@@ -25,6 +25,8 @@ namespace DenEmo.UI
         private const float PLAY_BUTTON_WIDTH = 44f;
 
         // ─── Internal state ───────────────────────────────────────────────────
+        private float   _trackLabelWidth = 150f;
+        private bool    _isDraggingLabelWidth;
         private bool    _isDraggingScrubber;
         private Vector2 _tracksScroll;
         private bool    _tracksCollapsed;
@@ -80,17 +82,28 @@ namespace DenEmo.UI
 
             GUILayout.BeginVertical(DenEmoTheme.CardStyle);
 
-            // Section header + track collapse toggle
+            // Section header + detach/attach button
             GUILayout.BeginHorizontal();
             GUILayout.Label(
                 DenEmoLoc.EnglishMode ? "TIMELINE" : "タイムライン",
                 DenEmoTheme.SectionHeaderStyle);
             GUILayout.FlexibleSpace();
-            string colLabel = _tracksCollapsed
-                ? (DenEmoLoc.EnglishMode ? "▶ Tracks" : "▶ トラック")
-                : (DenEmoLoc.EnglishMode ? "▼ Tracks" : "▼ トラック");
-            if (GUILayout.Button(colLabel, DenEmoTheme.MiniButtonStyle))
-                _tracksCollapsed = !_tracksCollapsed;
+            
+            bool isSeparate = window.GetType().Name == "DenEmoTimelineWindow";
+            if (isSeparate)
+            {
+                if (GUILayout.Button(new GUIContent(DenEmoLoc.EnglishMode ? "↘ Attach" : "↘ 結合", DenEmoLoc.EnglishMode ? "Return timeline to main window" : "メインウィンドウに戻す"), DenEmoTheme.MiniButtonStyle))
+                {
+                    window.Close();
+                }
+            }
+            else
+            {
+                if (GUILayout.Button(new GUIContent(DenEmoLoc.EnglishMode ? "↗ Detach" : "↗ 別窓化", DenEmoLoc.EnglishMode ? "Open timeline in a separate window" : "別ウィンドウでタイムラインを開く"), DenEmoTheme.MiniButtonStyle))
+                {
+                    DenEmoTimelineWindow.ShowWindow();
+                }
+            }
             GUILayout.EndHorizontal();
 
             DenEmoTheme.DrawSeparator(2);
@@ -107,14 +120,35 @@ namespace DenEmo.UI
 
             DrawRulerAndScrubber(clipModel, preview, window);
 
-            if (!_tracksCollapsed)
-            {
-                DrawKeyframeTracks(clipModel, preview, shapeModel, smrPath, currentInterp, window);
-            }
+            DrawKeyframeTracks(clipModel, preview, shapeModel, smrPath, currentInterp, window);
 
             DrawKeyframeDeleteButtons(clipModel, preview, smrPath, window);
 
             EditorGUILayout.EndVertical();
+
+            Rect boxRect = GUILayoutUtility.GetLastRect();
+            
+            // Splitter for _trackLabelWidth
+            Rect splitterRect = new Rect(boxRect.x + _trackLabelWidth - 2, boxRect.y, 5, boxRect.height);
+            EditorGUIUtility.AddCursorRect(splitterRect, MouseCursor.ResizeHorizontal);
+            
+            if (Event.current.type == EventType.MouseDown && splitterRect.Contains(Event.current.mousePosition))
+            {
+                _isDraggingLabelWidth = true;
+                Event.current.Use();
+            }
+            else if (Event.current.type == EventType.MouseDrag && _isDraggingLabelWidth)
+            {
+                _trackLabelWidth += Event.current.delta.x;
+                _trackLabelWidth = Mathf.Clamp(_trackLabelWidth, 80f, boxRect.width * 0.8f);
+                window.Repaint();
+                Event.current.Use();
+            }
+            else if (Event.current.type == EventType.MouseUp && _isDraggingLabelWidth)
+            {
+                _isDraggingLabelWidth = false;
+                Event.current.Use();
+            }
 
             GUILayout.EndVertical();
         }

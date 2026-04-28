@@ -213,6 +213,10 @@ namespace DenEmo.UI
             if (newSmoothLoop != clipModel.SmoothLoopEnabled)
             {
                 clipModel.SmoothLoopEnabled = newSmoothLoop;
+                if (newSmoothLoop)
+                    preview.ApplyLoopKeysToSourceClip(smrPath);
+                else
+                    preview.RemoveLoopKeysFromSourceClip(smrPath);
                 preview.SetCacheDirty();
                 preview.SampleAt(clipModel.CurrentTime);
                 window.Repaint();

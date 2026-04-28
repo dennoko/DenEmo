@@ -136,6 +136,94 @@ namespace DenEmo.Core
             _cacheDirty = true;
         }
 
+        /// <summary>Writes loop-end keys (value = frame-0 evaluation) to the source clip for all blendshape tracks.</summary>
+        public void ApplyLoopKeysToSourceClip(string smrPath)
+        {
+            if (_clipModel?.Clip == null) return;
+            var clip = _clipModel.Clip;
+            float clipLen = _clipModel.ClipLength;
+            float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+            bool changed = false;
+
+            Undo.RecordObject(clip, "Apply Loop Keys");
+
+            foreach (var b in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (b.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!b.propertyName.StartsWith("blendShape.")) continue;
+                if (b.path != (smrPath ?? "")) continue;
+
+                var curve = AnimationUtility.GetEditorCurve(clip, b);
+                if (curve == null || curve.keys.Length == 0) continue;
+
+                float valZero = curve.Evaluate(0f);
+                int endIdx = FindKeyAtTime(curve, clipLen, tol);
+                if (endIdx >= 0) curve.RemoveKey(endIdx);
+
+                int newIdx = curve.AddKey(new Keyframe(clipLen, valZero));
+                if (newIdx < 0)
+                {
+                    int existingIdx = FindKeyAtTime(curve, clipLen, 0f);
+                    if (existingIdx >= 0)
+                    {
+                        curve.MoveKey(existingIdx, new Keyframe(clipLen, valZero));
+                        newIdx = existingIdx;
+                    }
+                }
+
+                int startIdx = FindKeyAtTime(curve, 0f, tol);
+                if (startIdx >= 0 && newIdx >= 0)
+                {
+                    AnimationUtility.SetKeyLeftTangentMode(curve,  newIdx, AnimationUtility.GetKeyLeftTangentMode(curve,  startIdx));
+                    AnimationUtility.SetKeyRightTangentMode(curve, newIdx, AnimationUtility.GetKeyRightTangentMode(curve, startIdx));
+                }
+
+                AnimationUtility.SetEditorCurve(clip, b, curve);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(clip);
+                _cacheDirty = true;
+            }
+        }
+
+        /// <summary>Removes loop-end keys (keys at clipLength) from the source clip for all blendshape tracks.</summary>
+        public void RemoveLoopKeysFromSourceClip(string smrPath)
+        {
+            if (_clipModel?.Clip == null) return;
+            var clip = _clipModel.Clip;
+            float clipLen = _clipModel.ClipLength;
+            float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+            bool changed = false;
+
+            Undo.RecordObject(clip, "Remove Loop Keys");
+
+            foreach (var b in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (b.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!b.propertyName.StartsWith("blendShape.")) continue;
+                if (b.path != (smrPath ?? "")) continue;
+
+                var curve = AnimationUtility.GetEditorCurve(clip, b);
+                if (curve == null) continue;
+
+                int endIdx = FindKeyAtTime(curve, clipLen, tol);
+                if (endIdx < 0) continue;
+
+                curve.RemoveKey(endIdx);
+                AnimationUtility.SetEditorCurve(clip, b, curve.keys.Length > 0 ? curve : null);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(clip);
+                _cacheDirty = true;
+            }
+        }
+
         /// <summary>Deletes all keyframes for the given blendshape.</summary>
         public void DeleteAllKeyframesForShape(string shapeName, string smrPath)
         {
@@ -180,73 +268,57 @@ namespace DenEmo.Core
                 DeleteKeyframe(shapeName, smrPath, time);
         }
 
-        /// <summary>Moves keyframes on a single track with ripple push behavior.</summary>
-        public bool MoveSingleTrackKeyframes(string shapeName, string smrPath, int oldFrame, int newFrame, int totalFrames)
+        /// <summary>Moves keyframes on a single track, blocking if hitting another key.</summary>
+        public int MoveSingleTrackKeyframes(string shapeName, string smrPath, int oldFrame, int newFrame, int totalFrames)
         {
-            if (_clipModel?.Clip == null) return false;
-            if (oldFrame == newFrame) return true;
+            if (_clipModel?.Clip == null) return oldFrame;
+            if (oldFrame == newFrame) return oldFrame;
 
             var binding = MakeBinding(shapeName, smrPath);
             var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding);
-            if (curve == null) return false;
+            if (curve == null) return oldFrame;
 
             float fps = _clipModel.FPS > 0f ? _clipModel.FPS : 60f;
             int dir = newFrame > oldFrame ? 1 : -1;
             int steps = Mathf.Abs(newFrame - oldFrame);
 
             bool changed = false;
+            int currentFrame = oldFrame;
 
             for (int step = 0; step < steps; step++)
             {
                 var keys = curve.keys;
-                var chain = new List<int>();
                 
-                int startIndex = -1;
+                int currentIndex = -1;
                 for (int i = 0; i < keys.Length; i++)
                 {
-                    if (Mathf.RoundToInt(keys[i].time * fps) == oldFrame) { startIndex = i; break; }
+                    if (Mathf.RoundToInt(keys[i].time * fps) == currentFrame) { currentIndex = i; break; }
                 }
                 
-                if (startIndex < 0) break; // Not found, stop moving
-                
-                chain.Add(startIndex);
-                int currentFrame = oldFrame;
-                int currIdx = startIndex;
-                
-                while (true)
-                {
-                    int nextIdx = currIdx + dir;
-                    if (nextIdx >= 0 && nextIdx < keys.Length && Mathf.RoundToInt(keys[nextIdx].time * fps) == currentFrame + dir)
-                    {
-                        currIdx = nextIdx;
-                        currentFrame += dir;
-                        chain.Add(currIdx);
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                
+                if (currentIndex < 0) break;
+
                 int targetFrame = currentFrame + dir;
-                if (targetFrame < 0 || targetFrame > totalFrames) return false; // Blocked
+                if (targetFrame < 0 || targetFrame > totalFrames) break;
+                
+                bool hitOther = false;
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    if (Mathf.RoundToInt(keys[i].time * fps) == targetFrame) { hitOther = true; break; }
+                }
+
+                if (hitOther) break;
 
                 if (!changed)
                 {
-                    Undo.RecordObject(_clipModel.Clip, "Move Keyframes");
+                    Undo.RecordObject(_clipModel.Clip, "Move Keyframe");
                     changed = true;
                 }
 
-                // Move keys from the end of the chain (furthest in direction) to the start
-                for (int i = chain.Count - 1; i >= 0; i--)
-                {
-                    int idx = chain[i];
-                    var k = keys[idx];
-                    k.time = (Mathf.RoundToInt(k.time * fps) + dir) / fps;
-                    curve.MoveKey(idx, k);
-                }
+                var k = keys[currentIndex];
+                k.time = targetFrame / fps;
+                curve.MoveKey(currentIndex, k);
 
-                oldFrame += dir;
+                currentFrame = targetFrame;
             }
 
             if (changed)
@@ -255,14 +327,14 @@ namespace DenEmo.Core
                 EditorUtility.SetDirty(_clipModel.Clip);
                 _cacheDirty = true;
             }
-            return true;
+            return currentFrame;
         }
 
-        /// <summary>Moves keyframes across all tracks at a given frame with ripple push behavior.</summary>
-        public bool MoveAllTracksKeyframes(string smrPath, int oldFrame, int newFrame, int totalFrames)
+        /// <summary>Moves keyframes across all tracks at a given frame, blocking if any track hits another key.</summary>
+        public int MoveAllTracksKeyframes(string smrPath, int oldFrame, int newFrame, int totalFrames)
         {
-            if (_clipModel?.Clip == null) return false;
-            if (oldFrame == newFrame) return true;
+            if (_clipModel?.Clip == null) return oldFrame;
+            if (oldFrame == newFrame) return oldFrame;
 
             float fps = _clipModel.FPS > 0f ? _clipModel.FPS : 60f;
             int dir = newFrame > oldFrame ? 1 : -1;
@@ -280,56 +352,43 @@ namespace DenEmo.Core
             }
 
             bool changed = false;
+            int currentFrame = oldFrame;
 
             for (int step = 0; step < steps; step++)
             {
                 bool blocked = false;
-                var allChains = new List<List<int>>();
+                var movingIndices = new int[curves.Count];
+                for (int i = 0; i < curves.Count; i++) movingIndices[i] = -1;
+
+                int targetFrame = currentFrame + dir;
+                if (targetFrame < 0 || targetFrame > totalFrames) break;
 
                 for (int c = 0; c < curves.Count; c++)
                 {
                     var curve = curves[c];
                     var keys = curve.keys;
-                    var chain = new List<int>();
                     
-                    int startIndex = -1;
+                    int currIdx = -1;
+                    bool hasTarget = false;
                     for (int i = 0; i < keys.Length; i++)
                     {
-                        if (Mathf.RoundToInt(keys[i].time * fps) == oldFrame) { startIndex = i; break; }
+                        int f = Mathf.RoundToInt(keys[i].time * fps);
+                        if (f == currentFrame) currIdx = i;
+                        if (f == targetFrame) hasTarget = true;
                     }
                     
-                    if (startIndex >= 0)
+                    if (currIdx >= 0)
                     {
-                        chain.Add(startIndex);
-                        int currentFrame = oldFrame;
-                        int currIdx = startIndex;
-                        
-                        while (true)
-                        {
-                            int nextIdx = currIdx + dir;
-                            if (nextIdx >= 0 && nextIdx < keys.Length && Mathf.RoundToInt(keys[nextIdx].time * fps) == currentFrame + dir)
-                            {
-                                currIdx = nextIdx;
-                                currentFrame += dir;
-                                chain.Add(currIdx);
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        
-                        int targetFrame = currentFrame + dir;
-                        if (targetFrame < 0 || targetFrame > totalFrames)
+                        movingIndices[c] = currIdx;
+                        if (hasTarget)
                         {
                             blocked = true;
                             break;
                         }
                     }
-                    allChains.Add(chain);
                 }
 
-                if (blocked) return false;
+                if (blocked) break;
 
                 if (!changed)
                 {
@@ -339,21 +398,18 @@ namespace DenEmo.Core
 
                 for (int c = 0; c < curves.Count; c++)
                 {
-                    var curve = curves[c];
-                    var keys = curve.keys;
-                    var chain = allChains[c];
-                    if (chain.Count == 0) continue;
-
-                    for (int i = chain.Count - 1; i >= 0; i--)
+                    if (movingIndices[c] >= 0)
                     {
-                        int idx = chain[i];
+                        var curve = curves[c];
+                        var idx = movingIndices[c];
+                        var keys = curve.keys;
                         var k = keys[idx];
-                        k.time = (Mathf.RoundToInt(k.time * fps) + dir) / fps;
+                        k.time = targetFrame / fps;
                         curve.MoveKey(idx, k);
                     }
                 }
 
-                oldFrame += dir;
+                currentFrame = targetFrame;
             }
 
             if (changed)
@@ -365,7 +421,7 @@ namespace DenEmo.Core
                 EditorUtility.SetDirty(_clipModel.Clip);
                 _cacheDirty = true;
             }
-            return true;
+            return currentFrame;
         }
 
 

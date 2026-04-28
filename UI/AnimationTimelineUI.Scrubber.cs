@@ -20,7 +20,7 @@ namespace DenEmo.UI
                 EditorGUI.DrawRect(rulerRect, DenEmoTheme.Surface2);
                 EditorGUI.DrawRect(scrubRect, DenEmoTheme.Surface0);
 
-                float lw = TRACK_LABEL_WIDTH;
+                float lw = _trackLabelWidth;
                 EditorGUI.DrawRect(new Rect(rulerRect.x + lw, rulerRect.y, 1, rulerRect.height + scrubRect.height), DenEmoTheme.Outline);
 
                 DrawRulerTicks(rulerRect, clipModel);
@@ -32,8 +32,8 @@ namespace DenEmo.UI
 
         private void DrawRulerTicks(Rect rect, AnimationClipModel clipModel)
         {
-            float trackW = rect.width - TRACK_LABEL_WIDTH;
-            float trackX = rect.x + TRACK_LABEL_WIDTH;
+            float trackW = rect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX = rect.x + _trackLabelWidth;
             int total = clipModel.TotalFrames;
             if (total <= 0 || trackW <= 0) return;
 
@@ -53,8 +53,8 @@ namespace DenEmo.UI
 
         private void DrawScrubberLine(Rect rect, AnimationClipModel clipModel)
         {
-            float trackW = rect.width - TRACK_LABEL_WIDTH;
-            float trackX = rect.x + TRACK_LABEL_WIDTH;
+            float trackW = rect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX = rect.x + _trackLabelWidth;
             float norm = clipModel.ClipLength > 0f ? clipModel.CurrentTime / clipModel.ClipLength : 0f;
             norm = Mathf.Clamp01(norm);
             float sx = trackX + norm * trackW;
@@ -66,8 +66,8 @@ namespace DenEmo.UI
         private void HandleScrubberInput(
             Rect scrubRect, AnimationClipModel clipModel, AnimationPreviewController preview, EditorWindow window)
         {
-            float trackW = scrubRect.width - TRACK_LABEL_WIDTH;
-            float trackX = scrubRect.x + TRACK_LABEL_WIDTH;
+            float trackW = scrubRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX = scrubRect.x + _trackLabelWidth;
             Rect trackR = new Rect(trackX, scrubRect.y, trackW, scrubRect.height + RULER_HEIGHT);
 
             Event e = Event.current;
@@ -109,16 +109,16 @@ namespace DenEmo.UI
             float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
             if (allKeys == null || allKeys.Length == 0) return;
 
-            Rect rowRect = GUILayoutUtility.GetRect(0, 32, GUILayout.ExpandWidth(true));
+            Rect rowRect = GUILayoutUtility.GetRect(0, 36, GUILayout.ExpandWidth(true));
             if (Event.current.type == EventType.Repaint)
             {
                 EditorGUI.DrawRect(rowRect, DenEmoTheme.Surface0);
                 float cy = rowRect.y;
-                EditorGUI.DrawRect(new Rect(rowRect.x + TRACK_LABEL_WIDTH, cy, rowRect.width - TRACK_LABEL_WIDTH, 1), DenEmoTheme.Outline);
+                EditorGUI.DrawRect(new Rect(rowRect.x + _trackLabelWidth, cy, rowRect.width - _trackLabelWidth, 1), DenEmoTheme.Outline);
             }
 
-            float trackW = rowRect.width - TRACK_LABEL_WIDTH;
-            float trackX = rowRect.x + TRACK_LABEL_WIDTH;
+            float trackW = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX = rowRect.x + _trackLabelWidth;
 
             EnsureKfLabelStyle();
             
@@ -127,7 +127,7 @@ namespace DenEmo.UI
                 float norm = clipModel.ClipLength > 0f ? kTime / clipModel.ClipLength : 0f;
                 float kx = trackX + norm * trackW;
                 
-                Rect dragRect = new Rect(kx - 8, rowRect.y + 2, 16, 12);
+                Rect dragRect = new Rect(kx - 10, rowRect.y + 2, 20, 12);
                 EditorGUIUtility.AddCursorRect(dragRect, MouseCursor.SlideArrow);
                 
                 var style = new GUIStyle(DenEmoTheme.CaptionStyle)
@@ -140,7 +140,7 @@ namespace DenEmo.UI
 
                 HandleKeyframeDrag(dragRect, kTime, null, clipModel, preview, smrPath, window, trackX, trackW);
 
-                Rect btnRect = new Rect(kx - 8, rowRect.y + 14, 16, 16);
+                Rect btnRect = new Rect(kx - 10, rowRect.y + 16, 20, 20);
                 
                 if (GUI.Button(btnRect, new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete all keys at this frame" : "このフレームの全キーを削除"), DenEmoTheme.MiniButtonStyle))
                 {
@@ -188,20 +188,20 @@ namespace DenEmo.UI
 
                 if (targetFrame != _draggingOldFrame)
                 {
-                    bool moved = false;
+                    int reachedFrame = _draggingOldFrame;
                     if (shapeName == null)
                     {
-                        moved = preview.MoveAllTracksKeyframes(smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
+                        reachedFrame = preview.MoveAllTracksKeyframes(smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
                     }
                     else
                     {
-                        moved = preview.MoveSingleTrackKeyframes(shapeName, smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
+                        reachedFrame = preview.MoveSingleTrackKeyframes(shapeName, smrPath, _draggingOldFrame, targetFrame, clipModel.TotalFrames);
                     }
 
-                    if (moved)
+                    if (reachedFrame != _draggingOldFrame)
                     {
-                        _draggingOldFrame = targetFrame;
-                        clipModel.CurrentTime = (float)targetFrame / clipModel.FPS;
+                        _draggingOldFrame = reachedFrame;
+                        clipModel.CurrentTime = (float)reachedFrame / clipModel.FPS;
                         preview.SampleAt(clipModel.CurrentTime);
                         window.Repaint();
                     }

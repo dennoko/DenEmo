@@ -173,6 +173,12 @@ namespace DenEmo.Core
 
             if (existing == clip)
             {
+                if (clipModel.SmoothLoopEnabled)
+                {
+                    var settings = AnimationUtility.GetAnimationClipSettings(clip);
+                    settings.loopTime = true;
+                    AnimationUtility.SetAnimationClipSettings(clip, settings);
+                }
                 EditorUtility.SetDirty(clip);
                 AssetDatabase.SaveAssets();
             }
@@ -248,6 +254,13 @@ namespace DenEmo.Core
                         AnimationUtility.SetEditorCurve(target, b, curve);
                     }
                 }
+            }
+
+            if (clipModel.SmoothLoopEnabled)
+            {
+                var settings = AnimationUtility.GetAnimationClipSettings(target);
+                settings.loopTime = true;
+                AnimationUtility.SetAnimationClipSettings(target, settings);
             }
         }
 

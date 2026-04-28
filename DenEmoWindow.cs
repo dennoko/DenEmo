@@ -77,8 +77,11 @@ namespace DenEmo
 
         // ─── Lifecycle ───────────────────────────────────────────────────────
 
+        public static DenEmoWindow Instance { get; private set; }
+
         private void OnEnable()
         {
+            Instance = this;
             DenEmoLoc.LoadPrefs();
             saveFolder           = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
             searchText           = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
@@ -263,7 +266,30 @@ namespace DenEmo
             else
             {
                 _animModeUI.DrawAnimationClipSection(_model, saveFolder, this);
-                _animModeUI.DrawTimeline(_model, this);
+                
+                if (HasOpenInstances<DenEmoTimelineWindow>())
+                {
+                    EditorGUILayout.BeginVertical(DenEmoTheme.CardStyle);
+                    GUILayout.Label(DenEmoLoc.EnglishMode ? "Timeline is open in a separate window." : "タイムラインは別ウィンドウで開かれています。", DenEmoTheme.CaptionStyle);
+                    
+                    EditorGUILayout.BeginHorizontal();
+                    if (GUILayout.Button(DenEmoLoc.EnglishMode ? "Focus Timeline Window" : "ウィンドウをフォーカス", DenEmoTheme.SecondaryButtonStyle))
+                    {
+                        DenEmoTimelineWindow.ShowWindow();
+                    }
+                    if (GUILayout.Button(DenEmoLoc.EnglishMode ? "Close Timeline Window" : "ウィンドウを閉じて結合", DenEmoTheme.SecondaryButtonStyle))
+                    {
+                        GetWindow<DenEmoTimelineWindow>().Close();
+                    }
+                    EditorGUILayout.EndHorizontal();
+                    
+                    EditorGUILayout.EndVertical();
+                }
+                else
+                {
+                    _animModeUI.DrawTimeline(_model, this);
+                }
+                
                 DrawSearchFilterSection();
                 var animContext = _animModeUI.ClipModel.Clip != null
                     ? _animModeUI.BuildDrawContext(_model)
@@ -443,6 +469,17 @@ namespace DenEmo
                 statusAutoClearSec = 0;
                 Repaint();
             }
+        }
+        // ─── Timeline Separate Window Support ─────────────────────────────────
+
+        public void DrawTimelineForSeparateWindow(EditorWindow timelineWindow)
+        {
+            if (_currentMode != EditorMode.Animation)
+            {
+                GUILayout.Label(DenEmoLoc.EnglishMode ? "Animation mode is not active." : "アニメーションモードではありません。");
+                return;
+            }
+            _animModeUI.DrawTimeline(_model, timelineWindow);
         }
     }
 }

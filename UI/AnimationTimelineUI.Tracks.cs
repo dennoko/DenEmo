@@ -42,17 +42,20 @@ namespace DenEmo.UI
             {
                 EditorGUI.DrawRect(rowRect, DenEmoTheme.Surface0);
                 float cy = rowRect.y + rowRect.height * 0.5f;
-                EditorGUI.DrawRect(new Rect(rowRect.x + TRACK_LABEL_WIDTH, cy, rowRect.width - TRACK_LABEL_WIDTH, 1), DenEmoTheme.Outline);
+                EditorGUI.DrawRect(new Rect(rowRect.x + _trackLabelWidth, cy, rowRect.width - _trackLabelWidth, 1), DenEmoTheme.Outline);
             }
 
-            float trackW = rowRect.width - TRACK_LABEL_WIDTH;
-            float trackX = rowRect.x + TRACK_LABEL_WIDTH;
+            float trackW = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX = rowRect.x + _trackLabelWidth;
 
             GUI.Label(
-                new Rect(rowRect.x + 8, rowRect.y + 4, TRACK_LABEL_WIDTH - 44, rowRect.height - 8),
+                new Rect(rowRect.x + 8, rowRect.y + 4, _trackLabelWidth - 56, rowRect.height - 8),
                 shapeName, DenEmoTheme.CaptionStyle);
 
-            if (GUI.Button(new Rect(rowRect.x + TRACK_LABEL_WIDTH - 40, rowRect.y + 4, 16, 16), "◆", DenEmoTheme.MiniButtonStyle))
+            if (GUI.Button(
+                new Rect(rowRect.x + _trackLabelWidth - 48, rowRect.y + 2, 20, 20),
+                new GUIContent("◆", DenEmoLoc.EnglishMode ? "Add / Update Key" : "キーの追加・更新"),
+                DenEmoTheme.MiniButtonStyle))
             {
                 var smr = shapeModel?.TargetSkinnedMesh;
                 if (smr != null && smr.sharedMesh != null)
@@ -69,7 +72,7 @@ namespace DenEmo.UI
             }
 
             if (GUI.Button(
-                new Rect(rowRect.x + TRACK_LABEL_WIDTH - 22, rowRect.y + 4, 16, 16),
+                new Rect(rowRect.x + _trackLabelWidth - 24, rowRect.y + 2, 20, 20),
                 new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete this track" : "このトラックを削除"),
                 DenEmoTheme.MiniButtonStyle))
             {
