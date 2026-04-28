@@ -220,6 +220,9 @@ namespace DenEmo.UI
         }
 
         private static string MakeDragKey(ShapeKeyItem item)
-            => (item.OwnerSmr != null ? item.OwnerSmr.GetInstanceID().ToString() : "0") + "_" + item.Index;
+        {
+            int smrId = item.OwnerSmr != null ? item.OwnerSmr.GetInstanceID() : int.MinValue;
+            return $"{smrId}_{item.Index}";
+        }
     }
 }

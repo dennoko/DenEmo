@@ -456,18 +456,28 @@ namespace DenEmo.Core
                     {
                         var loopCurve = new AnimationCurve(curve.keys);
                         float valZero = loopCurve.Evaluate(0f);
-                        float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+                        float tol     = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+
                         int endIdx = FindKeyAtTime(loopCurve, _clipModel.ClipLength, tol);
                         if (endIdx >= 0)
-                        {
                             loopCurve.RemoveKey(endIdx);
-                        }
+
                         int newIdx = loopCurve.AddKey(new Keyframe(_clipModel.ClipLength, valZero));
-                        // Try to preserve interpolation from the start key if possible
-                        int startIdx = FindKeyAtTime(loopCurve, 0f, tol);
-                        if (startIdx >= 0)
+                        if (newIdx < 0)
                         {
-                            AnimationUtility.SetKeyLeftTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve, startIdx));
+                            // 既存キーと時刻が重なった場合（浮動小数点誤差）は MoveKey で上書き
+                            int existingIdx = FindKeyAtTime(loopCurve, _clipModel.ClipLength, 0f);
+                            if (existingIdx >= 0)
+                            {
+                                loopCurve.MoveKey(existingIdx, new Keyframe(_clipModel.ClipLength, valZero));
+                                newIdx = existingIdx;
+                            }
+                        }
+
+                        int startIdx = FindKeyAtTime(loopCurve, 0f, tol);
+                        if (startIdx >= 0 && newIdx >= 0)
+                        {
+                            AnimationUtility.SetKeyLeftTangentMode(loopCurve,  newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve,  startIdx));
                             AnimationUtility.SetKeyRightTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyRightTangentMode(loopCurve, startIdx));
                         }
                         _curveCache[index] = loopCurve;

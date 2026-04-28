@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
@@ -34,6 +35,9 @@ namespace DenEmo.UI
         private static Texture2D _texCard;
         private static Texture2D _texAccentCard;
         private static Texture2D _texRowHover;
+
+        // 生成したすべてのテクスチャを追跡してドメインリロード前に確実に破棄する
+        private static readonly List<Texture2D> _allTextures = new List<Texture2D>();
 
         // ─── Styles ──────────────────────────────────────────────────────────
 
@@ -295,6 +299,7 @@ namespace DenEmo.UI
             tex.SetPixel(0, 0, color);
             tex.Apply();
             tex.hideFlags = HideFlags.HideAndDontSave;
+            _allTextures.Add(tex);
             return tex;
         }
 
@@ -311,12 +316,38 @@ namespace DenEmo.UI
             tex.Apply();
             tex.filterMode = FilterMode.Point;
             tex.hideFlags  = HideFlags.HideAndDontSave;
+            _allTextures.Add(tex);
             return tex;
+        }
+
+        // ドメインリロード前に全テクスチャを破棄する（DenEmoThemeCleanupから呼ばれる）
+        internal static void DisposeTextures()
+        {
+            foreach (var tex in _allTextures)
+                if (tex != null) Object.DestroyImmediate(tex);
+            _allTextures.Clear();
+
+            _texSurface0   = null;
+            _texSurface1   = null;
+            _texSurface2   = null;
+            _texCard       = null;
+            _texAccentCard = null;
+            _texRowHover   = null;
+            _initialized   = false;
         }
 
         private static Color Hex(int rgb) => new Color(
             ((rgb >> 16) & 0xFF) / 255f,
             ((rgb >>  8) & 0xFF) / 255f,
             ( rgb        & 0xFF) / 255f);
+    }
+
+    [InitializeOnLoad]
+    internal static class DenEmoThemeCleanup
+    {
+        static DenEmoThemeCleanup()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += DenEmoTheme.DisposeTextures;
+        }
     }
 }

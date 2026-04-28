@@ -280,11 +280,14 @@ namespace DenEmo.Models
             return false;
         }
 
+        private static readonly char[] GroupKeyDelimiters = { ' ', '_', '-', '/', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+        private static readonly char[] SearchDelimiters   = { ' ', '\t', '　' };
+
         private static string GetGroupKey(string name)
         {
             if (string.IsNullOrEmpty(name)) return "Other";
             name = name.Trim();
-            int idx = IndexOfAny(name, new char[] { ' ', '_', '-', '/', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' });
+            int idx = name.IndexOfAny(GroupKeyDelimiters);
             string token;
             if (idx > 0)
             {
@@ -307,21 +310,10 @@ namespace DenEmo.Models
             return token;
         }
 
-        private static int IndexOfAny(string s, char[] chars)
-        {
-            int best = -1;
-            for (int i = 0; i < chars.Length; i++)
-            {
-                int p = s.IndexOf(chars[i]);
-                if (p >= 0 && (best < 0 || p < best)) best = p;
-            }
-            return best;
-        }
-
         public static string[] BuildSearchTokens(string text)
         {
             if (string.IsNullOrEmpty(text)) return Array.Empty<string>();
-            return text.Split(new char[] { ' ', '\t', '　' }, StringSplitOptions.RemoveEmptyEntries);
+            return text.Split(SearchDelimiters, StringSplitOptions.RemoveEmptyEntries);
         }
 
         private static bool MatchesAllTokens(string name, string[] tokens)
