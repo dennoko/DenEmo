@@ -124,33 +124,9 @@ namespace DenEmo.UI
 
             DrawKeyframeDeleteButtons(clipModel, preview, smrPath, window);
 
-            EditorGUILayout.EndVertical();
+            EditorGUILayout.EndVertical(); // end "box"
 
-            Rect boxRect = GUILayoutUtility.GetLastRect();
-            
-            // Splitter for _trackLabelWidth
-            Rect splitterRect = new Rect(boxRect.x + _trackLabelWidth - 2, boxRect.y, 5, boxRect.height);
-            EditorGUIUtility.AddCursorRect(splitterRect, MouseCursor.ResizeHorizontal);
-            
-            if (Event.current.type == EventType.MouseDown && splitterRect.Contains(Event.current.mousePosition))
-            {
-                _isDraggingLabelWidth = true;
-                Event.current.Use();
-            }
-            else if (Event.current.type == EventType.MouseDrag && _isDraggingLabelWidth)
-            {
-                _trackLabelWidth += Event.current.delta.x;
-                _trackLabelWidth = Mathf.Clamp(_trackLabelWidth, 80f, boxRect.width * 0.8f);
-                window.Repaint();
-                Event.current.Use();
-            }
-            else if (Event.current.type == EventType.MouseUp && _isDraggingLabelWidth)
-            {
-                _isDraggingLabelWidth = false;
-                Event.current.Use();
-            }
-
-            GUILayout.EndVertical();
+            GUILayout.EndVertical(); // end CardStyle
         }
 
 

@@ -45,15 +45,56 @@ namespace DenEmo.UI
                 EditorGUI.DrawRect(new Rect(rowRect.x + _trackLabelWidth, cy, rowRect.width - _trackLabelWidth, 1), DenEmoTheme.Outline);
             }
 
-            float trackW = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
-            float trackX = rowRect.x + _trackLabelWidth;
+            // Layout: [label][border(4px)][◆(25px)][gap(4px)][✕(20px)][gap(4px)] → last 53px reserved for buttons+border
+            const float BORDER_W       = 4f;
+            const float ADD_BTN_W      = 25f;
+            const float DEL_BTN_W      = 20f;
+            const float BTN_GAP        = 4f;
+            // Total right-of-label: BORDER_W + ADD_BTN_W + BTN_GAP + DEL_BTN_W + BTN_GAP = 57
+            const float LABEL_RIGHT_RESERVE = BORDER_W + ADD_BTN_W + BTN_GAP + DEL_BTN_W + BTN_GAP;
+
+            float labelMaxW  = _trackLabelWidth - LABEL_RIGHT_RESERVE - 8f;
+            float borderX    = rowRect.x + _trackLabelWidth - LABEL_RIGHT_RESERVE;
+            float addBtnX    = borderX + BORDER_W;
+            float delBtnX    = addBtnX + ADD_BTN_W + BTN_GAP;
+            float trackW     = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX     = rowRect.x + _trackLabelWidth;
 
             GUI.Label(
-                new Rect(rowRect.x + 8, rowRect.y + 4, _trackLabelWidth - 56, rowRect.height - 8),
+                new Rect(rowRect.x + 8, rowRect.y + 4, labelMaxW, rowRect.height - 8),
                 shapeName, DenEmoTheme.CaptionStyle);
 
+            // ── Splitter border between label and buttons ──────────────────────
+            Rect borderRect = new Rect(borderX, rowRect.y, BORDER_W, rowRect.height);
+            if (Event.current.type == EventType.Repaint)
+            {
+                float bCx = borderX + BORDER_W * 0.5f;
+                EditorGUI.DrawRect(new Rect(bCx - 0.5f, rowRect.y + 2, 1, rowRect.height - 4), DenEmoTheme.Outline);
+            }
+            EditorGUIUtility.AddCursorRect(borderRect, MouseCursor.ResizeHorizontal);
+
+            Event ev = Event.current;
+            if (ev.type == EventType.MouseDown && borderRect.Contains(ev.mousePosition) && ev.button == 0)
+            {
+                _isDraggingLabelWidth = true;
+                ev.Use();
+            }
+            else if (ev.type == EventType.MouseDrag && _isDraggingLabelWidth)
+            {
+                _trackLabelWidth += ev.delta.x;
+                _trackLabelWidth = Mathf.Clamp(_trackLabelWidth, 80f, rowRect.width * 0.8f);
+                window.Repaint();
+                ev.Use();
+            }
+            else if (ev.type == EventType.MouseUp && _isDraggingLabelWidth && ev.button == 0)
+            {
+                _isDraggingLabelWidth = false;
+                ev.Use();
+            }
+
+            // ── ◆ Add key button ───────────────────────────────────────────────
             if (GUI.Button(
-                new Rect(rowRect.x + _trackLabelWidth - 48, rowRect.y + 2, 20, 20),
+                new Rect(addBtnX, rowRect.y + 2, ADD_BTN_W, 20),
                 new GUIContent("◆", DenEmoLoc.EnglishMode ? "Add / Update Key" : "キーの追加・更新"),
                 DenEmoTheme.MiniButtonStyle))
             {
@@ -71,8 +112,9 @@ namespace DenEmo.UI
                 }
             }
 
+            // ── ✕ Delete track button ──────────────────────────────────────────
             if (GUI.Button(
-                new Rect(rowRect.x + _trackLabelWidth - 24, rowRect.y + 2, 20, 20),
+                new Rect(delBtnX, rowRect.y + 2, DEL_BTN_W, 20),
                 new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete this track" : "このトラックを削除"),
                 DenEmoTheme.MiniButtonStyle))
             {

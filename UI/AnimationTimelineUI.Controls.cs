@@ -72,7 +72,7 @@ namespace DenEmo.UI
 
             GUILayout.Space(12);
 
-            // ─── Row 2: Transport ───
+            // ─── Row 2 (& 3 if detached): Transport and Settings ───
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
 
@@ -172,14 +172,23 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
-            GUILayout.FlexibleSpace();
-            EditorGUILayout.EndHorizontal();
 
-            GUILayout.Space(8);
+            bool isSeparate = window.GetType().Name == "DenEmoTimelineWindow";
+            if (!isSeparate)
+            {
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.EndHorizontal();
 
-            // ─── Row 3: Current State & Options ───
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
+                GUILayout.Space(8);
+
+                // ─── Row 3: Current State & Options ───
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+            }
+            else
+            {
+                GUILayout.Space(16);
+            }
 
             EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle, GUILayout.ExpandWidth(false));
 

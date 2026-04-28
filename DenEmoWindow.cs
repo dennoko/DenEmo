@@ -23,7 +23,7 @@ namespace DenEmo
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoWindow>("DenEmo");
-            w.minSize = new Vector2(380, 400);
+            w.minSize = new Vector2(1900, 400);
         }
 
         private ShapeKeyModel   _model      = new ShapeKeyModel();

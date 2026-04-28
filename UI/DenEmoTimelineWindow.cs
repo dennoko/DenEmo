@@ -8,7 +8,7 @@ namespace DenEmo.UI
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoTimelineWindow>("Timeline");
-            w.minSize = new Vector2(380, 200);
+            w.minSize = new Vector2(760, 200);
             w.Show();
         }
 
