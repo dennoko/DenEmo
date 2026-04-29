@@ -296,6 +296,12 @@ namespace DenEmo
             }
 
             GUILayout.FlexibleSpace();
+
+            var optBtnLabel = new GUIContent(DenEmoLoc.EnglishMode ? "⚙ Preview" : "⚙ 表示設定");
+            var optBtnRect  = GUILayoutUtility.GetRect(optBtnLabel, DenEmoTheme.MiniButtonStyle, GUILayout.Width(66));
+            if (GUI.Button(optBtnRect, optBtnLabel, DenEmoTheme.MiniButtonStyle))
+                PopupWindow.Show(optBtnRect, new VertexPreviewOptionsPopup(this));
+
             EditorGUILayout.EndHorizontal();
 
             DenEmoTheme.EndSection();

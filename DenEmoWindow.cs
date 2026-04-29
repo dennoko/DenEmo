@@ -14,8 +14,9 @@ namespace DenEmo
 
         private enum EditorMode { Pose, Animation }
         private EditorMode _currentMode = EditorMode.Pose;
-        private const float VertexGuideHandleSizeMultiplier = 0.015f;
-        private static readonly Color VertexGuideColor = new Color(0.24f, 0.72f, 1.0f, 0.95f);
+        internal static Color VertexPreviewColor         = new Color(0.24f, 0.72f, 1.0f, 0.95f);
+        internal static Color VertexPreviewSelectedColor  = Color.yellow;
+        internal static float VertexPreviewSizeMultiplier = 1.0f;
 
         // ─── State ────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ namespace DenEmo
         private Vector3[] vertexGuideWorldNormals = null;
         private int vertexGuideMeshInstanceId = 0;
         private Matrix4x4 vertexGuideLocalToWorld = Matrix4x4.zero;
+        private bool _vertexResultPending = false;
+        private double _vertexResultClearAt = 0;
 
         private bool lastShowOnlyIncluded  = false;
         private bool lastShowOnlyNonZero   = false;
@@ -93,6 +96,10 @@ namespace DenEmo
             autoBackup           = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup",        true);
             overwriteSaveEnabled = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
             _meshFilterIndex     = DenEmoProjectPrefs.GetInt("DenEmo_MeshFilter", -1);
+            VertexPreviewColor        = ParseColor(DenEmoProjectPrefs.GetString("DenEmo_VertexPreviewColor",         ""), new Color(0.24f, 0.72f, 1.0f, 0.95f));
+            VertexPreviewSelectedColor = ParseColor(DenEmoProjectPrefs.GetString("DenEmo_VertexPreviewSelectedColor", ""), Color.yellow);
+            if (float.TryParse(DenEmoProjectPrefs.GetString("DenEmo_VertexPreviewSize", "1"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float pvSize))
+                VertexPreviewSizeMultiplier = pvSize;
 
             _additionalTargets.Clear();
             var addIds = DenEmoProjectPrefs.GetString("DenEmo_AdditionalTargets", "");
@@ -189,6 +196,9 @@ namespace DenEmo
             DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled", overwriteSaveEnabled);
             DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter",            _meshFilterIndex);
             DenEmoProjectPrefs.SetInt("DenEmo_Mode", (int)_currentMode);
+            DenEmoProjectPrefs.SetString("DenEmo_VertexPreviewColor",         ColorToPrefsString(VertexPreviewColor));
+            DenEmoProjectPrefs.SetString("DenEmo_VertexPreviewSelectedColor", ColorToPrefsString(VertexPreviewSelectedColor));
+            DenEmoProjectPrefs.SetString("DenEmo_VertexPreviewSize",          VertexPreviewSizeMultiplier.ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
 
             if (overwriteTargetClip != null)
             {
@@ -228,6 +238,13 @@ namespace DenEmo
         {
             if (_currentMode == EditorMode.Animation)
                 _animModeUI.OnUpdate(this);
+
+            if (_vertexResultPending && EditorApplication.timeSinceStartup >= _vertexResultClearAt)
+            {
+                _vertexResultPending = false;
+                ClearVertexGuideCache();
+                SceneView.RepaintAll();
+            }
         }
 
         private void OnUndoRedo()
@@ -487,6 +504,25 @@ namespace DenEmo
                 return;
             }
             _animModeUI.DrawTimeline(_model, timelineWindow);
+        }
+
+        // ─── Vertex preview prefs helpers ─────────────────────────────────────
+
+        internal static string ColorToPrefsString(Color c)
+            => string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F4},{1:F4},{2:F4},{3:F4}", c.r, c.g, c.b, c.a);
+
+        private static Color ParseColor(string s, Color def)
+        {
+            if (string.IsNullOrEmpty(s)) return def;
+            var parts = s.Split(',');
+            if (parts.Length != 4) return def;
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, ic, out float r) &&
+                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, ic, out float g) &&
+                float.TryParse(parts[2], System.Globalization.NumberStyles.Float, ic, out float b) &&
+                float.TryParse(parts[3], System.Globalization.NumberStyles.Float, ic, out float a))
+                return new Color(r, g, b, a);
+            return def;
         }
     }
 }

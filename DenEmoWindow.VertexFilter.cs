@@ -10,19 +10,22 @@ namespace DenEmo
 
         private void OnSceneGUI(SceneView sceneView)
         {
-            if (!vertexPickMode) return;
+            if (!vertexPickMode && !_vertexResultPending) return;
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
             DenEmoTheme.Initialize();
 
             UpdateVertexGuideCache();
             if (vertexGuideWorldPositions == null || vertexGuideWorldPositions.Length == 0) return;
 
-            Handles.BeginGUI();
-            GUI.Label(
-                new Rect(16, 16, 520, 22),
-                DenEmoLoc.T("ui.filter.vertex.guide"),
-                DenEmoTheme.SecondaryTextStyle);
-            Handles.EndGUI();
+            if (vertexPickMode)
+            {
+                Handles.BeginGUI();
+                GUI.Label(
+                    new Rect(16, 16, 520, 22),
+                    DenEmoLoc.T("ui.filter.vertex.guide"),
+                    DenEmoTheme.SecondaryTextStyle);
+                Handles.EndGUI();
+            }
 
             var prevColor = Handles.color;
             var prevZTest = Handles.zTest;
@@ -35,6 +38,9 @@ namespace DenEmo
 
             for (int i = 0; i < vertexGuideWorldPositions.Length; i++)
             {
+                // 結果表示中は選択頂点のみ描画
+                if (_vertexResultPending && i != selectedVertexIndex) continue;
+
                 Vector3 world   = vertexGuideWorldPositions[i];
                 Vector3 viewDir = isOrtho ? orthoDir : (camPos - world).normalized;
 
@@ -44,14 +50,22 @@ namespace DenEmo
                 }
 
                 float handleSize = HandleUtility.GetHandleSize(world);
-                float size       = 0.0002f + handleSize * 0.0002f;
+                float size       = (0.0002f + handleSize * 0.0002f) * VertexPreviewSizeMultiplier;
                 Vector3 drawPos  = world + viewDir * (handleSize * 0.002f);
 
-                Handles.color = i == selectedVertexIndex ? Color.yellow : VertexGuideColor;
-                if (Handles.Button(drawPos, Quaternion.identity, size, size, Handles.DotHandleCap))
+                Handles.color = i == selectedVertexIndex ? VertexPreviewSelectedColor : VertexPreviewColor;
+
+                if (vertexPickMode)
                 {
-                    pickedIndex = i;
-                    break;
+                    if (Handles.Button(drawPos, Quaternion.identity, size, size, Handles.SphereHandleCap))
+                    {
+                        pickedIndex = i;
+                        break;
+                    }
+                }
+                else
+                {
+                    Handles.SphereHandleCap(0, drawPos, Quaternion.identity, size, EventType.Repaint);
                 }
             }
             Handles.color = prevColor;
@@ -63,7 +77,8 @@ namespace DenEmo
                 vertexMovedShapeIndices  = _model.CollectShapeIndicesMovingVertex(selectedVertexIndex);
                 vertexFilterActive       = true;
                 vertexPickMode           = false;
-                ClearVertexGuideCache();
+                _vertexResultPending     = true;
+                _vertexResultClearAt     = EditorApplication.timeSinceStartup + 2.0;
                 UpdateVisibility();
                 SceneView.RepaintAll();
                 Repaint();
@@ -72,7 +87,8 @@ namespace DenEmo
 
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
             {
-                vertexPickMode = false;
+                vertexPickMode       = false;
+                _vertexResultPending = false;
                 ClearVertexGuideCache();
                 SceneView.RepaintAll();
                 Repaint();
@@ -200,6 +216,7 @@ namespace DenEmo
             vertexFilterActive      = false;
             selectedVertexIndex     = -1;
             vertexMovedShapeIndices = null;
+            _vertexResultPending    = false;
             ClearVertexGuideCache();
             UpdateVisibility();
             SceneView.RepaintAll();
