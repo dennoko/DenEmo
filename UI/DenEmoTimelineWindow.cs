@@ -5,6 +5,8 @@ namespace DenEmo.UI
 {
     public class DenEmoTimelineWindow : EditorWindow
     {
+        private Vector2 _scrollPos;
+
         public static void ShowWindow()
         {
             var w = GetWindow<DenEmoTimelineWindow>("Timeline");
@@ -24,7 +26,9 @@ namespace DenEmo.UI
                 return;
             }
 
+            _scrollPos = GUILayout.BeginScrollView(_scrollPos);
             DenEmoWindow.Instance.DrawTimelineForSeparateWindow(this);
+            GUILayout.EndScrollView();
         }
         
         private void OnEnable()

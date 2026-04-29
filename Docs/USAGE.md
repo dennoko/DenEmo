@@ -163,6 +163,35 @@ Opens a save dialog and creates a blank `.anim` file. The new clip is immediatel
 
 ---
 
+### SHAPE KEY VALUE CORRECTION
+
+This section is **collapsed by default**. Click the header to expand it.
+
+It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range — a common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
+
+The section lists every shape key that has keyframes in the current clip. For each one you can set a **Min** and **Max** bound:
+
+| Field | Default | Effect |
+|-------|---------|--------|
+| **Min (0–100)** | 0 | Lower bound after correction. When above 0, the original value 0 is raised to this value, while the original 100 maps to the Max setting. Prevents the shape key from fully returning to neutral. |
+| **Max (0–100)** | 100 | Upper bound after correction. When below 100, the original value 100 is lowered to this value, while the original 0 maps to the Min setting. Prevents the shape key from reaching its full intensity. |
+
+The correction formula applied to every keyframe:
+
+```
+new_value = original_value × (Max − Min) / 100 + Min
+```
+
+Curve tangents are scaled by the same factor, preserving the shape of the animation curve.
+
+Press **Apply Correction** to write the remapped values to the clip. The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from the defaults (0 and 100) are affected.
+
+> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction. All blink keyframes are rescaled into the 0–80 range — the curve shape and timing remain unchanged.
+
+> Example: You want `mouth_open` to never fully close in this animation. Set Min to 20. Original 0 keyframes become 20, original 100 keyframes stay at 100.
+
+---
+
 ### TIMELINE
 
 The timeline shows the playback position, transport controls, and a visual track area for every animated shape key. It can be detached from the main window.

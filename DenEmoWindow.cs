@@ -60,6 +60,7 @@ namespace DenEmo
         private int _meshFilterIndex = -1;
 
         private Vector2 scroll;
+        private Vector2 _mainScroll;
 
         private AnimationClip loadedClip          = null;
         private AnimationClip overwriteTargetClip = null;
@@ -247,9 +248,12 @@ namespace DenEmo
             DenEmoCommonUI.DrawHeader(this);
             DrawModeTabBar();
 
+            _mainScroll = EditorGUILayout.BeginScrollView(_mainScroll);
+
             bool hasTarget = DrawTargetMeshSection();
             if (!hasTarget)
             {
+                EditorGUILayout.EndScrollView();
                 GUILayout.FlexibleSpace();
                 DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
                 HandleDragAndDrop();
@@ -266,12 +270,13 @@ namespace DenEmo
             else
             {
                 _animModeUI.DrawAnimationClipSection(_model, saveFolder, this);
-                
+                _animModeUI.DrawClipCorrectionSection((msg, lvl) => SetStatus(msg, lvl), this);
+
                 if (HasOpenInstances<DenEmoTimelineWindow>())
                 {
                     EditorGUILayout.BeginVertical(DenEmoTheme.CardStyle);
                     GUILayout.Label(DenEmoLoc.EnglishMode ? "Timeline is open in a separate window." : "タイムラインは別ウィンドウで開かれています。", DenEmoTheme.CaptionStyle);
-                    
+
                     EditorGUILayout.BeginHorizontal();
                     if (GUILayout.Button(DenEmoLoc.EnglishMode ? "Focus Timeline Window" : "ウィンドウをフォーカス", DenEmoTheme.SecondaryButtonStyle))
                     {
@@ -282,14 +287,14 @@ namespace DenEmo
                         GetWindow<DenEmoTimelineWindow>().Close();
                     }
                     EditorGUILayout.EndHorizontal();
-                    
+
                     EditorGUILayout.EndVertical();
                 }
                 else
                 {
                     _animModeUI.DrawTimeline(_model, this);
                 }
-                
+
                 DrawSearchFilterSection();
                 var animContext = _animModeUI.ClipModel.Clip != null
                     ? _animModeUI.BuildDrawContext(_model)
@@ -297,6 +302,8 @@ namespace DenEmo
                 _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this, animContext);
                 DrawAnimationSaveSection();
             }
+
+            EditorGUILayout.EndScrollView();
 
             DenEmoCommonUI.DrawStatusBar(statusMessage, statusLevel);
             HandleDragAndDrop();

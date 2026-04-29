@@ -39,9 +39,10 @@ namespace DenEmo.UI
     {
         // ─── Sub-objects ──────────────────────────────────────────────────────
 
-        public AnimationClipModel         ClipModel  { get; } = new AnimationClipModel();
-        public AnimationPreviewController Preview    { get; } = new AnimationPreviewController();
-        public AnimationTimelineUI        TimelineUI { get; } = new AnimationTimelineUI();
+        public AnimationClipModel          ClipModel    { get; } = new AnimationClipModel();
+        public AnimationPreviewController  Preview      { get; } = new AnimationPreviewController();
+        public AnimationTimelineUI         TimelineUI   { get; } = new AnimationTimelineUI();
+        public AnimationClipCorrectionUI   CorrectionUI { get; } = new AnimationClipCorrectionUI();
 
         // ─── State ────────────────────────────────────────────────────────────
 
@@ -170,6 +171,13 @@ namespace DenEmo.UI
             }
 
             DenEmoTheme.EndSection();
+        }
+
+        // ─── Draw: Clip correction ────────────────────────────────────────────
+
+        public void DrawClipCorrectionSection(System.Action<string, int> setStatus, EditorWindow window)
+        {
+            CorrectionUI.Draw(ClipModel, Preview, _smrPath, setStatus, window);
         }
 
         // ─── Draw: Timeline ───────────────────────────────────────────────────
