@@ -427,8 +427,8 @@ namespace DenEmo
             _model.RefreshList(searchText, showOnlyIncluded);
             LipSyncExclusionRule.ApplyExclusion(_model.TargetSkinnedMesh, _model.Items);
             LoadFavoritesPrefs();
-            LoadIncludeFlagsPrefs();
             _model.BuildGroups();
+            LoadIncludeFlagsPrefs();
             if (vertexFilterActive && selectedVertexIndex >= 0)
                 vertexMovedShapeIndices = _model.CollectShapeIndicesMovingVertex(selectedVertexIndex);
             CreateSnapshot(true);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -78,7 +78,7 @@ namespace DenEmo.UI
             GUILayout.Space(4);
             GUILayout.EndHorizontal();
 
-            scroll = EditorGUILayout.BeginScrollView(scroll);
+            scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.MinHeight(450));
 
             if (model.Items.Count == 0)
             {
@@ -99,11 +99,11 @@ namespace DenEmo.UI
                 int visibleCount = 0;
                 for (int i = start; i < end; i++)
                 {
-                    if (model.Items[i].IsVisible)
-                    {
-                        visibleCount++;
-                        if (model.Items[i].IsIncluded) enabledCount++;
-                    }
+                    var it = model.Items[i];
+                    if (!it.IsVisible || it.IsLipSyncShape) continue;
+                    if (animContext?.TrackShapeNames != null && !animContext.TrackShapeNames.Contains(it.Name)) continue;
+                    visibleCount++;
+                    if (it.IsIncluded) enabledCount++;
                 }
 
                 if (visibleCount == 0) continue;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -192,6 +192,61 @@ namespace DenEmo.Models
 
         public void BuildGroups()
         {
+            if (Items.Count == 0)
+            {
+                GroupSegments.Clear();
+                return;
+            }
+
+            // 1. 各アイテムのグループキーを事前に計算してキャッシュ
+            var itemKeys = new Dictionary<ShapeKeyItem, string>();
+            foreach (var item in Items)
+            {
+                string key = GetGroupKey(item.Name);
+                itemKeys[item] = string.IsNullOrEmpty(key) ? "Other" : key;
+            }
+
+            // 2. グループの出現順序を記録（安定した並び替えのため）
+            // (SMR, GroupKey) のペアで順序を管理
+            var groupOrder = new Dictionary<(SkinnedMeshRenderer, string), int>();
+            int orderCounter = 0;
+            foreach (var item in Items)
+            {
+                if (item.IsVrcShape) continue;
+                var compositeKey = (item.OwnerSmr, itemKeys[item]);
+                if (!groupOrder.ContainsKey(compositeKey))
+                {
+                    groupOrder[compositeKey] = orderCounter++;
+                }
+            }
+
+            // 3. Items を並び替え
+            //   - メッシュ (ActiveMeshesでの順序)
+            //   - グループの出現順
+            //   - 元のインデックス
+            Items.Sort((a, b) =>
+            {
+                // VRC Shapeは常に最後（または特定の位置）に置くか、元の順序を維持
+                if (a.IsVrcShape != b.IsVrcShape) return a.IsVrcShape.CompareTo(b.IsVrcShape);
+                if (a.IsVrcShape) return a.Index.CompareTo(b.Index);
+
+                if (a.OwnerSmr != b.OwnerSmr)
+                {
+                    int idxA = ActiveMeshes.IndexOf(a.OwnerSmr);
+                    int idxB = ActiveMeshes.IndexOf(b.OwnerSmr);
+                    return idxA.CompareTo(idxB);
+                }
+
+                var keyA = (a.OwnerSmr, itemKeys[a]);
+                var keyB = (b.OwnerSmr, itemKeys[b]);
+
+                if (keyA != keyB)
+                    return groupOrder[keyA].CompareTo(groupOrder[keyB]);
+
+                return a.Index.CompareTo(b.Index);
+            });
+
+            // 4. 並び替えたリストに基づいて GroupSegments を作成
             GroupSegments.Clear();
             bool multiMesh = HasMultipleMeshes();
 
@@ -218,17 +273,15 @@ namespace DenEmo.Models
             for (int i = 0; i < Items.Count; i++)
             {
                 var item = Items[i];
-                if (item.IsVrcShape) { flush(); continue; }
+                if (item.IsVrcShape) { flush(); continue; } // VRC Shapeはセグメントに含めない（現状維持）
 
-                // SMR境界でflush
                 if (curSmr != item.OwnerSmr)
                 {
                     flush();
                     curSmr = item.OwnerSmr;
                 }
 
-                string key = GetGroupKey(item.Name);
-                if (string.IsNullOrEmpty(key)) key = "Other";
+                string key = itemKeys[item];
 
                 if (curKey == null)
                 {
@@ -287,11 +340,18 @@ namespace DenEmo.Models
         {
             if (string.IsNullOrEmpty(name)) return "Other";
             name = name.Trim();
+
+            // VRC、LipSync系は除外
+            if (IsVrcShapeName(name)) return "VRC";
+
             int idx = name.IndexOfAny(GroupKeyDelimiters);
             string token;
             if (idx > 0)
             {
                 token = name.Substring(0, idx);
+                
+                // 数字のみ、または非常に短い場合は次を試すか調整する余地があるが、
+                // 現状のユーザーのケース（Pupil2など）ではこれで "Pupil" が取れる。
             }
             else
             {
@@ -305,8 +365,13 @@ namespace DenEmo.Models
                 }
                 token = cut > 0 ? name.Substring(0, cut) : name;
             }
+
             token = token.Trim();
             if (token.Length == 0) return "Other";
+            
+            // 全て大文字の短いトークン（LRなど）が単独で来た場合のガード
+            if (token.Length <= 2 && token.ToUpperInvariant() == token) return "Other";
+
             return token;
         }
 

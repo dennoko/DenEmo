@@ -287,12 +287,11 @@ namespace DenEmo.Core
                 if (idx >= 0)
                 {
                     model.TargetSkinnedMesh.SetBlendShapeWeight(idx, value);
-                    if (idx < model.Items.Count)
-                        model.Items[idx].Value = value;
                     applied = true;
                 }
             }
 
+            if (applied) model.SyncValuesFromMesh();
             return applied ? "SUCCESS" : DenEmoLoc.T("dlg.apply.noneFound");
         }
     }
