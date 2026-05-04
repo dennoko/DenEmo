@@ -159,6 +159,12 @@ Select an existing `.anim` file to edit it. The timeline and list update to refl
 **New**
 Opens a save dialog and creates a blank `.anim` file. The new clip is immediately loaded and ready to record into.
 
+When no clip is loaded, the section shows a three-step workflow guide:
+
+1. Drag an existing `.anim` file into the Clip field, or press **New** to create a blank clip.
+2. Check / set **FPS** and **duration** in the Timeline section.
+3. Move the playhead → enable **REC** → drag sliders to record keyframes.
+
 > Example: Start a "wink" animation by pressing New, saving the file, then recording keyframes using the timeline.
 
 ---
@@ -291,7 +297,20 @@ Appears at the far right of each row. ◁E(filled) means a keyframe exists at th
 
 ---
 
+### RECORDING BANNER
+
+When **🔴 REC** is active, a red banner appears below the timeline:
+
+> ● RECORDING — Dragging a slider records a keyframe at the current time
+
+This banner makes the recording state unmissable so you always know whether slider movements will stamp keyframes.
+
+---
+
 ### SAVE ANIMATION
+
+**Keyframe statistics**
+The top of the Save Animation section shows how many tracks and total keyframes the current clip contains (e.g., *3 tracks / 12 keyframes total*). If no keyframes have been recorded yet, a warning message is displayed instead, reminding you to add keyframes before saving.
 
 **Save Animation**
 Writes the current clip's keyframes to the `.anim` file. If the clip was loaded from an existing file, it overwrites that file. If the clip was just created with **New** and has not been saved to disk yet, a file save dialog appears.

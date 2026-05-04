@@ -315,6 +315,8 @@ namespace DenEmo
                     _animModeUI.DrawTimeline(_model, this);
                 }
 
+                _animModeUI.DrawRecordingBanner();
+
                 DrawSearchFilterSection();
                 var animContext = _animModeUI.ClipModel.Clip != null
                     ? _animModeUI.BuildDrawContext(_model)

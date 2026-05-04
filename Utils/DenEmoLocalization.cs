@@ -125,6 +125,18 @@ public static class DenEmoLoc
         ["ui.animMode.interp.label"] = "補間:",
         ["ui.animMode.tab.pose"]     = "シングルフレーム",
         ["ui.animMode.tab.anim"]     = "マルチフレーム",
+
+        // Animation mode – workflow guide (shown when no clip is loaded)
+        ["ui.animMode.guide.step1"]  = "① クリップフィールドに既存の .anim ファイルをセット、または「新規」で新しいクリップを作成",
+        ["ui.animMode.guide.step2"]  = "② タイムラインで FPS・長さ（秒）を確認・設定",
+        ["ui.animMode.guide.step3"]  = "③ 再生ヘッドを移動 → REC をオン → スライダーを動かしてキーフレームを記録",
+
+        // Animation mode – recording banner
+        ["ui.animMode.rec.banner"]   = "● 録画中 — スライダーを動かすと現在のフレームにキーフレームが自動記録されます",
+
+        // Animation mode – save section info
+        ["ui.animMode.noKeys.warn"]  = "⚠ キーフレームがまだありません。REC モードでスライダーを動かしてキーフレームを追加してから保存してください。",
+        ["ui.animMode.keyStats"]     = "{0} トラック / 合計 {1} キーフレーム",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -230,6 +242,18 @@ public static class DenEmoLoc
         ["ui.animMode.interp.label"] = "Interp:",
         ["ui.animMode.tab.pose"]     = "SINGLE FRAME",
         ["ui.animMode.tab.anim"]     = "MULTI FRAME",
+
+        // Animation mode – workflow guide (shown when no clip is loaded)
+        ["ui.animMode.guide.step1"]  = "① Drag an existing .anim file into the Clip field, or press \"New\" to create a blank clip",
+        ["ui.animMode.guide.step2"]  = "② Check / set FPS and duration in the Timeline section",
+        ["ui.animMode.guide.step3"]  = "③ Move the playhead → enable REC → drag sliders to record keyframes",
+
+        // Animation mode – recording banner
+        ["ui.animMode.rec.banner"]   = "● RECORDING — Dragging a slider records a keyframe at the current time",
+
+        // Animation mode – save section info
+        ["ui.animMode.noKeys.warn"]  = "⚠ No keyframes yet. Enable REC mode and drag sliders to add keyframes before saving.",
+        ["ui.animMode.keyStats"]     = "{0} tracks / {1} keyframes total",
     };
 
     public static string T(string key)

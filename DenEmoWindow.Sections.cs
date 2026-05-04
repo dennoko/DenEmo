@@ -409,6 +409,28 @@ namespace DenEmo
         {
             DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE ANIMATION" : "アニメーション保存");
 
+            // Show keyframe statistics when a clip is loaded
+            if (_animModeUI.ClipModel.Clip != null)
+            {
+                var tracks = _animModeUI.ClipModel.GetShapeNamesWithKeys();
+                int trackCount = tracks.Count;
+                if (trackCount == 0)
+                {
+                    var warnStyle = new GUIStyle(DenEmoTheme.CaptionStyle);
+                    warnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
+                    warnStyle.wordWrap = true;
+                    GUILayout.Label(DenEmoLoc.T("ui.animMode.noKeys.warn"), warnStyle);
+                }
+                else
+                {
+                    int keyTotal = 0;
+                    foreach (var tn in tracks)
+                        keyTotal += _animModeUI.ClipModel.GetKeyTimesForShape(tn).Length;
+                    GUILayout.Label(DenEmoLoc.Tf("ui.animMode.keyStats", trackCount, keyTotal), DenEmoTheme.CaptionStyle);
+                }
+                GUILayout.Space(4);
+            }
+
             GUILayout.Space(2);
             _animSaveAsNew = EditorGUILayout.ToggleLeft(
                 new GUIContent(

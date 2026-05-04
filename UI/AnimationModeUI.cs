@@ -71,6 +71,8 @@ namespace DenEmo.UI
         // Cached styles
         private GUIStyle _recOnStyle;
         private GUIStyle _recOffStyle;
+        private GUIStyle _recBannerStyle;
+        private GUIStyle _workflowGuideStyle;
 
         // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -169,8 +171,14 @@ namespace DenEmo.UI
 
             if (ClipModel.Clip == null)
             {
+                GUILayout.Space(4);
+                EnsureWorkflowGuideStyle();
+                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step1"), _workflowGuideStyle);
                 GUILayout.Space(2);
-                GUILayout.Label(DenEmoLoc.T("ui.animMode.clip.hint"), DenEmoTheme.CaptionStyle);
+                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step2"), _workflowGuideStyle);
+                GUILayout.Space(2);
+                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step3"), _workflowGuideStyle);
+                GUILayout.Space(4);
                 DenEmoTheme.EndSection();
                 return;
             }
@@ -183,6 +191,21 @@ namespace DenEmo.UI
         public void DrawClipCorrectionSection(System.Action<string, int> setStatus, EditorWindow window)
         {
             CorrectionUI.Draw(ClipModel, Preview, _smrPath, setStatus, window);
+        }
+
+        // ─── Draw: Recording banner ───────────────────────────────────────────
+
+        /// <summary>
+        /// Displays a prominent banner when REC mode is active so the user knows
+        /// that slider changes will automatically create keyframes.
+        /// </summary>
+        public void DrawRecordingBanner()
+        {
+            if (!IsRecording || ClipModel.Clip == null) return;
+            EnsureRecBannerStyle();
+            GUILayout.BeginVertical(DenEmoTheme.CardStyle);
+            GUILayout.Label(DenEmoLoc.T("ui.animMode.rec.banner"), _recBannerStyle);
+            GUILayout.EndVertical();
         }
 
         // ─── Draw: Timeline ───────────────────────────────────────────────────
@@ -345,6 +368,30 @@ namespace DenEmo.UI
                 _recOffStyle = new GUIStyle(EditorStyles.miniButton)
                 {
                     normal = { textColor = DenEmoTheme.TextTertiary }
+                };
+            }
+        }
+
+        private void EnsureRecBannerStyle()
+        {
+            if (_recBannerStyle == null)
+            {
+                _recBannerStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
+                {
+                    wordWrap = true,
+                    fontSize = 11,
+                };
+                _recBannerStyle.normal.textColor = new Color(1f, 0.45f, 0.45f);
+            }
+        }
+
+        private void EnsureWorkflowGuideStyle()
+        {
+            if (_workflowGuideStyle == null)
+            {
+                _workflowGuideStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
+                {
+                    wordWrap = true,
                 };
             }
         }
