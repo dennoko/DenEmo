@@ -409,13 +409,23 @@ namespace DenEmo
         {
             DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE ANIMATION" : "アニメーション保存");
 
+            GUILayout.Space(2);
+            _animSaveAsNew = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    DenEmoLoc.EnglishMode ? "Save as new clip" : "新規クリップとして保存",
+                    DenEmoLoc.EnglishMode
+                        ? "Opens a file dialog to save as a new animation clip. The original clip's folder is used as the default path."
+                        : "元クリップのフォルダをデフォルトパスとしてファイルダイアログを開き、新規クリップとして保存します。"),
+                _animSaveAsNew, DenEmoTheme.CaptionStyle);
+
+            GUILayout.Space(4);
             GUILayout.BeginHorizontal();
             GUILayout.Space(6);
             if (GUILayout.Button(
                 DenEmoLoc.EnglishMode ? "Save Animation" : "アニメーションを保存",
                 DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
             {
-                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl));
+                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl), _animSaveAsNew);
             }
             GUILayout.Space(6);
             GUILayout.EndHorizontal();

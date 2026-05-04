@@ -260,7 +260,7 @@ namespace DenEmo.UI
 
         // ─── Save ─────────────────────────────────────────────────────────────
 
-        public void SaveClip(string saveFolder, ShapeKeyModel shapeModel, Action<string, int> setStatus)
+        public void SaveClip(string saveFolder, ShapeKeyModel shapeModel, Action<string, int> setStatus, bool saveAsNew = false)
         {
             if (ClipModel.Clip == null)
             {
@@ -268,16 +268,26 @@ namespace DenEmo.UI
                 return;
             }
 
-            string path = AssetDatabase.GetAssetPath(ClipModel.Clip);
-            if (string.IsNullOrEmpty(path))
+            string existingPath = AssetDatabase.GetAssetPath(ClipModel.Clip);
+
+            string path;
+            if (saveAsNew || string.IsNullOrEmpty(existingPath))
             {
-                string defaultName = shapeModel.TargetObject
-                    ? shapeModel.TargetObject.name + "_anim"
-                    : "blendshape_anim";
+                string defaultFolder = string.IsNullOrEmpty(existingPath)
+                    ? saveFolder
+                    : System.IO.Path.GetDirectoryName(existingPath);
+                string defaultName = string.IsNullOrEmpty(existingPath)
+                    ? (shapeModel.TargetObject ? shapeModel.TargetObject.name + "_anim" : "blendshape_anim")
+                    : System.IO.Path.GetFileNameWithoutExtension(existingPath);
+
                 path = EditorUtility.SaveFilePanelInProject(
                     DenEmoLoc.T("save.panel.title"), defaultName + ".anim", "anim",
-                    DenEmoLoc.T("save.panel.hint"), saveFolder);
+                    DenEmoLoc.T("save.panel.hint"), defaultFolder);
                 if (string.IsNullOrEmpty(path)) return;
+            }
+            else
+            {
+                path = existingPath;
             }
 
             string err = AnimationExporter.SaveMultiFrameClip(ClipModel, path);

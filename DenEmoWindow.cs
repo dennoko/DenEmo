@@ -41,6 +41,7 @@ namespace DenEmo
         private bool symmetryMode       = false;
         private bool autoBackup         = true;
         private bool overwriteSaveEnabled = false;
+        private bool _animSaveAsNew       = false;
         private bool vertexPickMode       = false;
         private bool vertexFilterActive   = false;
         private int  selectedVertexIndex  = -1;
@@ -95,6 +96,7 @@ namespace DenEmo
             symmetryMode         = DenEmoProjectPrefs.GetBool("DenEmo_SymmetryMode",      false);
             autoBackup           = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup",        true);
             overwriteSaveEnabled = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
+            _animSaveAsNew       = DenEmoProjectPrefs.GetBool("DenEmo_AnimSaveAsNew",     false);
             _meshFilterIndex     = DenEmoProjectPrefs.GetInt("DenEmo_MeshFilter", -1);
             VertexPreviewColor        = ParseColor(DenEmoProjectPrefs.GetString("DenEmo_VertexPreviewColor",         ""), new Color(0.24f, 0.72f, 1.0f, 0.95f));
             VertexPreviewSelectedColor = ParseColor(DenEmoProjectPrefs.GetString("DenEmo_VertexPreviewSelectedColor", ""), Color.yellow);
@@ -194,6 +196,7 @@ namespace DenEmo
             DenEmoProjectPrefs.SetBool("DenEmo_SymmetryMode",         symmetryMode);
             DenEmoProjectPrefs.SetBool("DenEmo_AutoBackup",           autoBackup);
             DenEmoProjectPrefs.SetBool("DenEmo_OverwriteSaveEnabled", overwriteSaveEnabled);
+            DenEmoProjectPrefs.SetBool("DenEmo_AnimSaveAsNew",        _animSaveAsNew);
             DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter",            _meshFilterIndex);
             DenEmoProjectPrefs.SetInt("DenEmo_Mode", (int)_currentMode);
             DenEmoProjectPrefs.SetString("DenEmo_VertexPreviewColor",         ColorToPrefsString(VertexPreviewColor));
