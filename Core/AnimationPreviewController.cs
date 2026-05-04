@@ -25,6 +25,13 @@ namespace DenEmo.Core
         private AnimationCurve[] _curveCache;
         private bool             _cacheDirty = true;
 
+        // ─── Smooth loop end-key backup ───────────────────────────────────────
+        // Stores the original keyframe at ClipLength for each binding, saved
+        // when ApplyLoopKeysToSourceClip replaces it. Restored by
+        // RemoveLoopKeysFromSourceClip so the original endpoint is not lost.
+        private Dictionary<EditorCurveBinding, Keyframe?> _savedLoopEndKeys
+            = new Dictionary<EditorCurveBinding, Keyframe?>();
+
         public bool IsActive => _isActive;
 
         public void SetCacheDirty() => _cacheDirty = true;
@@ -145,6 +152,7 @@ namespace DenEmo.Core
             float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
             bool changed = false;
 
+            _savedLoopEndKeys.Clear();
             Undo.RecordObject(clip, "Apply Loop Keys");
 
             foreach (var b in AnimationUtility.GetCurveBindings(clip))
@@ -158,6 +166,8 @@ namespace DenEmo.Core
 
                 float valZero = curve.Evaluate(0f);
                 int endIdx = FindKeyAtTime(curve, clipLen, tol);
+                // Save original end key before replacing it so RemoveLoopKeysFromSourceClip can restore it
+                _savedLoopEndKeys[b] = endIdx >= 0 ? (Keyframe?)curve.keys[endIdx] : null;
                 if (endIdx >= 0) curve.RemoveKey(endIdx);
 
                 int newIdx = curve.AddKey(new Keyframe(clipLen, valZero));
@@ -189,7 +199,8 @@ namespace DenEmo.Core
             }
         }
 
-        /// <summary>Removes loop-end keys (keys at clipLength) from the source clip for all blendshape tracks.</summary>
+        /// <summary>Removes loop-end keys (keys at clipLength) from the source clip for all blendshape tracks.
+        /// If ApplyLoopKeysToSourceClip previously saved an original key at clipLength, that key is restored.</summary>
         public void RemoveLoopKeysFromSourceClip(string smrPath)
         {
             if (_clipModel?.Clip == null) return;
@@ -213,9 +224,16 @@ namespace DenEmo.Core
                 if (endIdx < 0) continue;
 
                 curve.RemoveKey(endIdx);
+
+                // Restore the original key at clipLength if one was present before ApplyLoopKeysToSourceClip
+                if (_savedLoopEndKeys.TryGetValue(b, out var savedKey) && savedKey.HasValue)
+                    curve.AddKey(savedKey.Value);
+
                 AnimationUtility.SetEditorCurve(clip, b, curve.keys.Length > 0 ? curve : null);
                 changed = true;
             }
+
+            _savedLoopEndKeys.Clear();
 
             if (changed)
             {

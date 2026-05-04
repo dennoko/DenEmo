@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -355,10 +355,10 @@ namespace DenEmo
             var poseStyle = _currentMode == EditorMode.Pose     ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
             var animStyle = _currentMode == EditorMode.Animation ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
 
-            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.pose"), poseStyle))
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.pose"), poseStyle, GUILayout.Width(130)))
                 SwitchMode(EditorMode.Pose);
             GUILayout.Space(2);
-            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.anim"), animStyle))
+            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.anim"), animStyle, GUILayout.Width(130)))
                 SwitchMode(EditorMode.Animation);
 
             GUILayout.FlexibleSpace();
@@ -500,7 +500,7 @@ namespace DenEmo
         {
             if (_currentMode != EditorMode.Animation)
             {
-                GUILayout.Label(DenEmoLoc.EnglishMode ? "Animation mode is not active." : "アニメーションモードではありません。");
+                GUILayout.Label(DenEmoLoc.EnglishMode ? "Multi Frame mode is not active." : "マルチフレームモードではありません。");
                 return;
             }
             _animModeUI.DrawTimeline(_model, timelineWindow);

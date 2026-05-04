@@ -1,6 +1,6 @@
 # DenEmo Usage Guide
 
-DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). It has two modes: **Pose** for single-frame expressions, and **Animation** for time-based clips.
+DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). It has two modes: **Single Frame** for single-frame expressions, and **Multi Frame** for time-based clips.
 
 Open DenEmo from the Unity menu bar: `dennokoworks > DenEmo`.
 
@@ -18,11 +18,11 @@ The **TARGET MESH** section is always shown at the top. Select the mesh (Skinned
 
 ### Primary Mesh
 
-Drag a GameObject from the Hierarchy or use the object picker to set the primary mesh. Click ✕ to clear it.
+Drag a GameObject from the Hierarchy or use the object picker to set the primary mesh. Click ✁Eto clear it.
 
 ### Additional Meshes
 
-Some avatars split their face across multiple meshes (e.g., separate eyebrow or teeth meshes). Drag each extra SkinnedMeshRenderer into a `+` slot below the primary field. Each additional mesh can be removed with its own ✕ button. All registered meshes share one combined shape key list.
+Some avatars split their face across multiple meshes (e.g., separate eyebrow or teeth meshes). Drag each extra SkinnedMeshRenderer into a `+` slot below the primary field. Each additional mesh can be removed with its own ✁Ebutton. All registered meshes share one combined shape key list.
 
 > Example: Your VRChat avatar has `Body` and `Brow` as separate face meshes. Set `Body` as the primary mesh and drag `Brow` into the `+` slot. Both appear in the list together.
 
@@ -32,13 +32,13 @@ Press **Refresh** after adding blendshapes to a mesh in another tool, or wheneve
 
 ---
 
-## Pose Mode
+## Single Frame Mode
 
-Pose Mode is for building a single expression frame and exporting it as an `.anim` file. This is the typical workflow for creating gesture animations in VRChat.
+Single Frame Mode is for building a single expression frame and exporting it as an `.anim` file. This is the typical workflow for creating gesture animations in VRChat.
 
 ### ANIMATION SOURCE
 
-This section lets you pull shape key values or checkbox settings from an existing animation clip — useful for editing or extending animations you already have.
+This section lets you pull shape key values or checkbox settings from an existing animation clip  Euseful for editing or extending animations you already have.
 
 **Clip field**
 Reference any `.anim` file here to use it as a source.
@@ -51,7 +51,7 @@ Reads the shape key values at 0 s from the selected clip and applies them to all
 **Align Animation Keys**
 Checks or unchecks the save-target checkboxes based on which shape keys appear in the selected clip. Shape keys that the clip uses get checked; all others get unchecked. Slider values are not changed.
 
-> Example: Your avatar has 200 shape keys but the reference "smile" clip only uses 12. After aligning, only those 12 will be exported — keeping your new animation clean and free of unintended shape keys.
+> Example: Your avatar has 200 shape keys but the reference "smile" clip only uses 12. After aligning, only those 12 will be exported  Ekeeping your new animation clean and free of unintended shape keys.
 
 ---
 
@@ -60,16 +60,16 @@ Checks or unchecks the save-target checkboxes based on which shape keys appear i
 These chips and the search field narrow down the shape key list. Combine multiple filters freely.
 
 **🔍 Keyword**
-Type to filter by name. Multiple words separated by spaces are treated as AND conditions. Press ✕ to clear.
+Type to filter by name. Multiple words separated by spaces are treated as AND conditions. Press ✁Eto clear.
 
 > Example: Type `mouth open` to show only shape keys whose names contain both words.
 
-**★ Fav**
-Shows only shape keys you have starred. Click the ★ or ☆ button on any row to toggle the favorite flag.
+**☁EFav**
+Shows only shape keys you have starred. Click the ☁Eor ☁Ebutton on any row to toggle the favorite flag.
 
-> Example: Star the 8–10 shape keys you use on every expression so you can isolate them instantly without searching.
+> Example: Star the 8 E0 shape keys you use on every expression so you can isolate them instantly without searching.
 
-**✓ Enabled**
+**✁EEnabled**
 Shows only shape keys whose save checkbox is currently checked.
 
 > Example: Before saving, switch to this view to confirm exactly which shape keys will be written to the file.
@@ -79,13 +79,13 @@ Shows only shape keys with a slider value other than zero.
 
 > Example: After loading a reference animation, use this filter to see which shape keys the expression actually moves.
 
-**↔ Symmetry**
+**ↁESymmetry**
 Pairs shape keys ending in `...L` and `...R` into a single combined row. The shared slider drives both sides at once. When the L and R values differ, they fall back to separate rows automatically.
 
 > Example: `cheek_puff.L` and `cheek_puff.R` appear as one row. Turn Symmetry off if you need to set one side to a different value.
 
-**● Vertex Filter**
-Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✕ to clear.
+**◁EVertex Filter**
+Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✁Eto clear.
 
 > Example: A vertex on the upper lip is deforming in an unexpected way. Click it in the SceneView to find which shape keys affect that specific point.
 
@@ -98,7 +98,7 @@ Appears only when two or more meshes are registered. Select **All** to see every
 
 The main editing area. Each row represents one shape key.
 
-**★ / ☆**
+**☁E/ ☁E*
 Toggles the favorite flag for that shape key.
 
 **Checkbox**
@@ -110,7 +110,7 @@ The shape key name as defined in the mesh. Checked items appear in a brighter st
 **[0]**
 Resets the slider to zero without changing the save checkbox.
 
-**Slider (0–100)**
+**Slider (0 E00)**
 Drag to adjust the blendshape weight. Supports Unity Undo/Redo (Ctrl+Z).
 
 ### Groups
@@ -143,13 +143,13 @@ When overwrite is enabled, this option copies the current file to a `_backups/` 
 **Save Animation**
 Exports all checked shape keys with their current slider values. If Overwrite Save is enabled and a target is set, it overwrites that file. Otherwise it creates a new file in the Save To folder.
 
-> Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, enable Overwrite Save pointing at the first file (with Auto Backup on) — the original is preserved in `_backups/` and the file is updated in place.
+> Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, enable Overwrite Save pointing at the first file (with Auto Backup on)  Ethe original is preserved in `_backups/` and the file is updated in place.
 
 ---
 
-## Animation Mode
+## Multi Frame Mode
 
-Animation Mode lets you create shape key animations that change over time. You record keyframes at different points on the timeline and the tool generates the curves automatically.
+Multi Frame Mode lets you create shape key animations that change over time. You record keyframes at different points on the timeline and the tool generates the curves automatically.
 
 ### ANIMATION CLIP
 
@@ -167,26 +167,26 @@ Opens a save dialog and creates a blank `.anim` file. The new clip is immediatel
 
 This section is **collapsed by default**. Click the header to expand it.
 
-It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range — a common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
+It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range  Ea common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
 
 The section lists every shape key that has keyframes in the current clip. For each one you can set a **Min** and **Max** bound:
 
 | Field | Default | Effect |
 |-------|---------|--------|
-| **Min (0–100)** | 0 | Lower bound after correction. When above 0, the original value 0 is raised to this value, while the original 100 maps to the Max setting. Prevents the shape key from fully returning to neutral. |
-| **Max (0–100)** | 100 | Upper bound after correction. When below 100, the original value 100 is lowered to this value, while the original 0 maps to the Min setting. Prevents the shape key from reaching its full intensity. |
+| **Min (0 E00)** | 0 | Lower bound after correction. When above 0, the original value 0 is raised to this value, while the original 100 maps to the Max setting. Prevents the shape key from fully returning to neutral. |
+| **Max (0 E00)** | 100 | Upper bound after correction. When below 100, the original value 100 is lowered to this value, while the original 0 maps to the Min setting. Prevents the shape key from reaching its full intensity. |
 
 The correction formula applied to every keyframe:
 
 ```
-new_value = original_value × (Max − Min) / 100 + Min
+new_value = original_value ÁE(Max ∁EMin) / 100 + Min
 ```
 
 Curve tangents are scaled by the same factor, preserving the shape of the animation curve.
 
 Press **Apply Correction** to write the remapped values to the clip. The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from the defaults (0 and 100) are affected.
 
-> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction. All blink keyframes are rescaled into the 0–80 range — the curve shape and timing remain unchanged.
+> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction. All blink keyframes are rescaled into the 0 E0 range  Ethe curve shape and timing remain unchanged.
 
 > Example: You want `mouth_open` to never fully close in this animation. Set Min to 20. Original 0 keyframes become 20, original 100 keyframes stay at 100.
 
@@ -196,8 +196,8 @@ Press **Apply Correction** to write the remapped values to the clip. The operati
 
 The timeline shows the playback position, transport controls, and a visual track area for every animated shape key. It can be detached from the main window.
 
-**↗ Detach / ↘ Attach**
-Detach opens the timeline in a separate floating window for more screen space. Closing the separate window (or pressing ↘ Attach inside it) returns the timeline to the main DenEmo window.
+**ↁEDetach / ↁEAttach**
+Detach opens the timeline in a separate floating window for more screen space. Closing the separate window (or pressing ↁEAttach inside it) returns the timeline to the main DenEmo window.
 
 #### Global Settings
 
@@ -223,11 +223,11 @@ Changes the interpolation method for all existing keyframes at once.
 | Button | Action |
 |--------|--------|
 | `\|<` | Jump to the first frame |
-| `\|◆` | Jump to the previous keyframe |
+| `\|◁E | Jump to the previous keyframe |
 | `<` | Step one frame backward |
 | `▶` / `■` | Start or stop playback (loops continuously) |
 | `>` | Step one frame forward |
-| `◆\|` | Jump to the next keyframe |
+| `◁E|` | Jump to the next keyframe |
 | `>\|` | Jump to the last frame |
 
 #### State and Options
@@ -236,7 +236,7 @@ Changes the interpolation method for all existing keyframes at once.
 The current playhead position as a frame number. Edit directly to jump to a specific frame.
 
 **Speed**
-Playback speed multiplier (0.1× – 4×). Affects preview only; it does not change the clip.
+Playback speed multiplier (0.1ÁE E4ÁE. Affects preview only; it does not change the clip.
 
 **Loop Support**
 Copies the first frame's keyframe values to the end of the clip so the animation loops without a visible jump. Toggle off to remove those extra keys.
@@ -259,35 +259,35 @@ The thin bar just below the ruler. Click or drag anywhere on it to move the play
 **Keyframe Tracks**
 One track row appears for each shape key that has at least one keyframe. Each row contains:
 
-- **Shape key name** — the name of the animated shape key.
-- **◆ button** — adds or updates a keyframe at the current playhead time, using the shape's current slider value.
-- **✕ button** — deletes the entire track (all keyframes) for that shape key after confirmation.
-- **◆ diamonds on the track** — each diamond is one keyframe. Drag a diamond left or right to move it to a different frame. Right-click a diamond for a context menu: delete that keyframe, or change its interpolation to Step, Linear, or Ease.
+- **Shape key name**  Ethe name of the animated shape key.
+- **◁Ebutton**  Eadds or updates a keyframe at the current playhead time, using the shape's current slider value.
+- **✁Ebutton**  Edeletes the entire track (all keyframes) for that shape key after confirmation.
+- **◁Ediamonds on the track**  Eeach diamond is one keyframe. Drag a diamond left or right to move it to a different frame. Right-click a diamond for a context menu: delete that keyframe, or change its interpolation to Step, Linear, or Ease.
 
 The label column width can be resized by dragging the vertical divider between the label and the track area.
 
 **Frame delete row (bottom)**
-Below all tracks, each frame that has any keyframe shows a ✕ button. Pressing it deletes all keyframes across all tracks at that frame — removing a complete pose from one point in time.
+Below all tracks, each frame that has any keyframe shows a ✁Ebutton. Pressing it deletes all keyframes across all tracks at that frame  Eremoving a complete pose from one point in time.
 
 ---
 
-### SEARCH & FILTER (Animation Mode)
+### SEARCH & FILTER (Multi Frame Mode)
 
-All filters from Pose Mode are available. One additional chip appears when a clip is loaded:
+All filters from Single Frame Mode are available. One additional chip appears when a clip is loaded:
 
-**◆ Keyed Only**
+**◁EKeyed Only**
 Hides shape keys that have no keyframes in the current clip. Use this to focus the list on only the shapes that are actually animated.
 
 ---
 
-### SHAPE KEYS List (Animation Mode)
+### SHAPE KEYS List (Multi Frame Mode)
 
-Identical to the Pose Mode list with one addition per row:
+Identical to the Single Frame Mode list with one addition per row:
 
-**◆ / ◇ (Keyframe button)**
-Appears at the far right of each row. ◆ (filled) means a keyframe exists at the current playhead time. ◇ (outline) means no keyframe exists at this time. Clicking the icon toggles it: ◇ stamps a keyframe at the current time; ◆ removes it.
+**◁E/ ◁E(Keyframe button)**
+Appears at the far right of each row. ◁E(filled) means a keyframe exists at the current playhead time. ◁E(outline) means no keyframe exists at this time. Clicking the icon toggles it: ◁Estamps a keyframe at the current time; ◁Eremoves it.
 
-> Example: You want the mouth to be fully closed at frame 0 without using REC. Move to frame 0, set the mouth slider to 0, click ◇ to stamp the keyframe. Done.
+> Example: You want the mouth to be fully closed at frame 0 without using REC. Move to frame 0, set the mouth slider to 0, click ◁Eto stamp the keyframe. Done.
 
 ---
 
@@ -310,10 +310,10 @@ A. Avatars often contain shape keys for gimmicks, physics toggles, or other non-
 
 A. Yes. Slider adjustments, checkbox toggles, and loading animation values all participate in Unity's Undo/Redo system (Ctrl+Z / Ctrl+Y).
 
-**Q. How do I adjust only one side when ↔ Symmetry is on?**
+**Q. How do I adjust only one side when ↁESymmetry is on?**
 
-A. Turn off the ↔ Symmetry chip, adjust the individual L or R row, then turn Symmetry back on. The L and R values will remain independent until they happen to become equal again.
+A. Turn off the ↁESymmetry chip, adjust the individual L or R row, then turn Symmetry back on. The L and R values will remain independent until they happen to become equal again.
 
-**Q. Can I work in Animation Mode without looking at the timeline?**
+**Q. Can I work in Multi Frame Mode without looking at the timeline?**
 
-A. Yes. Detach the timeline with ↗ Detach, minimize or move that window out of the way, and use only the ◆/◇ buttons in the shape key list combined with REC mode. The timeline still records keyframes correctly in the background.
+A. Yes. Detach the timeline with ↁEDetach, minimize or move that window out of the way, and use only the ◁E◁Ebuttons in the shape key list combined with REC mode. The timeline still records keyframes correctly in the background.

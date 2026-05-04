@@ -104,6 +104,8 @@ public static class DenEmoLoc
         ["dlg.ok"] = "OK",
         ["dlg.save.done.title"] = "保存完了",
         ["dlg.save.done.msg"] = "アニメーションを保存しました: {0}",
+        ["dlg.save.noIncluded.title"] = "保存できません",
+        ["dlg.save.noIncluded.msg"] = "保存対象のシェイプキーが一つもありません。\n\nアニメーションに含めるシェイプキーにチェックを入れてから保存してください。\n\nヒント：アバターのデフォルト表情アニメーション（FX レイヤーのデフォルト状態に設定されているアニメーション）と保存するシェイプキーを揃えておくと、表情のトラブルが起きにくくなります。「保存するキーを既存のアニメーションに揃える」機能もご活用ください。",
         ["dlg.apply.noTarget"] = "対象の SkinnedMeshRenderer が選択されていません。",
         ["dlg.apply.noClip"] = "アニメーションが選択されていません。",
         ["dlg.apply.done.title"] = "適用完了",
@@ -121,8 +123,8 @@ public static class DenEmoLoc
         ["ui.animMode.clip.hint"]  = "クリップを選択するか、「新規」で作成してください。",
         ["ui.animMode.length.label"] = "長さ(s):",
         ["ui.animMode.interp.label"] = "補間:",
-        ["ui.animMode.tab.pose"]     = "ポーズ",
-        ["ui.animMode.tab.anim"]     = "アニメーション",
+        ["ui.animMode.tab.pose"]     = "シングルフレーム",
+        ["ui.animMode.tab.anim"]     = "マルチフレーム",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -207,6 +209,8 @@ public static class DenEmoLoc
         ["dlg.ok"] = "OK",
         ["dlg.save.done.title"] = "Saved",
         ["dlg.save.done.msg"] = "Animation saved: {0}",
+        ["dlg.save.noIncluded.title"] = "Cannot Save",
+        ["dlg.save.noIncluded.msg"] = "No shape keys are checked for saving.\n\nPlease check the shape keys you want to include in the animation before saving.\n\nTip: Aligning the saved keys with your avatar's default expression animation (the animation set on the default state of the FX layer) helps prevent expression issues. Try using the 'Align saved keys to existing animation' feature.",
         ["dlg.apply.noTarget"] = "No target SkinnedMeshRenderer selected.",
         ["dlg.apply.noClip"] = "No animation selected.",
         ["dlg.apply.done.title"] = "Applied",
@@ -224,8 +228,8 @@ public static class DenEmoLoc
         ["ui.animMode.clip.hint"]  = "Select a clip or create a new one.",
         ["ui.animMode.length.label"] = "Length(s):",
         ["ui.animMode.interp.label"] = "Interp:",
-        ["ui.animMode.tab.pose"]     = "POSE",
-        ["ui.animMode.tab.anim"]     = "ANIMATION",
+        ["ui.animMode.tab.pose"]     = "SINGLE FRAME",
+        ["ui.animMode.tab.anim"]     = "MULTI FRAME",
     };
 
     public static string T(string key)

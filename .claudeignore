@@ -1,0 +1,45 @@
+# Git internals
+.git/
+
+# Unity metadata (too noisy for context)
+*.meta
+
+# Compiled files
+*.dll
+*.pdb
+*.exe
+
+# Large assets and binaries (usually not useful for code context)
+*.png
+*.jpg
+*.jpeg
+*.tga
+*.psd
+*.exr
+*.hdr
+*.fbx
+*.obj
+*.blend
+*.mp3
+*.wav
+*.ogg
+*.mp4
+*.mov
+*.pdf
+*.zip
+*.rar
+*.7z
+
+# Unity specific (if pointed to root)
+/Library/
+/Temp/
+/Obj/
+/Logs/
+/MemoryCaptures/
+/Build/
+/Builds/
+/UserSettings/
+
+# OS specific
+.DS_Store
+Thumbs.db

@@ -375,7 +375,14 @@ namespace DenEmo
 
             if (GUILayout.Button(DenEmoLoc.T("ui.footer.saveAnim"), DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
             {
-                if (overwriteSaveEnabled && overwriteTargetClip != null)
+                if (!HasIncludedShapeKeys())
+                {
+                    EditorUtility.DisplayDialog(
+                        DenEmoLoc.T("dlg.save.noIncluded.title"),
+                        DenEmoLoc.T("dlg.save.noIncluded.msg"),
+                        DenEmoLoc.T("dlg.ok"));
+                }
+                else if (overwriteSaveEnabled && overwriteTargetClip != null)
                 {
                     string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
                     SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
@@ -414,6 +421,13 @@ namespace DenEmo
             GUILayout.EndHorizontal();
             GUILayout.Space(6);
             DenEmoTheme.EndSection();
+        }
+
+        private bool HasIncludedShapeKeys()
+        {
+            foreach (var item in _model.Items)
+                if (item.IsIncluded && !item.IsVrcShape && !item.IsLipSyncShape) return true;
+            return false;
         }
 
         // ─── Drag and drop ────────────────────────────────────────────────────
