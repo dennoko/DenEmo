@@ -122,6 +122,36 @@ namespace DenEmo.Core
             ApplyTangentMode(curve, idx, interp);
         }
 
+        /// <summary>Records keyframes for all supplied shapes at the given time in a single Undo operation.</summary>
+        public void RecordAllKeyframes(
+            IEnumerable<ShapeKeyItem> items,
+            string smrPath,
+            float time,
+            InterpolationType interp)
+        {
+            if (_clipModel?.Clip == null) return;
+            var smr = _shapeModel?.TargetSkinnedMesh;
+            if (smr == null || smr.sharedMesh == null) return;
+
+            Undo.RecordObject(_clipModel.Clip, "Insert Keyframe (All)");
+
+            foreach (var item in items)
+            {
+                int index = smr.sharedMesh.GetBlendShapeIndex(item.Name);
+                if (index < 0) continue;
+                float value = smr.GetBlendShapeWeight(index);
+
+                var binding = MakeBinding(item.Name, smrPath);
+                var curve = AnimationUtility.GetEditorCurve(_clipModel.Clip, binding) ?? new AnimationCurve();
+                float tol = _clipModel.FPS > 0f ? 0.5f / _clipModel.FPS : 0.01f;
+                WriteSingleKey(curve, time, value, interp, tol);
+                AnimationUtility.SetEditorCurve(_clipModel.Clip, binding, curve);
+            }
+
+            EditorUtility.SetDirty(_clipModel.Clip);
+            _cacheDirty = true;
+        }
+
         /// <summary>Deletes the keyframe closest to the given time for the given blendshape.</summary>
         public void DeleteKeyframe(string shapeName, string smrPath, float time)
         {

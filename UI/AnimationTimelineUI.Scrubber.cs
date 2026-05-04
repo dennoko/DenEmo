@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using DenEmo.Models;
@@ -7,13 +9,30 @@ namespace DenEmo.UI
 {
     public partial class AnimationTimelineUI
     {
+        private const float SCROLLBAR_HEIGHT = 10f;
+
         // ─── Ruler & Scrubber ─────────────────────────────────────────────────
+
+        private bool _showScrollbar;  // cached per-frame to keep Layout/Repaint GetRect calls consistent
 
         private void DrawRulerAndScrubber(
             AnimationClipModel clipModel, AnimationPreviewController preview, EditorWindow window)
         {
-            Rect rulerRect   = GUILayoutUtility.GetRect(0, RULER_HEIGHT, GUILayout.ExpandWidth(true));
-            Rect scrubRect   = GUILayoutUtility.GetRect(0, SCRUBBER_HEIGHT, GUILayout.ExpandWidth(true));
+            Rect rulerRect = GUILayoutUtility.GetRect(0, RULER_HEIGHT,   GUILayout.ExpandWidth(true));
+            Rect scrubRect = GUILayoutUtility.GetRect(0, SCRUBBER_HEIGHT, GUILayout.ExpandWidth(true));
+
+            float trackW    = rulerRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX    = rulerRect.x + _trackLabelWidth;
+            Rect  trackArea = new Rect(trackX, rulerRect.y, trackW, rulerRect.height + scrubRect.height);
+
+            // Capture before HandleTimelineZoom so Layout/Repaint always call GetRect the same times
+            if (Event.current.type == EventType.Layout)
+                _showScrollbar = ViewRange < 1f - 0.001f;
+
+            HandleTimelineZoom(trackArea, clipModel.ClipLength, trackX, trackW);
+
+            if (_showScrollbar)
+                DrawTimelineScrollbar(clipModel.ClipLength, trackX, trackW, window);
 
             if (Event.current.type == EventType.Repaint)
             {
@@ -30,6 +49,44 @@ namespace DenEmo.UI
             HandleScrubberInput(scrubRect, clipModel, preview, window);
         }
 
+        private void HandleTimelineZoom(Rect trackRect, float clipLen, float trackX, float trackW)
+        {
+            Event e = Event.current;
+            if (e.type != EventType.ScrollWheel) return;
+            if (!trackRect.Contains(e.mousePosition)) return;
+
+            float mouseNorm = _viewStart + ((e.mousePosition.x - trackX) / trackW) * ViewRange;
+            mouseNorm = Mathf.Clamp01(mouseNorm);
+
+            float zoomFactor = e.delta.y > 0f ? 1.15f : (1f / 1.15f);
+            float newRange   = Mathf.Clamp(ViewRange * zoomFactor, 1f / 50f, 1f);
+
+            _viewStart = mouseNorm - (mouseNorm - _viewStart) * (newRange / ViewRange);
+            _viewEnd   = _viewStart + newRange;
+
+            if (_viewStart < 0f) { _viewEnd -= _viewStart; _viewStart = 0f; }
+            if (_viewEnd   > 1f) { _viewStart -= (_viewEnd - 1f); _viewEnd = 1f; }
+            _viewStart = Mathf.Clamp01(_viewStart);
+            _viewEnd   = Mathf.Clamp01(_viewEnd);
+
+            e.Use();
+        }
+
+        private void DrawTimelineScrollbar(float clipLen, float trackX, float trackW, EditorWindow window)
+        {
+            Rect sbRect      = GUILayoutUtility.GetRect(0, SCROLLBAR_HEIGHT, GUILayout.ExpandWidth(true));
+            Rect trackSbRect = new Rect(trackX, sbRect.y, trackW, SCROLLBAR_HEIGHT);
+
+            float newStart = GUI.HorizontalScrollbar(trackSbRect, _viewStart, ViewRange, 0f, 1f);
+            if (!Mathf.Approximately(newStart, _viewStart))
+            {
+                float range = ViewRange;
+                _viewStart  = Mathf.Clamp01(newStart);
+                _viewEnd    = Mathf.Clamp01(_viewStart + range);
+                window.Repaint();
+            }
+        }
+
         private void DrawRulerTicks(Rect rect, AnimationClipModel clipModel)
         {
             float trackW = rect.width - _trackLabelWidth - RIGHT_PADDING;
@@ -42,9 +99,12 @@ namespace DenEmo.UI
             EnsureKfLabelStyle();
             var style = new GUIStyle(_kfLabelStyle) { alignment = TextAnchor.UpperLeft };
 
-            for (int f = 0; f <= total; f += step)
+            int frameStart = Mathf.FloorToInt(_viewStart * total);
+            int frameEnd   = Mathf.CeilToInt(_viewEnd   * total);
+            for (int f = frameStart; f <= frameEnd; f += step)
             {
-                float x = trackX + ((float)f / total) * trackW;
+                float x = TimeToPixel((float)f / clipModel.FPS, clipModel.ClipLength, trackX, trackW);
+                if (x < trackX || x > trackX + trackW) continue;
                 EditorGUI.DrawRect(new Rect(x, rect.yMax - 6, 1, 6), DenEmoTheme.Outline);
                 if (x + 24 < trackX + trackW)
                     GUI.Label(new Rect(x + 2, rect.y + 2, 28, 14), f.ToString(), style);
@@ -55,12 +115,23 @@ namespace DenEmo.UI
         {
             float trackW = rect.width - _trackLabelWidth - RIGHT_PADDING;
             float trackX = rect.x + _trackLabelWidth;
-            float norm = clipModel.ClipLength > 0f ? clipModel.CurrentTime / clipModel.ClipLength : 0f;
-            norm = Mathf.Clamp01(norm);
-            float sx = trackX + norm * trackW;
+            float sx = TimeToPixel(clipModel.CurrentTime, clipModel.ClipLength, trackX, trackW);
 
             EditorGUI.DrawRect(new Rect(sx - 1, rect.y, 2, rect.height), new Color(1f, 1f, 1f, 0.8f));
             EditorGUI.DrawRect(new Rect(sx - 5, rect.y, 10, rect.height), DenEmoTheme.TextPrimary);
+
+            if (_isDraggingKeyframe)
+            {
+                EnsureHoverLabelStyle();
+                string frameText = clipModel.CurrentFrame.ToString();
+                Vector2 fSize = _hoverLabelStyle.CalcSize(new GUIContent(frameText));
+                float labelX  = sx - fSize.x * 0.5f;
+                float labelY  = rect.y - fSize.y - 2;
+
+                Rect bgRect = new Rect(labelX - 2, labelY - 1, fSize.x + 4, fSize.y + 2);
+                EditorGUI.DrawRect(bgRect, new Color(0.2f, 0.5f, 1f, 0.9f));
+                GUI.Label(new Rect(labelX, labelY, fSize.x, fSize.y), frameText, _hoverLabelStyle);
+            }
         }
 
         private void HandleScrubberInput(
@@ -93,21 +164,21 @@ namespace DenEmo.UI
             }
         }
 
-        private static void SeekFromMouseX(
+        private void SeekFromMouseX(
             float mouseX, float trackX, float trackW,
             AnimationClipModel clipModel, AnimationPreviewController preview)
         {
-            float t = Mathf.Clamp01((mouseX - trackX) / trackW) * clipModel.ClipLength;
+            float t = PixelToTime(mouseX, clipModel.ClipLength, trackX, trackW);
             t = Mathf.Round(t * clipModel.FPS) / clipModel.FPS;
             clipModel.CurrentTime = Mathf.Clamp(t, 0f, clipModel.ClipLength);
             preview.SampleAt(clipModel.CurrentTime);
         }
 
         private void DrawKeyframeDeleteButtons(
-            AnimationClipModel clipModel, AnimationPreviewController preview, string smrPath, EditorWindow window)
+            AnimationClipModel clipModel, AnimationPreviewController preview, string smrPath,
+            ShapeKeyModel shapeModel, InterpolationType currentInterp, EditorWindow window)
         {
             float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
-            if (allKeys == null || allKeys.Length == 0) return;
 
             Rect rowRect = GUILayoutUtility.GetRect(0, 36, GUILayout.ExpandWidth(true));
             if (Event.current.type == EventType.Repaint)
@@ -117,15 +188,31 @@ namespace DenEmo.UI
                 EditorGUI.DrawRect(new Rect(rowRect.x + _trackLabelWidth, cy, rowRect.width - _trackLabelWidth, 1), DenEmoTheme.Outline);
             }
 
+            // ── ◆+ Insert-all button ──────────────────────────────────────────
+            Rect insertRect = new Rect(rowRect.x + 4, rowRect.y + 8, _trackLabelWidth - 12, 20);
+            string insertTip = DenEmoLoc.EnglishMode
+                ? "Insert keyframe at current time for all visible shapes"
+                : "現在フレームに表示中の全シェイプのキーを追加";
+            if (GUI.Button(insertRect, new GUIContent("◆+", insertTip), DenEmoTheme.MiniButtonStyle))
+            {
+                var visibleItems = shapeModel.Items
+                    .Where(i => i.IsVisible && !i.IsVrcShape && !i.IsLipSyncShape)
+                    .ToList();
+                preview.RecordAllKeyframes(visibleItems, smrPath, clipModel.CurrentTime, currentInterp);
+                preview.SampleAt(clipModel.CurrentTime);
+                window.Repaint();
+            }
+
+            if (allKeys == null || allKeys.Length == 0) return;
+
             float trackW = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
             float trackX = rowRect.x + _trackLabelWidth;
 
             EnsureKfLabelStyle();
-            
+
             foreach (float kTime in allKeys)
             {
-                float norm = clipModel.ClipLength > 0f ? kTime / clipModel.ClipLength : 0f;
-                float kx = trackX + norm * trackW;
+                float kx = TimeToPixel(kTime, clipModel.ClipLength, trackX, trackW);
                 
                 Rect dragRect = new Rect(kx - 10, rowRect.y + 2, 20, 12);
                 EditorGUIUtility.AddCursorRect(dragRect, MouseCursor.SlideArrow);
@@ -183,8 +270,8 @@ namespace DenEmo.UI
             else if (e.type == EventType.MouseDrag && _isDraggingKeyframe && _draggingOldFrame == frame && _draggingShapeName == shapeName)
             {
                 float mouseX = e.mousePosition.x;
-                float norm = Mathf.Clamp01((mouseX - trackX) / trackW);
-                int targetFrame = Mathf.RoundToInt(norm * clipModel.ClipLength * clipModel.FPS);
+                float t = PixelToTime(mouseX, clipModel.ClipLength, trackX, trackW);
+                int targetFrame = Mathf.RoundToInt(Mathf.Clamp(t * clipModel.FPS, 0f, clipModel.TotalFrames));
 
                 if (targetFrame != _draggingOldFrame)
                 {

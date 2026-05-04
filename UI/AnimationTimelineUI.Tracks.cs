@@ -131,9 +131,9 @@ namespace DenEmo.UI
 
             if (Event.current.type == EventType.Repaint)
             {
-                float norm = clipModel.ClipLength > 0f ? clipModel.CurrentTime / clipModel.ClipLength : 0f;
+                float sx = TimeToPixel(clipModel.CurrentTime, clipModel.ClipLength, trackX, trackW);
                 EditorGUI.DrawRect(
-                    new Rect(trackX + norm * trackW - 1, rowRect.y, 2, rowRect.height),
+                    new Rect(sx - 1, rowRect.y, 2, rowRect.height),
                     new Color(1f, 1f, 1f, 0.4f));
             }
 
@@ -141,8 +141,8 @@ namespace DenEmo.UI
             EnsureKfLabelStyle();
             foreach (float kTime in keyTimes)
             {
-                float norm = clipModel.ClipLength > 0f ? kTime / clipModel.ClipLength : 0f;
-                float kx = trackX + norm * trackW;
+                float kx = TimeToPixel(kTime, clipModel.ClipLength, trackX, trackW);
+                if (kx < trackX - DIAMOND_SIZE || kx > trackX + trackW + DIAMOND_SIZE) continue;
                 float ky = rowRect.y + rowRect.height * 0.5f;
                 Rect hitR = new Rect(kx - DIAMOND_SIZE - 2, ky - DIAMOND_SIZE - 2, (DIAMOND_SIZE + 2) * 2, (DIAMOND_SIZE + 2) * 2);
 
@@ -157,6 +157,25 @@ namespace DenEmo.UI
                         fontSize = 10
                     };
                     GUI.Label(new Rect(kx - 8, ky - 8, 16, 16), "◆", style);
+
+                    bool isHovered = hitR.Contains(Event.current.mousePosition);
+                    if (isHovered)
+                    {
+                        EnsureHoverLabelStyle();
+                        int   frameNum = Mathf.RoundToInt(kTime * clipModel.FPS);
+                        float val      = clipModel.GetShapeKeyValue(shapeName, kTime);
+                        string tipText = $"F:{frameNum}  V:{val:F1}";
+
+                        Vector2 size   = _hoverLabelStyle.CalcSize(new GUIContent(tipText));
+                        float   labelX = (kx + 10 + size.x < trackX + trackW)
+                            ? kx + 10
+                            : kx - 10 - size.x;
+                        float labelY = ky - size.y * 0.5f;
+
+                        Rect bgRect = new Rect(labelX - 3, labelY - 2, size.x + 6, size.y + 4);
+                        EditorGUI.DrawRect(bgRect, new Color(0.1f, 0.1f, 0.1f, 0.85f));
+                        GUI.Label(new Rect(labelX, labelY, size.x, size.y), tipText, _hoverLabelStyle);
+                    }
                 }
 
                 EditorGUIUtility.AddCursorRect(hitR, MouseCursor.SlideArrow);

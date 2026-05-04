@@ -255,6 +255,11 @@ namespace DenEmo
         private void OnUndoRedo()
         {
             _model.SyncValuesFromMesh();
+            if (_currentMode == EditorMode.Animation && _animModeUI.Preview.IsActive)
+            {
+                _animModeUI.Preview.SetCacheDirty();
+                _animModeUI.Preview.SampleAt(_animModeUI.ClipModel.CurrentTime);
+            }
             Repaint();
         }
 

@@ -7,6 +7,97 @@ namespace DenEmo.UI
 {
     public partial class AnimationTimelineUI
     {
+        // ─── Keyboard shortcuts ───────────────────────────────────────────────
+
+        private void HandleKeyboardInput(
+            AnimationClipModel clipModel,
+            AnimationPreviewController preview,
+            string smrPath,
+            ref bool isPlaying,
+            ref double playStartRealTime,
+            ref float playStartClipTime,
+            EditorWindow window)
+        {
+            Event e = Event.current;
+            if (e.type != EventType.KeyDown) return;
+            if (!string.IsNullOrEmpty(GUI.GetNameOfFocusedControl())) return;
+
+            float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+
+            switch (e.keyCode)
+            {
+                case KeyCode.Space:
+                    isPlaying = !isPlaying;
+                    if (isPlaying)
+                    {
+                        playStartRealTime = EditorApplication.timeSinceStartup;
+                        playStartClipTime = clipModel.CurrentTime;
+                    }
+                    e.Use();
+                    window.Repaint();
+                    break;
+
+                case KeyCode.LeftArrow:
+                    isPlaying = false;
+                    clipModel.CurrentTime = Mathf.Max(0f, clipModel.CurrentTime - 1f / clipModel.FPS);
+                    preview.SampleAt(clipModel.CurrentTime);
+                    e.Use();
+                    window.Repaint();
+                    break;
+
+                case KeyCode.RightArrow:
+                    isPlaying = false;
+                    clipModel.CurrentTime = Mathf.Min(clipModel.ClipLength, clipModel.CurrentTime + 1f / clipModel.FPS);
+                    preview.SampleAt(clipModel.CurrentTime);
+                    e.Use();
+                    window.Repaint();
+                    break;
+
+                case KeyCode.Comma:
+                {
+                    isPlaying = false;
+                    float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
+                    float prev = -1f;
+                    foreach (float kt in allKeys)
+                        if (kt < clipModel.CurrentTime - tol) prev = kt;
+                    if (prev >= 0f) { clipModel.CurrentTime = prev; preview.SampleAt(prev); }
+                    e.Use();
+                    window.Repaint();
+                    break;
+                }
+
+                case KeyCode.Period:
+                {
+                    isPlaying = false;
+                    float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
+                    float next = -1f;
+                    foreach (float kt in allKeys)
+                        if (kt > clipModel.CurrentTime + tol) { next = kt; break; }
+                    if (next >= 0f) { clipModel.CurrentTime = next; preview.SampleAt(next); }
+                    e.Use();
+                    window.Repaint();
+                    break;
+                }
+
+                case KeyCode.Delete:
+                case KeyCode.Backspace:
+                {
+                    float[] keysAtTime = clipModel.GetAllKeyTimes(smrPath);
+                    float match = -1f;
+                    foreach (float kt in keysAtTime)
+                        if (Mathf.Abs(kt - clipModel.CurrentTime) <= tol) { match = kt; break; }
+                    if (match >= 0f)
+                    {
+                        preview.DeleteAllKeyframesAtTime(smrPath, match);
+                        preview.SampleAt(clipModel.CurrentTime);
+                        e.Use();
+                        window.Repaint();
+                    }
+                    break;
+                }
+            }
+        }
+
         // ─── Playback controls ────────────────────────────────────────────────
 
         private void DrawPlaybackControls(

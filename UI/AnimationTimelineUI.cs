@@ -36,6 +36,11 @@ namespace DenEmo.UI
         private int    _draggingOldFrame = -1;
         private string _draggingShapeName; // null means "All Tracks"
 
+        // ─── View (zoom & scroll) state ───────────────────────────────────────
+        private float _viewStart = 0f;
+        private float _viewEnd   = 1f;
+        private float ViewRange => Mathf.Max(0.01f, _viewEnd - _viewStart);
+
 
         // Cached styles (re-created when null after domain reload)
         private GUIStyle _kfLabelStyle;
@@ -44,6 +49,7 @@ namespace DenEmo.UI
         private GUIStyle _playBtnStyle;
         private GUIStyle _clearBtnStyle;
         private GUIStyle _timelineLabelStyle;
+        private GUIStyle _hoverLabelStyle;
 
         private void EnsureTimelineStyles()
         {
@@ -79,6 +85,9 @@ namespace DenEmo.UI
         {
             if (clipModel?.Clip == null) return;
             DenEmoTheme.Initialize();
+
+            HandleKeyboardInput(clipModel, preview, smrPath,
+                ref isPlaying, ref playStartRealTime, ref playStartClipTime, window);
 
             GUILayout.BeginVertical(DenEmoTheme.CardStyle);
 
@@ -118,11 +127,12 @@ namespace DenEmo.UI
             // Timeline Area
             EditorGUILayout.BeginVertical("box");
 
+            EnsureScrubberVisible(clipModel, window);
             DrawRulerAndScrubber(clipModel, preview, window);
 
             DrawKeyframeTracks(clipModel, preview, shapeModel, smrPath, currentInterp, window);
 
-            DrawKeyframeDeleteButtons(clipModel, preview, smrPath, window);
+            DrawKeyframeDeleteButtons(clipModel, preview, smrPath, shapeModel, currentInterp, window);
 
             EditorGUILayout.EndVertical(); // end "box"
 
@@ -131,6 +141,35 @@ namespace DenEmo.UI
 
 
         // ─── Helpers ──────────────────────────────────────────────────────────
+
+        private float TimeToPixel(float time, float clipLen, float trackX, float trackW)
+        {
+            if (clipLen <= 0f) return trackX;
+            float norm    = time / clipLen;
+            float visible = (norm - _viewStart) / ViewRange;
+            return trackX + visible * trackW;
+        }
+
+        private float PixelToTime(float pixelX, float clipLen, float trackX, float trackW)
+        {
+            if (trackW <= 0f || clipLen <= 0f) return 0f;
+            float visible = (pixelX - trackX) / trackW;
+            float norm    = _viewStart + visible * ViewRange;
+            return Mathf.Clamp(norm, 0f, 1f) * clipLen;
+        }
+
+        private void EnsureScrubberVisible(AnimationClipModel clipModel, EditorWindow window)
+        {
+            if (clipModel.ClipLength <= 0f) return;
+            float norm = clipModel.CurrentTime / clipModel.ClipLength;
+            if (norm < _viewStart || norm > _viewEnd)
+            {
+                float halfRange = ViewRange * 0.5f;
+                _viewStart = Mathf.Clamp01(norm - halfRange);
+                _viewEnd   = Mathf.Clamp01(_viewStart + ViewRange);
+                window.Repaint();
+            }
+        }
 
         private static int CalcRulerStep(int totalFrames, float pixelWidth)
         {
@@ -150,6 +189,19 @@ namespace DenEmo.UI
                 {
                     normal = { textColor = DenEmoTheme.TextTertiary },
                     fontSize = 9
+                };
+            }
+        }
+
+        private void EnsureHoverLabelStyle()
+        {
+            if (_hoverLabelStyle == null)
+            {
+                _hoverLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    fontSize = 9,
+                    normal   = { textColor = Color.white },
+                    padding  = new RectOffset(2, 2, 1, 1),
                 };
             }
         }
