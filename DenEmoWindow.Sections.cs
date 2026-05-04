@@ -416,10 +416,15 @@ namespace DenEmo
                 int trackCount = tracks.Count;
                 if (trackCount == 0)
                 {
-                    var warnStyle = new GUIStyle(DenEmoTheme.CaptionStyle);
-                    warnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
-                    warnStyle.wordWrap = true;
-                    GUILayout.Label(DenEmoLoc.T("ui.animMode.noKeys.warn"), warnStyle);
+                    if (_animNoKeyWarnStyle == null)
+                    {
+                        _animNoKeyWarnStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
+                        {
+                            wordWrap = true,
+                        };
+                        _animNoKeyWarnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
+                    }
+                    GUILayout.Label(DenEmoLoc.T("ui.animMode.noKeys.warn"), _animNoKeyWarnStyle);
                 }
                 else
                 {

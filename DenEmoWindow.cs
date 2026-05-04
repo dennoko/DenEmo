@@ -80,6 +80,8 @@ namespace DenEmo
         private double lastIncludeFlagsChangeTime = 0;
         private List<float> snapshotValues        = null;
 
+        private GUIStyle _animNoKeyWarnStyle;
+
         // ─── Lifecycle ───────────────────────────────────────────────────────
 
         public static DenEmoWindow Instance { get; private set; }
