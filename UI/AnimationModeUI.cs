@@ -150,6 +150,11 @@ namespace DenEmo.UI
             var newClip = EditorGUILayout.ObjectField(ClipModel.Clip, typeof(AnimationClip), false) as AnimationClip;
             if (EditorGUI.EndChangeCheck())
             {
+                if (ClipModel.SmoothLoopEnabled)
+                {
+                    Preview.RemoveLoopKeysFromSourceClip(_smrPath);
+                    ClipModel.SmoothLoopEnabled = false;
+                }
                 StopPreview();
                 ClipModel.SetClip(newClip);
                 if (newClip != null && shapeModel.TargetSkinnedMesh != null)

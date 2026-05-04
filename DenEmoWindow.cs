@@ -31,7 +31,7 @@ namespace DenEmo
         private ShapeKeyListUI  _listUI     = new ShapeKeyListUI();
         private AnimationModeUI _animModeUI = new AnimationModeUI();
 
-        private string saveFolder  = "Assets/Generated_Animations";
+        private string saveFolder  = "Assets/DenEmo/GeneratedAnimations";
         private string searchText  = string.Empty;
         private string lastSearchText = null;
 

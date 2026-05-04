@@ -22,6 +22,7 @@ namespace DenEmo.Models
         public void SetClip(AnimationClip clip)
         {
             Clip = clip;
+            CurrentTime = 0f;
             if (clip != null)
             {
                 ClipLength = clip.length > 0f ? clip.length : 1f;
