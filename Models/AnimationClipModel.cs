@@ -115,5 +115,29 @@ namespace DenEmo.Models
             result.Sort();
             return result.ToArray();
         }
+
+        /// <summary>指定シェイプ・時刻のキーの補間タイプを返す。見つからない場合は Ease。</summary>
+        public InterpolationType GetKeyInterpolationType(string shapeName, float time, string smrPath = null)
+        {
+            if (Clip == null) return InterpolationType.Ease;
+            float tol = FPS > 0f ? 0.5f / FPS : 0.01f;
+            string propName = "blendShape." + shapeName;
+            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
+            {
+                if (b.type != typeof(SkinnedMeshRenderer) || b.propertyName != propName) continue;
+                if (smrPath != null && b.path != smrPath) continue;
+                var curve = AnimationUtility.GetEditorCurve(Clip, b);
+                if (curve == null) continue;
+                for (int i = 0; i < curve.keys.Length; i++)
+                {
+                    if (Mathf.Abs(curve.keys[i].time - time) > tol) continue;
+                    var lm = AnimationUtility.GetKeyLeftTangentMode(curve, i);
+                    if (lm == AnimationUtility.TangentMode.Constant) return InterpolationType.Step;
+                    if (lm == AnimationUtility.TangentMode.Linear)   return InterpolationType.Linear;
+                    return InterpolationType.Ease;
+                }
+            }
+            return InterpolationType.Ease;
+        }
     }
 }

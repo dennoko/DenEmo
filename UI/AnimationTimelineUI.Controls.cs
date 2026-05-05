@@ -95,6 +95,46 @@ namespace DenEmo.UI
                     }
                     break;
                 }
+
+                case KeyCode.C when e.control:
+                {
+                    _keyClipboard.Clear();
+                    var shapes = clipModel.GetShapeNamesWithKeys(smrPath);
+                    foreach (string shapeName in shapes)
+                    {
+                        float[] times = clipModel.GetKeyTimesForShape(shapeName, smrPath);
+                        foreach (float kt in times)
+                        {
+                            if (Mathf.Abs(kt - clipModel.CurrentTime) > tol) continue;
+                            _keyClipboard.Add(new KeyClipboardEntry
+                            {
+                                ShapeName    = shapeName,
+                                RelativeTime = 0f,
+                                Value        = clipModel.GetShapeKeyValue(shapeName, kt),
+                                Interp       = clipModel.GetKeyInterpolationType(shapeName, kt, smrPath),
+                            });
+                        }
+                    }
+                    e.Use();
+                    break;
+                }
+
+                case KeyCode.V when e.control:
+                {
+                    if (!_hasClipboardData) break;
+                    foreach (var entry in _keyClipboard)
+                    {
+                        float pasteTime = Mathf.Clamp(
+                            clipModel.CurrentTime + entry.RelativeTime,
+                            0f, clipModel.ClipLength);
+                        pasteTime = Mathf.Round(pasteTime * clipModel.FPS) / clipModel.FPS;
+                        preview.RecordKeyframe(entry.ShapeName, smrPath, pasteTime, entry.Value, entry.Interp);
+                    }
+                    preview.SampleAt(clipModel.CurrentTime);
+                    e.Use();
+                    window.Repaint();
+                    break;
+                }
             }
         }
 

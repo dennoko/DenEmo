@@ -36,6 +36,18 @@ namespace DenEmo.UI
         private int    _draggingOldFrame = -1;
         private string _draggingShapeName; // null means "All Tracks"
 
+        // ─── Copy/paste clipboard ─────────────────────────────────────────────
+        private struct KeyClipboardEntry
+        {
+            public string            ShapeName;
+            public float             RelativeTime;
+            public float             Value;
+            public InterpolationType Interp;
+        }
+
+        private List<KeyClipboardEntry> _keyClipboard = new List<KeyClipboardEntry>();
+        private bool _hasClipboardData => _keyClipboard != null && _keyClipboard.Count > 0;
+
         // ─── View (zoom & scroll) state ───────────────────────────────────────
         private float _viewStart = 0f;
         private float _viewEnd   = 1f;
