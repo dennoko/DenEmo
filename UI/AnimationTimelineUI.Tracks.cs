@@ -191,12 +191,78 @@ namespace DenEmo.UI
                         false,
                         () => { preview.DeleteKeyframe(sn, smrPath, kt); window.Repaint(); });
                     menu.AddSeparator("");
+                    menu.AddItem(
+                        new GUIContent(DenEmoLoc.EnglishMode ? "Copy frame" : "フレームをコピー"),
+                        false,
+                        () =>
+                        {
+                            _keyClipboard.Clear();
+                            float tol2 = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+                            foreach (string sh in clipModel.GetShapeNamesWithKeys(smrPath))
+                            {
+                                foreach (float t2 in clipModel.GetKeyTimesForShape(sh, smrPath))
+                                {
+                                    if (Mathf.Abs(t2 - kt) > tol2) continue;
+                                    _keyClipboard.Add(new KeyClipboardEntry
+                                    {
+                                        ShapeName    = sh,
+                                        RelativeTime = 0f,
+                                        Value        = clipModel.GetShapeKeyValue(sh, t2),
+                                        Interp       = clipModel.GetKeyInterpolationType(sh, t2, smrPath),
+                                    });
+                                }
+                            }
+                        });
+                    if (_hasClipboardData)
+                        menu.AddItem(
+                            new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"),
+                            false,
+                            () =>
+                            {
+                                foreach (var entry in _keyClipboard)
+                                {
+                                    float pt = Mathf.Clamp(clipModel.CurrentTime + entry.RelativeTime, 0f, clipModel.ClipLength);
+                                    pt = Mathf.Round(pt * clipModel.FPS) / clipModel.FPS;
+                                    preview.RecordKeyframe(entry.ShapeName, smrPath, pt, entry.Value, entry.Interp);
+                                }
+                                preview.SampleAt(clipModel.CurrentTime);
+                                window.Repaint();
+                            });
+                    else
+                        menu.AddDisabledItem(new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"));
+                    menu.AddSeparator("");
                     menu.AddItem(new GUIContent("Step"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Step); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
                     menu.AddItem(new GUIContent("Linear"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Linear); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
                     menu.AddItem(new GUIContent("Ease"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Ease); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
                     menu.ShowAsContext();
                     Event.current.Use();
                 }
+            }
+
+            // Right-click on empty track area (no keyframe consumed the event) → paste menu
+            Rect trackClickArea = new Rect(trackX, rowRect.y, trackW, rowRect.height);
+            if (Event.current.type == EventType.ContextClick && trackClickArea.Contains(Event.current.mousePosition))
+            {
+                var menu = new GenericMenu();
+                if (_hasClipboardData)
+                    menu.AddItem(
+                        new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"),
+                        false,
+                        () =>
+                        {
+                            foreach (var entry in _keyClipboard)
+                            {
+                                float pt = Mathf.Clamp(clipModel.CurrentTime + entry.RelativeTime, 0f, clipModel.ClipLength);
+                                pt = Mathf.Round(pt * clipModel.FPS) / clipModel.FPS;
+                                preview.RecordKeyframe(entry.ShapeName, smrPath, pt, entry.Value, entry.Interp);
+                            }
+                            preview.SampleAt(clipModel.CurrentTime);
+                            window.Repaint();
+                        });
+                else
+                    menu.AddDisabledItem(new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"));
+                menu.ShowAsContext();
+                Event.current.Use();
             }
 
             if (Event.current.type == EventType.Repaint)
