@@ -25,6 +25,9 @@ namespace DenEmo.UI
             float trackX    = rulerRect.x + _trackLabelWidth;
             Rect  trackArea = new Rect(trackX, rulerRect.y, trackW, rulerRect.height + scrubRect.height);
 
+            _cachedTrackX = trackX;
+            _cachedTrackW = trackW;
+
             // Capture before HandleTimelineZoom so Layout/Repaint always call GetRect the same times
             if (Event.current.type == EventType.Layout)
                 _showScrollbar = ViewRange < 1f - 0.001f;
@@ -94,20 +97,50 @@ namespace DenEmo.UI
             int total = clipModel.TotalFrames;
             if (total <= 0 || trackW <= 0) return;
 
-            int step = CalcRulerStep(total, trackW);
+            float separatorY = rect.y + rect.height * 0.5f;
 
             EnsureKfLabelStyle();
-            var style = new GUIStyle(_kfLabelStyle) { alignment = TextAnchor.UpperLeft };
+            var frameStyle = new GUIStyle(_kfLabelStyle) { alignment = TextAnchor.UpperLeft };
+            var timeStyle  = new GUIStyle(_kfLabelStyle) { alignment = TextAnchor.UpperLeft, fontSize = 8 };
 
+            // Separator between frame row and time row
+            EditorGUI.DrawRect(new Rect(trackX, separatorY, trackW, 1), DenEmoTheme.Outline);
+
+            // ── Frame numbers (top row) ──────────────────────────────────────
+            int step = CalcRulerStep(total, trackW);
             int frameStart = Mathf.FloorToInt(_viewStart * total);
             int frameEnd   = Mathf.CeilToInt(_viewEnd   * total);
             for (int f = frameStart; f <= frameEnd; f += step)
             {
                 float x = TimeToPixel((float)f / clipModel.FPS, clipModel.ClipLength, trackX, trackW);
                 if (x < trackX || x > trackX + trackW) continue;
-                EditorGUI.DrawRect(new Rect(x, rect.yMax - 6, 1, 6), DenEmoTheme.Outline);
+                EditorGUI.DrawRect(new Rect(x, separatorY - 5f, 1, 5), DenEmoTheme.Outline);
                 if (x + 24 < trackX + trackW)
-                    GUI.Label(new Rect(x + 2, rect.y + 2, 28, 14), f.ToString(), style);
+                    GUI.Label(new Rect(x + 2, rect.y + 2, 32, 14), f.ToString(), frameStyle);
+            }
+
+            // ── Seconds (bottom row, 0.1s intervals) ────────────────────────
+            const float SEC_INTERVAL = 0.1f;
+            float pxPer01 = (trackW * SEC_INTERVAL) / (clipModel.ClipLength * ViewRange);
+            int labelSkip = Mathf.Max(1, Mathf.CeilToInt(26f / pxPer01));
+
+            float visStartSec = _viewStart * clipModel.ClipLength;
+            float visEndSec   = _viewEnd   * clipModel.ClipLength;
+            int startIdx = Mathf.Max(0, Mathf.FloorToInt(visStartSec / SEC_INTERVAL) - 1);
+            int endIdx   = Mathf.CeilToInt(visEndSec / SEC_INTERVAL) + 1;
+
+            for (int i = startIdx; i <= endIdx; i++)
+            {
+                float t = i * SEC_INTERVAL;
+                if (t > clipModel.ClipLength + 0.001f) break;
+
+                float x = TimeToPixel(t, clipModel.ClipLength, trackX, trackW);
+                if (x < trackX || x > trackX + trackW) continue;
+
+                EditorGUI.DrawRect(new Rect(x, rect.yMax - 5f, 1, 5), DenEmoTheme.Outline);
+
+                if (i % labelSkip == 0 && x + 30 < trackX + trackW)
+                    GUI.Label(new Rect(x + 2, separatorY + 2, 34, 12), t.ToString("0.0"), timeStyle);
             }
         }
 

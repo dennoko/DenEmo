@@ -13,7 +13,7 @@ namespace DenEmo.UI
     public partial class AnimationTimelineUI
     {
         // ─── Layout constants ─────────────────────────────────────────────────
-        private const float RULER_HEIGHT      = 24f;
+        private const float RULER_HEIGHT      = 38f;
         private const float SCRUBBER_HEIGHT   = 14f;
         private const float CONTROLS_HEIGHT   = 36f;
         private const float TRACK_ROW_HEIGHT  = 24f;
@@ -30,6 +30,10 @@ namespace DenEmo.UI
         private bool    _isDraggingScrubber;
         private Vector2 _tracksScroll;
         private bool    _tracksCollapsed;
+
+        // Cached track geometry (set by DrawRulerAndScrubber; used by DrawTrackRow inside scroll view)
+        private float _cachedTrackX;
+        private float _cachedTrackW;
 
         // Keyframe dragging state
         private bool   _isDraggingKeyframe;

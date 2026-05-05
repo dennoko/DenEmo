@@ -57,7 +57,7 @@ namespace DenEmo.UI
             float borderX    = rowRect.x + _trackLabelWidth - LABEL_RIGHT_RESERVE;
             float addBtnX    = borderX + BORDER_W;
             float delBtnX    = addBtnX + ADD_BTN_W + BTN_GAP;
-            float trackW     = rowRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackW     = _cachedTrackW > 0f ? _cachedTrackW : rowRect.width - _trackLabelWidth - RIGHT_PADDING;
             float trackX     = rowRect.x + _trackLabelWidth;
 
             GUI.Label(

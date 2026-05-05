@@ -1,4 +1,4 @@
-# DenEmo Usage Guide
+﻿# DenEmo Usage Guide
 
 DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). It has two modes: **Single Frame** for single-frame expressions, and **Multi Frame** for time-based clips.
 
@@ -268,7 +268,16 @@ One track row appears for each shape key that has at least one keyframe. Each ro
 - **Shape key name**  Ethe name of the animated shape key.
 - **◁Ebutton**  Eadds or updates a keyframe at the current playhead time, using the shape's current slider value.
 - **✁Ebutton**  Edeletes the entire track (all keyframes) for that shape key after confirmation.
-- **◁Ediamonds on the track**  Eeach diamond is one keyframe. Drag a diamond left or right to move it to a different frame. Right-click a diamond for a context menu: delete that keyframe, or change its interpolation to Step, Linear, or Ease.
+- **◆ diamonds on the track** — each diamond is one keyframe. Drag a diamond left or right to move it to a different frame. Hover over a diamond to see a ` F:N  V:X.X ` tooltip. Right-click a diamond for a context menu:
+
+  | Menu item | Action |
+  |-----------|--------|
+  | Delete | Removes that keyframe |
+  | Copy frame | Copies the value and interpolation of **all tracks** at that frame to the DenEmo internal clipboard |
+  | Paste at current time | Pastes clipboard contents at the **current playhead position** (greyed out when empty) |
+  | Step / Linear / Ease | Changes the interpolation of that single keyframe |
+
+- **Right-click on empty track area** — right-clicking anywhere on the track that is not a diamond shows a "Paste at current time" menu, so you can paste without targeting a specific keyframe handle
 
 The label column width can be resized by dragging the vertical divider between the label and the track area.
 
@@ -276,6 +285,38 @@ The label column width can be resized by dragging the vertical divider between t
 Below all tracks, each frame that has any keyframe shows a ✁Ebutton. Pressing it deletes all keyframes across all tracks at that frame  Eremoving a complete pose from one point in time.
 
 ---
+#### Keyboard Shortcuts
+
+Active when a clip is loaded and no text field is focused.
+
+| Key | Action |
+|-----|--------|
+| `Space` | Toggle playback |
+| `←` | Step one frame backward |
+| `→` | Step one frame forward |
+| `,` | Jump to previous keyframe |
+| `.` | Jump to next keyframe |
+| `Delete` / `Backspace` | Delete all keyframes at the current frame (no confirmation, Undo supported) |
+| `Ctrl+C` | Copy all keyframes at the current frame (values + interpolation) to clipboard |
+| `Ctrl+V` | Paste clipboard keyframes at the current frame (overwrites existing keys, Undo supported) |
+
+**Copy & Paste** — there are two equivalent ways to copy and paste keyframe values:
+
+| | Copy | Paste |
+|--|------|-------|
+| **Keyboard** | `Ctrl+C` — copies all keys at the current frame | `Ctrl+V` — pastes at the current frame |
+| **Right-click menu** | Right-click a ◆ diamond → **Copy frame** (copies all tracks at that frame) | Right-click a ◆ diamond or empty track area → **Paste at current time** |
+
+Both methods share the same internal clipboard. You can copy via right-click and paste with `Ctrl+V`, or vice versa.
+
+The clipboard is DenEmo-internal and is not written to the OS clipboard. Its contents are lost on Unity restart or domain reload.
+
+> Example: To duplicate the pose at frame 5 onto frame 30 — move to frame 5, press `Ctrl+C`, move to frame 30, press `Ctrl+V`. Press `Ctrl+Z` once to undo the paste.
+
+> Example: Right-click the ◆ diamond at frame 10, choose **Copy frame**, scrub to frame 25, then right-click the empty track area and choose **Paste at current time**.
+
+---
+
 
 ### SEARCH & FILTER (Multi Frame Mode)
 
