@@ -49,6 +49,7 @@ namespace DenEmo.UI
                 DrawScrubberLine(scrubRect, clipModel);
             }
 
+            DrawZoomControls(rulerRect, window);
             HandleScrubberInput(scrubRect, clipModel, preview, window);
         }
 
@@ -87,6 +88,34 @@ namespace DenEmo.UI
                 _viewStart  = Mathf.Clamp01(newStart);
                 _viewEnd    = Mathf.Clamp01(_viewStart + range);
                 window.Repaint();
+            }
+        }
+
+        private void DrawZoomControls(Rect rulerRect, EditorWindow window)
+        {
+            EnsureKfLabelStyle();
+            float separatorY = rulerRect.y + rulerRect.height * 0.5f;
+            int   zoomPct    = Mathf.RoundToInt(1f / ViewRange * 100f);
+            float innerW     = _trackLabelWidth - 8f;
+
+            // Upper half: zoom percentage label
+            if (Event.current.type == EventType.Repaint)
+            {
+                var style = new GUIStyle(_kfLabelStyle) { alignment = TextAnchor.MiddleLeft, fontSize = 9 };
+                GUI.Label(new Rect(rulerRect.x + 4, rulerRect.y + 2, innerW, 14), zoomPct + "%", style);
+            }
+
+            // Lower half: reset button (only shown when zoomed in)
+            if (ViewRange < 1f - 0.001f)
+            {
+                string label = DenEmoLoc.EnglishMode ? "Reset Zoom" : "ズームリセット";
+                string tip   = DenEmoLoc.EnglishMode ? "Reset zoom to 100%" : "ズームを100%にリセット";
+                if (GUI.Button(new Rect(rulerRect.x + 4, separatorY + 2, innerW, 14), new GUIContent(label, tip), DenEmoTheme.MiniButtonStyle))
+                {
+                    _viewStart = 0f;
+                    _viewEnd   = 1f;
+                    window.Repaint();
+                }
             }
         }
 
