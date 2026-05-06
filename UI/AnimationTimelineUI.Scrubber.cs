@@ -201,7 +201,7 @@ namespace DenEmo.UI
         {
             float trackW = scrubRect.width - _trackLabelWidth - RIGHT_PADDING;
             float trackX = scrubRect.x + _trackLabelWidth;
-            Rect trackR = new Rect(trackX, scrubRect.y, trackW, scrubRect.height + RULER_HEIGHT);
+            Rect trackR = new Rect(trackX, scrubRect.y, trackW, scrubRect.height);
 
             Event e = Event.current;
 
