@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace DenEmo.UI
 {
+    /// <summary>タイムラインを別ウィンドウとして表示する（描画は DenEmoWindow に委譲）。</summary>
     public class DenEmoTimelineWindow : EditorWindow
     {
         private Vector2 _scrollPos;
@@ -16,26 +17,42 @@ namespace DenEmo.UI
 
         private void OnGUI()
         {
-            if (DenEmoWindow.Instance == null)
+            DenEmoTheme.Initialize();
+            DenEmoTheme.PushEditorTheme();
+            try
             {
-                GUILayout.Label("DenEmo Window is not open.");
-                if (GUILayout.Button("Open DenEmo"))
-                {
-                    DenEmoWindow.ShowWindow();
-                }
-                return;
-            }
+                EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
 
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos);
-            DenEmoWindow.Instance.DrawTimelineForSeparateWindow(this);
-            GUILayout.EndScrollView();
+                if (DenEmoWindow.Instance == null)
+                {
+                    GUILayout.Space(8);
+                    GUILayout.Label(
+                        DenEmoLoc.EnglishMode ? "DenEmo Window is not open." : "DenEmo ウィンドウが開かれていません。",
+                        DenEmoTheme.SecondaryTextStyle);
+                    if (GUILayout.Button(
+                        DenEmoLoc.EnglishMode ? "Open DenEmo" : "DenEmo を開く",
+                        DenEmoTheme.SecondaryButtonStyle))
+                    {
+                        DenEmoWindow.ShowWindow();
+                    }
+                    return;
+                }
+
+                _scrollPos = GUILayout.BeginScrollView(_scrollPos);
+                DenEmoWindow.Instance.DrawTimelineForSeparateWindow(this);
+                GUILayout.EndScrollView();
+            }
+            finally
+            {
+                DenEmoTheme.PopEditorTheme();
+            }
         }
-        
+
         private void OnEnable()
         {
             EditorApplication.update += Repaint;
         }
-        
+
         private void OnDisable()
         {
             EditorApplication.update -= Repaint;

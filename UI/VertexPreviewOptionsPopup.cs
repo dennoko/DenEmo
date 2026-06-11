@@ -17,34 +17,44 @@ namespace DenEmo.UI
         public override void OnGUI(Rect rect)
         {
             DenEmoTheme.Initialize();
-            GUILayout.Space(6);
-            GUILayout.Label(
-                DenEmoLoc.EnglishMode ? "Vertex Preview Settings" : "頂点プレビュー設定",
-                EditorStyles.boldLabel);
-            GUILayout.Space(2);
-
-            EditorGUI.BeginChangeCheck();
-
-            var newColor = EditorGUILayout.ColorField(
-                new GUIContent(DenEmoLoc.EnglishMode ? "Normal Color" : "通常の色"),
-                DenEmoWindow.VertexPreviewColor, true, false, false);
-
-            var newSelColor = EditorGUILayout.ColorField(
-                new GUIContent(DenEmoLoc.EnglishMode ? "Selected Color" : "選択中の色"),
-                DenEmoWindow.VertexPreviewSelectedColor, true, false, false);
-
-            var newSize = EditorGUILayout.Slider(
-                DenEmoLoc.EnglishMode ? "Size" : "サイズ",
-                DenEmoWindow.VertexPreviewSizeMultiplier, 0.1f, 5f);
-
-            if (EditorGUI.EndChangeCheck())
+            DenEmoTheme.PushEditorTheme();
+            try
             {
-                DenEmoWindow.VertexPreviewColor         = newColor;
-                DenEmoWindow.VertexPreviewSelectedColor  = newSelColor;
-                DenEmoWindow.VertexPreviewSizeMultiplier = newSize;
-                SavePrefs();
-                SceneView.RepaintAll();
-                _window?.Repaint();
+                EditorGUI.DrawRect(rect, DenEmoTheme.Surface1);
+
+                GUILayout.Space(6);
+                GUILayout.Label(
+                    DenEmoLoc.EnglishMode ? "Vertex Preview Settings" : "頂点プレビュー設定",
+                    DenEmoTheme.GroupLabelStyle);
+                GUILayout.Space(2);
+
+                EditorGUI.BeginChangeCheck();
+
+                var newColor = EditorGUILayout.ColorField(
+                    new GUIContent(DenEmoLoc.EnglishMode ? "Normal Color" : "通常の色"),
+                    DenEmoWindow.VertexPreviewColor, true, false, false);
+
+                var newSelColor = EditorGUILayout.ColorField(
+                    new GUIContent(DenEmoLoc.EnglishMode ? "Selected Color" : "選択中の色"),
+                    DenEmoWindow.VertexPreviewSelectedColor, true, false, false);
+
+                var newSize = EditorGUILayout.Slider(
+                    DenEmoLoc.EnglishMode ? "Size" : "サイズ",
+                    DenEmoWindow.VertexPreviewSizeMultiplier, 0.1f, 5f);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    DenEmoWindow.VertexPreviewColor          = newColor;
+                    DenEmoWindow.VertexPreviewSelectedColor  = newSelColor;
+                    DenEmoWindow.VertexPreviewSizeMultiplier = newSize;
+                    SavePrefs();
+                    SceneView.RepaintAll();
+                    _window?.Repaint();
+                }
+            }
+            finally
+            {
+                DenEmoTheme.PopEditorTheme();
             }
         }
 

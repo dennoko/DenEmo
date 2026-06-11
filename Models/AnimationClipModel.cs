@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -6,138 +7,281 @@ namespace DenEmo.Models
 {
     public enum InterpolationType { Step, Linear, Ease }
 
+    /// <summary>
+    /// クリップ内の 1 ブレンドシェイプ分のトラック情報（キャッシュエントリ）。
+    /// Curve はエディタカーブのコピー、PreviewCurve はスムーズループ有効時に
+    /// 末尾キーを先頭値へ揃えた評価用カーブ（無効時は Curve と同一参照）。
+    /// </summary>
+    public class AnimationTrack
+    {
+        public string             ShapeName;
+        public EditorCurveBinding Binding;
+        public AnimationCurve     Curve;
+        public AnimationCurve     PreviewCurve;
+        public float[]            KeyTimes;   // 昇順
+    }
+
+    /// <summary>
+    /// マルチフレームモードのクリップ状態。
+    /// AnimationClip を唯一のデータソースとしつつ、UI クエリ用のトラックキャッシュを保持する。
+    /// クリップを変更した側は必ず MarkDirty() を呼ぶこと（AnimationClipEditor 経由なら自動）。
+    /// キャッシュは次のアクセス時に一度だけ再構築される。
+    /// </summary>
     public class AnimationClipModel
     {
         public AnimationClip Clip { get; private set; }
         public float CurrentTime  { get; set; }
-        public float ClipLength   { get; set; } = 1f;
-        public float FPS          { get; set; } = 60f;
-        public bool  SmoothLoopEnabled { get; set; } = false;
 
-        public int CurrentFrame => Mathf.RoundToInt(CurrentTime * FPS);
-        public int TotalFrames  => Mathf.RoundToInt(ClipLength  * FPS);
+        private float  _clipLength = 1f;
+        private float  _fps        = 60f;
+        private bool   _smoothLoop;
+        private string _smrPath = "";
+
+        public float ClipLength
+        {
+            get => _clipLength;
+            set { if (!Mathf.Approximately(_clipLength, value)) { _clipLength = value; MarkDirty(); } }
+        }
+
+        public float FPS
+        {
+            get => _fps;
+            set { if (!Mathf.Approximately(_fps, value)) { _fps = value; MarkDirty(); } }
+        }
+
+        /// <summary>ループ対応（末尾値を先頭値に揃える）。プレビューと保存時にのみ反映され、編集中のクリップ自体は変更しない。</summary>
+        public bool SmoothLoopEnabled
+        {
+            get => _smoothLoop;
+            set { if (_smoothLoop != value) { _smoothLoop = value; MarkDirty(); } }
+        }
+
+        /// <summary>編集対象 SMR のルートからの相対パス。トラックキャッシュのフィルタに使う。</summary>
+        public string SmrPath
+        {
+            get => _smrPath;
+            set { value = value ?? ""; if (_smrPath != value) { _smrPath = value; MarkDirty(); } }
+        }
+
+        public int   CurrentFrame   => Mathf.RoundToInt(CurrentTime * _fps);
+        public int   TotalFrames    => Mathf.RoundToInt(_clipLength * _fps);
+        public float FrameTolerance => _fps > 0f ? 0.5f / _fps : 0.01f;
+
+        public float SnapToFrame(float time)
+        {
+            float t = _fps > 0f ? Mathf.Round(time * _fps) / _fps : time;
+            return Mathf.Clamp(t, 0f, _clipLength);
+        }
+
+        public float FrameToTime(int frame) => _fps > 0f ? frame / _fps : 0f;
+        public int   TimeToFrame(float time) => Mathf.RoundToInt(time * _fps);
 
         // ─── Clip management ─────────────────────────────────────────────────
 
         public void SetClip(AnimationClip clip)
         {
-            Clip = clip;
+            Clip        = clip;
             CurrentTime = 0f;
             if (clip != null)
             {
-                ClipLength = clip.length > 0f ? clip.length : 1f;
-                FPS        = clip.frameRate > 0f ? clip.frameRate : 60f;
+                _clipLength = clip.length    > 0f ? clip.length    : 1f;
+                _fps        = clip.frameRate > 0f ? clip.frameRate : 60f;
             }
+            MarkDirty();
         }
 
-        // ─── Keyframe queries ─────────────────────────────────────────────────
+        // ─── Track cache ─────────────────────────────────────────────────────
 
-        /// <summary>Returns the curve value at the given time for a blendshape (ignores SMR path).</summary>
-        public float GetShapeKeyValue(string shapeName, float time)
+        private int _revision;
+        private int _cachedRevision = -1;
+
+        private readonly List<AnimationTrack>               _tracks      = new List<AnimationTrack>();
+        private readonly Dictionary<string, AnimationTrack> _trackByName = new Dictionary<string, AnimationTrack>();
+        private float[] _allKeyTimes = Array.Empty<float>();
+
+        public int Revision => _revision;
+
+        /// <summary>クリップ・長さ・SMR パス等が変わった後に呼ぶ。キャッシュは次回アクセス時に再構築される。</summary>
+        public void MarkDirty() => _revision++;
+
+        /// <summary>現在の SMR パスに属する全ブレンドシェイプトラック（キャッシュ済み）。</summary>
+        public IReadOnlyList<AnimationTrack> Tracks
         {
-            if (Clip == null) return 0f;
-            string propName = "blendShape." + shapeName;
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer) || b.propertyName != propName) continue;
-                var curve = AnimationUtility.GetEditorCurve(Clip, b);
-                if (curve != null) return curve.Evaluate(time);
-            }
-            return 0f;
+            get { EnsureCache(); return _tracks; }
         }
 
-        /// <summary>Returns true when a keyframe exists within half-a-frame tolerance.</summary>
-        public bool HasKeyframeAt(string shapeName, float time, string smrPath = null)
+        /// <summary>全トラックのキー時刻の和集合（昇順・重複なし）。</summary>
+        public float[] AllKeyTimes
         {
-            if (Clip == null) return false;
-            float tol = FPS > 0f ? 0.5f / FPS : 0.01f;
-            string propName = "blendShape." + shapeName;
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer) || b.propertyName != propName) continue;
-                if (smrPath != null && b.path != smrPath) continue;
-                var curve = AnimationUtility.GetEditorCurve(Clip, b);
-                if (curve == null) continue;
-                foreach (var key in curve.keys)
-                    if (Mathf.Abs(key.time - time) <= tol) return true;
-            }
-            return false;
+            get { EnsureCache(); return _allKeyTimes; }
         }
 
-        /// <summary>Returns all shape names that have at least one keyframe in the clip.</summary>
-        public List<string> GetShapeNamesWithKeys(string smrPath = null)
+        public bool TryGetTrack(string shapeName, out AnimationTrack track)
         {
-            var result = new List<string>();
-            if (Clip == null) return result;
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer)) continue;
-                if (!b.propertyName.StartsWith("blendShape.")) continue;
-                if (smrPath != null && b.path != smrPath) continue;
-                result.Add(b.propertyName.Substring("blendShape.".Length));
-            }
-            return result;
+            EnsureCache();
+            return _trackByName.TryGetValue(shapeName, out track);
         }
 
-        /// <summary>Returns all keyframe times for a blendshape.</summary>
-        public float[] GetKeyTimesForShape(string shapeName, string smrPath = null)
+        private void EnsureCache()
         {
-            if (Clip == null) return new float[0];
-            string propName = "blendShape." + shapeName;
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer) || b.propertyName != propName) continue;
-                if (smrPath != null && b.path != smrPath) continue;
-                var curve = AnimationUtility.GetEditorCurve(Clip, b);
-                if (curve == null) continue;
-                var times = new float[curve.keys.Length];
-                for (int i = 0; i < curve.keys.Length; i++) times[i] = curve.keys[i].time;
-                return times;
-            }
-            return new float[0];
-        }
+            if (_cachedRevision == _revision) return;
+            _cachedRevision = _revision;
 
-        /// <summary>Returns all unique keyframe times across all tracks, sorted ascending.</summary>
-        public float[] GetAllKeyTimes(string smrPath = null)
-        {
-            if (Clip == null) return new float[0];
-            var timeSet = new HashSet<float>();
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
-            {
-                if (b.type != typeof(SkinnedMeshRenderer)) continue;
-                if (!b.propertyName.StartsWith("blendShape.")) continue;
-                if (smrPath != null && b.path != smrPath) continue;
-                var curve = AnimationUtility.GetEditorCurve(Clip, b);
-                if (curve == null) continue;
-                foreach (var key in curve.keys) timeSet.Add(key.time);
-            }
-            var result = new List<float>(timeSet);
-            result.Sort();
-            return result.ToArray();
-        }
+            _tracks.Clear();
+            _trackByName.Clear();
 
-        /// <summary>指定シェイプ・時刻のキーの補間タイプを返す。見つからない場合は Ease。</summary>
-        public InterpolationType GetKeyInterpolationType(string shapeName, float time, string smrPath = null)
-        {
-            if (Clip == null) return InterpolationType.Ease;
-            float tol = FPS > 0f ? 0.5f / FPS : 0.01f;
-            string propName = "blendShape." + shapeName;
-            foreach (var b in AnimationUtility.GetCurveBindings(Clip))
+            if (Clip == null)
             {
-                if (b.type != typeof(SkinnedMeshRenderer) || b.propertyName != propName) continue;
-                if (smrPath != null && b.path != smrPath) continue;
-                var curve = AnimationUtility.GetEditorCurve(Clip, b);
-                if (curve == null) continue;
-                for (int i = 0; i < curve.keys.Length; i++)
+                _allKeyTimes = Array.Empty<float>();
+                return;
+            }
+
+            var timeSet = new SortedSet<float>();
+            foreach (var binding in AnimationUtility.GetCurveBindings(Clip))
+            {
+                if (binding.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!binding.propertyName.StartsWith("blendShape.")) continue;
+                if (binding.path != _smrPath) continue;
+
+                var curve = AnimationUtility.GetEditorCurve(Clip, binding);
+                if (curve == null || curve.keys.Length == 0) continue;
+
+                var keys = curve.keys;
+                var times = new float[keys.Length];
+                for (int i = 0; i < keys.Length; i++)
                 {
-                    if (Mathf.Abs(curve.keys[i].time - time) > tol) continue;
-                    var lm = AnimationUtility.GetKeyLeftTangentMode(curve, i);
-                    if (lm == AnimationUtility.TangentMode.Constant) return InterpolationType.Step;
-                    if (lm == AnimationUtility.TangentMode.Linear)   return InterpolationType.Linear;
-                    return InterpolationType.Ease;
+                    times[i] = keys[i].time;
+                    timeSet.Add(keys[i].time);
+                }
+
+                var track = new AnimationTrack
+                {
+                    ShapeName    = binding.propertyName.Substring("blendShape.".Length),
+                    Binding      = binding,
+                    Curve        = curve,
+                    PreviewCurve = _smoothLoop ? BuildLoopCurve(curve) : curve,
+                    KeyTimes     = times,
+                };
+                _tracks.Add(track);
+                _trackByName[track.ShapeName] = track;
+            }
+
+            _allKeyTimes = new float[timeSet.Count];
+            timeSet.CopyTo(_allKeyTimes);
+        }
+
+        /// <summary>末尾（ClipLength）のキー値を先頭（0 秒）の評価値に揃えたカーブを生成する。</summary>
+        public AnimationCurve BuildLoopCurve(AnimationCurve source)
+        {
+            var loop = new AnimationCurve(source.keys);
+            if (loop.keys.Length == 0 || _clipLength <= 0f) return loop;
+
+            float valZero = loop.Evaluate(0f);
+            float tol     = FrameTolerance;
+
+            int endIdx = FindKeyIndex(loop, _clipLength, tol);
+            if (endIdx >= 0) loop.RemoveKey(endIdx);
+
+            int newIdx = loop.AddKey(new Keyframe(_clipLength, valZero));
+            if (newIdx < 0)
+            {
+                // 既存キーと時刻が重なった場合（浮動小数点誤差）は MoveKey で上書き
+                int existingIdx = FindKeyIndex(loop, _clipLength, 0f);
+                if (existingIdx >= 0)
+                {
+                    loop.MoveKey(existingIdx, new Keyframe(_clipLength, valZero));
+                    newIdx = existingIdx;
                 }
             }
+
+            int startIdx = FindKeyIndex(loop, 0f, tol);
+            if (startIdx >= 0 && newIdx >= 0)
+            {
+                AnimationUtility.SetKeyLeftTangentMode(loop,  newIdx, AnimationUtility.GetKeyLeftTangentMode(loop,  startIdx));
+                AnimationUtility.SetKeyRightTangentMode(loop, newIdx, AnimationUtility.GetKeyRightTangentMode(loop, startIdx));
+            }
+            return loop;
+        }
+
+        // ─── Keyframe queries（すべてキャッシュ経由） ────────────────────────
+
+        public bool HasKeyframeAt(string shapeName, float time)
+        {
+            if (!TryGetTrack(shapeName, out var track)) return false;
+            return FindTimeIndex(track.KeyTimes, time, FrameTolerance) >= 0;
+        }
+
+        public bool HasAnyKeyframeAt(float time)
+        {
+            return FindTimeIndex(AllKeyTimes, time, FrameTolerance) >= 0;
+        }
+
+        /// <summary>現在時刻のカーブ値（トラックがなければ 0）。</summary>
+        public float GetValueAt(string shapeName, float time)
+        {
+            return TryGetTrack(shapeName, out var track) ? track.Curve.Evaluate(time) : 0f;
+        }
+
+        public float[] GetKeyTimes(string shapeName)
+        {
+            return TryGetTrack(shapeName, out var track) ? track.KeyTimes : Array.Empty<float>();
+        }
+
+        /// <summary>現在時刻より前の直近キー時刻。なければ負値。</summary>
+        public float PrevKeyTime(float time)
+        {
+            var all = AllKeyTimes;
+            float tol = FrameTolerance;
+            float prev = -1f;
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i] < time - tol) prev = all[i];
+                else break;
+            }
+            return prev;
+        }
+
+        /// <summary>現在時刻より後の直近キー時刻。なければ負値。</summary>
+        public float NextKeyTime(float time)
+        {
+            var all = AllKeyTimes;
+            float tol = FrameTolerance;
+            for (int i = 0; i < all.Length; i++)
+                if (all[i] > time + tol) return all[i];
+            return -1f;
+        }
+
+        /// <summary>指定シェイプ・時刻のキーの補間タイプ。見つからない場合は Ease。</summary>
+        public InterpolationType GetKeyInterpolation(string shapeName, float time)
+        {
+            if (!TryGetTrack(shapeName, out var track)) return InterpolationType.Ease;
+            int idx = FindKeyIndex(track.Curve, time, FrameTolerance);
+            if (idx < 0) return InterpolationType.Ease;
+
+            var lm = AnimationUtility.GetKeyLeftTangentMode(track.Curve, idx);
+            if (lm == AnimationUtility.TangentMode.Constant) return InterpolationType.Step;
+            if (lm == AnimationUtility.TangentMode.Linear)   return InterpolationType.Linear;
             return InterpolationType.Ease;
+        }
+
+        // ─── Static helpers ──────────────────────────────────────────────────
+
+        public static int FindKeyIndex(AnimationCurve curve, float time, float tol)
+        {
+            var keys = curve.keys;
+            for (int i = 0; i < keys.Length; i++)
+                if (Mathf.Abs(keys[i].time - time) <= tol) return i;
+            return -1;
+        }
+
+        private static int FindTimeIndex(float[] sortedTimes, float time, float tol)
+        {
+            for (int i = 0; i < sortedTimes.Length; i++)
+            {
+                if (Mathf.Abs(sortedTimes[i] - time) <= tol) return i;
+                if (sortedTimes[i] > time + tol) return -1;
+            }
+            return -1;
         }
     }
 }

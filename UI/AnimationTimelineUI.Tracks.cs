@@ -1,7 +1,6 @@
 using UnityEditor;
 using UnityEngine;
 using DenEmo.Models;
-using DenEmo.Core;
 
 namespace DenEmo.UI
 {
@@ -9,34 +8,34 @@ namespace DenEmo.UI
     {
         // ─── Keyframe tracks ──────────────────────────────────────────────────
 
-        private void DrawKeyframeTracks(
-            AnimationClipModel clipModel, AnimationPreviewController preview,
-            ShapeKeyModel shapeModel, string smrPath, InterpolationType currentInterp, EditorWindow window)
+        private void DrawKeyframeTracks(AnimationModeUI mode, ShapeKeyModel shapeModel, EditorWindow window)
         {
-            var shapes = clipModel.GetShapeNamesWithKeys(smrPath);
-            if (shapes.Count == 0)
+            var tracks = mode.ClipModel.Tracks;
+            if (tracks.Count == 0)
             {
-                GUILayout.Label(
-                    DenEmoLoc.EnglishMode
-                        ? "No keyframes yet. Use 🔴 Auto-Key or the ◆ button to add keys."
-                        : "キーフレームがまだありません。🔴 Auto-Key または ◆ ボタンでキーを追加してください。",
-                    DenEmoTheme.CaptionStyle);
+                GUILayout.Label(DenEmoLoc.T("ui.timeline.noKeys"), DenEmoTheme.CaptionStyle);
                 return;
             }
 
-            float rowsHeight = Mathf.Min(shapes.Count * (TRACK_ROW_HEIGHT + 1), MAX_TRACKS_HEIGHT);
+            float rowsHeight = Mathf.Min(tracks.Count * (TRACK_ROW_HEIGHT + 1), MAX_TRACKS_HEIGHT);
             _tracksScroll = EditorGUILayout.BeginScrollView(_tracksScroll, GUILayout.Height(rowsHeight));
 
-            foreach (string shapeName in shapes)
-                DrawTrackRow(shapeName, clipModel, preview, shapeModel, smrPath, currentInterp, window);
+            // DeleteTrack するとキャッシュが再構築されリストが変わるため、削除されたら即座に抜ける
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                if (!DrawTrackRow(tracks[i], mode, shapeModel, window))
+                    break;
+            }
 
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawTrackRow(
-            string shapeName, AnimationClipModel clipModel, AnimationPreviewController preview,
-            ShapeKeyModel shapeModel, string smrPath, InterpolationType currentInterp, EditorWindow window)
+        /// <summary>1 トラック分の行を描画する。トラックが削除された場合は false を返す。</summary>
+        private bool DrawTrackRow(AnimationTrack track, AnimationModeUI mode, ShapeKeyModel shapeModel, EditorWindow window)
         {
+            var m = mode.ClipModel;
+            string shapeName = track.ShapeName;
+
             Rect rowRect = GUILayoutUtility.GetRect(0, TRACK_ROW_HEIGHT, GUILayout.ExpandWidth(true));
             if (Event.current.type == EventType.Repaint)
             {
@@ -45,30 +44,122 @@ namespace DenEmo.UI
                 EditorGUI.DrawRect(new Rect(rowRect.x + _trackLabelWidth, cy, rowRect.width - _trackLabelWidth, 1), DenEmoTheme.Outline);
             }
 
-            // Layout: [label][border(4px)][◆(25px)][gap(4px)][✕(20px)][gap(4px)] → last 53px reserved for buttons+border
-            const float BORDER_W       = 4f;
-            const float ADD_BTN_W      = 25f;
-            const float DEL_BTN_W      = 20f;
-            const float BTN_GAP        = 4f;
-            // Total right-of-label: BORDER_W + ADD_BTN_W + BTN_GAP + DEL_BTN_W + BTN_GAP = 57
+            // レイアウト: [label][border(4px)][◆(25px)][gap(4px)][✕(20px)][gap(4px)]
+            const float BORDER_W  = 4f;
+            const float ADD_BTN_W = 25f;
+            const float DEL_BTN_W = 20f;
+            const float BTN_GAP   = 4f;
             const float LABEL_RIGHT_RESERVE = BORDER_W + ADD_BTN_W + BTN_GAP + DEL_BTN_W + BTN_GAP;
 
-            float labelMaxW  = _trackLabelWidth - LABEL_RIGHT_RESERVE - 8f;
-            float borderX    = rowRect.x + _trackLabelWidth - LABEL_RIGHT_RESERVE;
-            float addBtnX    = borderX + BORDER_W;
-            float delBtnX    = addBtnX + ADD_BTN_W + BTN_GAP;
-            float trackW     = _cachedTrackW > 0f ? _cachedTrackW : rowRect.width - _trackLabelWidth - RIGHT_PADDING;
-            float trackX     = rowRect.x + _trackLabelWidth;
+            float labelMaxW = _trackLabelWidth - LABEL_RIGHT_RESERVE - 8f;
+            float borderX   = rowRect.x + _trackLabelWidth - LABEL_RIGHT_RESERVE;
+            float addBtnX   = borderX + BORDER_W;
+            float delBtnX   = addBtnX + ADD_BTN_W + BTN_GAP;
+            float trackW    = _cachedTrackW > 0f ? _cachedTrackW : rowRect.width - _trackLabelWidth - RIGHT_PADDING;
+            float trackX    = rowRect.x + _trackLabelWidth;
 
             GUI.Label(
                 new Rect(rowRect.x + 8, rowRect.y + 4, labelMaxW, rowRect.height - 8),
                 shapeName, DenEmoTheme.CaptionStyle);
 
-            // ── Splitter border between label and buttons ──────────────────────
-            Rect borderRect = new Rect(borderX, rowRect.y, BORDER_W, rowRect.height);
+            DrawLabelWidthSplitter(borderX, BORDER_W, rowRect, window);
+
+            // ── ◆ キー追加・更新ボタン ─────────────────────────────────────────
+            if (GUI.Button(
+                new Rect(addBtnX, rowRect.y + 2, ADD_BTN_W, 20),
+                new GUIContent("◆", DenEmoLoc.T("ui.timeline.addKey.tip")),
+                DenEmoTheme.MiniButtonStyle))
+            {
+                var smr = shapeModel?.TargetSkinnedMesh;
+                if (smr != null && smr.sharedMesh != null)
+                {
+                    int index = smr.sharedMesh.GetBlendShapeIndex(shapeName);
+                    if (index >= 0)
+                    {
+                        mode.Editor.RecordKey(shapeName, m.CurrentTime, smr.GetBlendShapeWeight(index), mode.CurrentInterp);
+                        mode.Preview.SampleAt(m.CurrentTime);
+                        window.Repaint();
+                    }
+                }
+            }
+
+            // ── ✕ トラック削除ボタン ───────────────────────────────────────────
+            if (GUI.Button(
+                new Rect(delBtnX, rowRect.y + 2, DEL_BTN_W, 20),
+                new GUIContent("✕", DenEmoLoc.T("ui.timeline.deleteTrack.tip")),
+                DenEmoTheme.MiniButtonStyle))
+            {
+                if (EditorUtility.DisplayDialog(
+                    DenEmoLoc.T("dlg.timeline.deleteTrack.title"),
+                    DenEmoLoc.Tf("dlg.timeline.deleteTrack.msg", shapeName),
+                    DenEmoLoc.T("dlg.yes"),
+                    DenEmoLoc.T("dlg.no")))
+                {
+                    mode.Editor.DeleteTrack(shapeName);
+                    window.Repaint();
+                    return false; // トラックが消えたのでこの行の残り描画は行わない
+                }
+            }
+
+            // ── 現在時刻ライン ─────────────────────────────────────────────────
             if (Event.current.type == EventType.Repaint)
             {
-                float bCx = borderX + BORDER_W * 0.5f;
+                float sx = TimeToPixel(m.CurrentTime, m.ClipLength, trackX, trackW);
+                EditorGUI.DrawRect(new Rect(sx - 1, rowRect.y, 2, rowRect.height), new Color(1f, 1f, 1f, 0.4f));
+            }
+
+            // ── キーフレームダイヤ ─────────────────────────────────────────────
+            float tol = m.FrameTolerance;
+            foreach (float kTime in track.KeyTimes)
+            {
+                float kx = TimeToPixel(kTime, m.ClipLength, trackX, trackW);
+                if (kx < trackX - DIAMOND_SIZE || kx > trackX + trackW + DIAMOND_SIZE) continue;
+                float ky = rowRect.y + rowRect.height * 0.5f;
+                Rect hitR = new Rect(kx - DIAMOND_SIZE - 2, ky - DIAMOND_SIZE - 2, (DIAMOND_SIZE + 2) * 2, (DIAMOND_SIZE + 2) * 2);
+
+                bool isCurrent = Mathf.Abs(kTime - m.CurrentTime) <= tol;
+
+                if (Event.current.type == EventType.Repaint)
+                {
+                    GUI.Label(new Rect(kx - 8, ky - 8, 16, 16), "◆",
+                        isCurrent ? DenEmoTheme.KeyDiamondActiveStyle : DenEmoTheme.KeyDiamondStyle);
+
+                    if (hitR.Contains(Event.current.mousePosition))
+                        DrawKeyHoverTip(track, kTime, kx, ky, trackX, trackW, m);
+                }
+
+                EditorGUIUtility.AddCursorRect(hitR, MouseCursor.SlideArrow);
+                HandleKeyframeDrag(hitR, kTime, shapeName, mode, window, trackX, trackW, seekOnDown: true);
+
+                if (Event.current.type == EventType.ContextClick && hitR.Contains(Event.current.mousePosition))
+                {
+                    ShowKeyContextMenu(mode, shapeName, kTime, window);
+                    Event.current.Use();
+                }
+            }
+
+            // ── トラック空白部の右クリック → ペーストメニュー ─────────────────
+            Rect trackClickArea = new Rect(trackX, rowRect.y, trackW, rowRect.height);
+            if (Event.current.type == EventType.ContextClick && trackClickArea.Contains(Event.current.mousePosition))
+            {
+                ShowTrackContextMenu(mode, window);
+                Event.current.Use();
+            }
+
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(new Rect(rowRect.x, rowRect.yMax - 1, rowRect.width, 1), DenEmoTheme.Surface2);
+
+            return true;
+        }
+
+        // ─── Label width splitter ─────────────────────────────────────────────
+
+        private void DrawLabelWidthSplitter(float borderX, float borderW, Rect rowRect, EditorWindow window)
+        {
+            Rect borderRect = new Rect(borderX, rowRect.y, borderW, rowRect.height);
+            if (Event.current.type == EventType.Repaint)
+            {
+                float bCx = borderX + borderW * 0.5f;
                 EditorGUI.DrawRect(new Rect(bCx - 0.5f, rowRect.y + 2, 1, rowRect.height - 4), DenEmoTheme.Outline);
             }
             EditorGUIUtility.AddCursorRect(borderRect, MouseCursor.ResizeHorizontal);
@@ -81,8 +172,7 @@ namespace DenEmo.UI
             }
             else if (ev.type == EventType.MouseDrag && _isDraggingLabelWidth)
             {
-                _trackLabelWidth += ev.delta.x;
-                _trackLabelWidth = Mathf.Clamp(_trackLabelWidth, 80f, rowRect.width * 0.8f);
+                _trackLabelWidth = Mathf.Clamp(_trackLabelWidth + ev.delta.x, 80f, rowRect.width * 0.8f);
                 window.Repaint();
                 ev.Use();
             }
@@ -91,182 +181,84 @@ namespace DenEmo.UI
                 _isDraggingLabelWidth = false;
                 ev.Use();
             }
+        }
 
-            // ── ◆ Add key button ───────────────────────────────────────────────
-            if (GUI.Button(
-                new Rect(addBtnX, rowRect.y + 2, ADD_BTN_W, 20),
-                new GUIContent("◆", DenEmoLoc.EnglishMode ? "Add / Update Key" : "キーの追加・更新"),
-                DenEmoTheme.MiniButtonStyle))
-            {
-                var smr = shapeModel?.TargetSkinnedMesh;
-                if (smr != null && smr.sharedMesh != null)
-                {
-                    int index = smr.sharedMesh.GetBlendShapeIndex(shapeName);
-                    if (index >= 0)
-                    {
-                        float val = smr.GetBlendShapeWeight(index);
-                        preview.RecordKeyframe(shapeName, smrPath, clipModel.CurrentTime, val, currentInterp);
-                        preview.SampleAt(clipModel.CurrentTime);
-                        window.Repaint();
-                    }
-                }
-            }
+        // ─── Key hover tooltip ────────────────────────────────────────────────
 
-            // ── ✕ Delete track button ──────────────────────────────────────────
-            if (GUI.Button(
-                new Rect(delBtnX, rowRect.y + 2, DEL_BTN_W, 20),
-                new GUIContent("✕", DenEmoLoc.EnglishMode ? "Delete this track" : "このトラックを削除"),
-                DenEmoTheme.MiniButtonStyle))
+        private void DrawKeyHoverTip(AnimationTrack track, float kTime, float kx, float ky, float trackX, float trackW, AnimationClipModel m)
+        {
+            int    frameNum = m.TimeToFrame(kTime);
+            float  val      = track.Curve.Evaluate(kTime);
+            string tipText  = $"F:{frameNum}  V:{val:F1}";
+
+            Vector2 size   = DenEmoTheme.HoverTipStyle.CalcSize(new GUIContent(tipText));
+            float   labelX = (kx + 10 + size.x < trackX + trackW) ? kx + 10 : kx - 10 - size.x;
+            float   labelY = ky - size.y * 0.5f;
+
+            EditorGUI.DrawRect(new Rect(labelX - 3, labelY - 2, size.x + 6, size.y + 4), new Color(0.1f, 0.1f, 0.1f, 0.85f));
+            GUI.Label(new Rect(labelX, labelY, size.x, size.y), tipText, DenEmoTheme.HoverTipStyle);
+        }
+
+        // ─── Context menus ────────────────────────────────────────────────────
+
+        private void ShowKeyContextMenu(AnimationModeUI mode, string shapeName, float kTime, EditorWindow window)
+        {
+            var m = mode.ClipModel;
+            var menu = new GenericMenu();
+
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.delete")), false, () =>
             {
-                if (EditorUtility.DisplayDialog(
-                    DenEmoLoc.EnglishMode ? "Delete Track" : "トラックの削除",
-                    DenEmoLoc.EnglishMode ? $"Delete all keyframes for '{shapeName}'?" : $"'{shapeName}'のすべてのキーフレームを削除しますか？",
-                    DenEmoLoc.EnglishMode ? "Yes" : "はい",
-                    DenEmoLoc.EnglishMode ? "No" : "いいえ"))
+                mode.Editor.DeleteKey(shapeName, kTime);
+                mode.Preview.SampleAt(m.CurrentTime);
+                window.Repaint();
+            });
+
+            menu.AddSeparator("");
+
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.copyFrame")), false, () =>
+            {
+                CopyFrame(mode, kTime);
+            });
+
+            if (HasClipboardData)
+                menu.AddItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.paste")), false, () =>
                 {
-                    preview.DeleteAllKeyframesForShape(shapeName, smrPath);
+                    PasteAtCurrentTime(mode, window);
+                });
+            else
+                menu.AddDisabledItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.paste")));
+
+            menu.AddSeparator("");
+
+            void AddInterpItem(string label, InterpolationType interp)
+            {
+                bool isCurrent = m.GetKeyInterpolation(shapeName, kTime) == interp;
+                menu.AddItem(new GUIContent(label), isCurrent, () =>
+                {
+                    mode.Editor.SetKeyInterpolation(shapeName, kTime, interp);
+                    mode.Preview.SampleAt(m.CurrentTime);
                     window.Repaint();
-                }
+                });
             }
 
-            if (Event.current.type == EventType.Repaint)
-            {
-                float sx = TimeToPixel(clipModel.CurrentTime, clipModel.ClipLength, trackX, trackW);
-                EditorGUI.DrawRect(
-                    new Rect(sx - 1, rowRect.y, 2, rowRect.height),
-                    new Color(1f, 1f, 1f, 0.4f));
-            }
+            AddInterpItem("Step",   InterpolationType.Step);
+            AddInterpItem("Linear", InterpolationType.Linear);
+            AddInterpItem("Ease",   InterpolationType.Ease);
 
-            float[] keyTimes = clipModel.GetKeyTimesForShape(shapeName, smrPath);
-            EnsureKfLabelStyle();
-            foreach (float kTime in keyTimes)
-            {
-                float kx = TimeToPixel(kTime, clipModel.ClipLength, trackX, trackW);
-                if (kx < trackX - DIAMOND_SIZE || kx > trackX + trackW + DIAMOND_SIZE) continue;
-                float ky = rowRect.y + rowRect.height * 0.5f;
-                Rect hitR = new Rect(kx - DIAMOND_SIZE - 2, ky - DIAMOND_SIZE - 2, (DIAMOND_SIZE + 2) * 2, (DIAMOND_SIZE + 2) * 2);
+            menu.ShowAsContext();
+        }
 
-                bool isCurrent = Mathf.Abs(kTime - clipModel.CurrentTime) <= (clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f);
-
-                if (Event.current.type == EventType.Repaint)
+        private void ShowTrackContextMenu(AnimationModeUI mode, EditorWindow window)
+        {
+            var menu = new GenericMenu();
+            if (HasClipboardData)
+                menu.AddItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.paste")), false, () =>
                 {
-                    var style = new GUIStyle(_kfLabelStyle)
-                    {
-                        alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = isCurrent ? Color.white : DenEmoTheme.SemanticInfo },
-                        fontSize = 10
-                    };
-                    GUI.Label(new Rect(kx - 8, ky - 8, 16, 16), "◆", style);
-
-                    bool isHovered = hitR.Contains(Event.current.mousePosition);
-                    if (isHovered)
-                    {
-                        EnsureHoverLabelStyle();
-                        int   frameNum = Mathf.RoundToInt(kTime * clipModel.FPS);
-                        float val      = clipModel.GetShapeKeyValue(shapeName, kTime);
-                        string tipText = $"F:{frameNum}  V:{val:F1}";
-
-                        Vector2 size   = _hoverLabelStyle.CalcSize(new GUIContent(tipText));
-                        float   labelX = (kx + 10 + size.x < trackX + trackW)
-                            ? kx + 10
-                            : kx - 10 - size.x;
-                        float labelY = ky - size.y * 0.5f;
-
-                        Rect bgRect = new Rect(labelX - 3, labelY - 2, size.x + 6, size.y + 4);
-                        EditorGUI.DrawRect(bgRect, new Color(0.1f, 0.1f, 0.1f, 0.85f));
-                        GUI.Label(new Rect(labelX, labelY, size.x, size.y), tipText, _hoverLabelStyle);
-                    }
-                }
-
-                EditorGUIUtility.AddCursorRect(hitR, MouseCursor.SlideArrow);
-                HandleKeyframeDrag(hitR, kTime, shapeName, clipModel, preview, smrPath, window, trackX, trackW, true);
-
-                if (Event.current.type == EventType.ContextClick && hitR.Contains(Event.current.mousePosition))
-                {
-                    string sn = shapeName;
-                    float kt = kTime;
-                    var menu = new GenericMenu();
-                    menu.AddItem(
-                        new GUIContent(DenEmoLoc.EnglishMode ? "Delete" : "削除"),
-                        false,
-                        () => { preview.DeleteKeyframe(sn, smrPath, kt); window.Repaint(); });
-                    menu.AddSeparator("");
-                    menu.AddItem(
-                        new GUIContent(DenEmoLoc.EnglishMode ? "Copy frame" : "フレームをコピー"),
-                        false,
-                        () =>
-                        {
-                            _keyClipboard.Clear();
-                            float tol2 = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
-                            foreach (string sh in clipModel.GetShapeNamesWithKeys(smrPath))
-                            {
-                                foreach (float t2 in clipModel.GetKeyTimesForShape(sh, smrPath))
-                                {
-                                    if (Mathf.Abs(t2 - kt) > tol2) continue;
-                                    _keyClipboard.Add(new KeyClipboardEntry
-                                    {
-                                        ShapeName    = sh,
-                                        RelativeTime = 0f,
-                                        Value        = clipModel.GetShapeKeyValue(sh, t2),
-                                        Interp       = clipModel.GetKeyInterpolationType(sh, t2, smrPath),
-                                    });
-                                }
-                            }
-                        });
-                    if (_hasClipboardData)
-                        menu.AddItem(
-                            new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"),
-                            false,
-                            () =>
-                            {
-                                foreach (var entry in _keyClipboard)
-                                {
-                                    float pt = Mathf.Clamp(clipModel.CurrentTime + entry.RelativeTime, 0f, clipModel.ClipLength);
-                                    pt = Mathf.Round(pt * clipModel.FPS) / clipModel.FPS;
-                                    preview.RecordKeyframe(entry.ShapeName, smrPath, pt, entry.Value, entry.Interp);
-                                }
-                                preview.SampleAt(clipModel.CurrentTime);
-                                window.Repaint();
-                            });
-                    else
-                        menu.AddDisabledItem(new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"));
-                    menu.AddSeparator("");
-                    menu.AddItem(new GUIContent("Step"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Step); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
-                    menu.AddItem(new GUIContent("Linear"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Linear); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
-                    menu.AddItem(new GUIContent("Ease"), false, () => { preview.ChangeInterpolation(sn, smrPath, kt, InterpolationType.Ease); preview.SampleAt(clipModel.CurrentTime); window.Repaint(); });
-                    menu.ShowAsContext();
-                    Event.current.Use();
-                }
-            }
-
-            // Right-click on empty track area (no keyframe consumed the event) → paste menu
-            Rect trackClickArea = new Rect(trackX, rowRect.y, trackW, rowRect.height);
-            if (Event.current.type == EventType.ContextClick && trackClickArea.Contains(Event.current.mousePosition))
-            {
-                var menu = new GenericMenu();
-                if (_hasClipboardData)
-                    menu.AddItem(
-                        new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"),
-                        false,
-                        () =>
-                        {
-                            foreach (var entry in _keyClipboard)
-                            {
-                                float pt = Mathf.Clamp(clipModel.CurrentTime + entry.RelativeTime, 0f, clipModel.ClipLength);
-                                pt = Mathf.Round(pt * clipModel.FPS) / clipModel.FPS;
-                                preview.RecordKeyframe(entry.ShapeName, smrPath, pt, entry.Value, entry.Interp);
-                            }
-                            preview.SampleAt(clipModel.CurrentTime);
-                            window.Repaint();
-                        });
-                else
-                    menu.AddDisabledItem(new GUIContent(DenEmoLoc.EnglishMode ? "Paste at current time" : "現在時刻にペースト"));
-                menu.ShowAsContext();
-                Event.current.Use();
-            }
-
-            if (Event.current.type == EventType.Repaint)
-                EditorGUI.DrawRect(new Rect(rowRect.x, rowRect.yMax - 1, rowRect.width, 1), DenEmoTheme.Surface2);
+                    PasteAtCurrentTime(mode, window);
+                });
+            else
+                menu.AddDisabledItem(new GUIContent(DenEmoLoc.T("ui.timeline.menu.paste")));
+            menu.ShowAsContext();
         }
     }
 }

@@ -1,155 +1,81 @@
 using UnityEditor;
 using UnityEngine;
 using DenEmo.Models;
-using DenEmo.Core;
 
 namespace DenEmo.UI
 {
     public partial class AnimationTimelineUI
     {
         // ─── Keyboard shortcuts ───────────────────────────────────────────────
+        // Space: 再生/停止  ←/→: 1フレーム移動  ,/.: 前後のキーへ
+        // Delete/Backspace: 現在フレームの全キー削除  Ctrl+C/V: フレームのコピー/ペースト
 
-        private void HandleKeyboardInput(
-            AnimationClipModel clipModel,
-            AnimationPreviewController preview,
-            string smrPath,
-            ref bool isPlaying,
-            ref double playStartRealTime,
-            ref float playStartClipTime,
-            EditorWindow window)
+        private void HandleKeyboardInput(AnimationModeUI mode, EditorWindow window)
         {
             Event e = Event.current;
             if (e.type != EventType.KeyDown) return;
             if (!string.IsNullOrEmpty(GUI.GetNameOfFocusedControl())) return;
 
-            float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+            var m = mode.ClipModel;
 
             switch (e.keyCode)
             {
                 case KeyCode.Space:
-                    isPlaying = !isPlaying;
-                    if (isPlaying)
-                    {
-                        playStartRealTime = EditorApplication.timeSinceStartup;
-                        playStartClipTime = clipModel.CurrentTime;
-                    }
+                    TogglePlay(mode, window);
                     e.Use();
-                    window.Repaint();
                     break;
 
                 case KeyCode.LeftArrow:
-                    isPlaying = false;
-                    clipModel.CurrentTime = Mathf.Max(0f, clipModel.CurrentTime - 1f / clipModel.FPS);
-                    preview.SampleAt(clipModel.CurrentTime);
+                    StepFrame(mode, -1, window);
                     e.Use();
-                    window.Repaint();
                     break;
 
                 case KeyCode.RightArrow:
-                    isPlaying = false;
-                    clipModel.CurrentTime = Mathf.Min(clipModel.ClipLength, clipModel.CurrentTime + 1f / clipModel.FPS);
-                    preview.SampleAt(clipModel.CurrentTime);
+                    StepFrame(mode, +1, window);
                     e.Use();
-                    window.Repaint();
                     break;
 
                 case KeyCode.Comma:
-                {
-                    isPlaying = false;
-                    float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
-                    float prev = -1f;
-                    foreach (float kt in allKeys)
-                        if (kt < clipModel.CurrentTime - tol) prev = kt;
-                    if (prev >= 0f) { clipModel.CurrentTime = prev; preview.SampleAt(prev); }
+                    GoToPrevKey(mode, window);
                     e.Use();
-                    window.Repaint();
                     break;
-                }
 
                 case KeyCode.Period:
-                {
-                    isPlaying = false;
-                    float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
-                    float next = -1f;
-                    foreach (float kt in allKeys)
-                        if (kt > clipModel.CurrentTime + tol) { next = kt; break; }
-                    if (next >= 0f) { clipModel.CurrentTime = next; preview.SampleAt(next); }
+                    GoToNextKey(mode, window);
                     e.Use();
-                    window.Repaint();
                     break;
-                }
 
                 case KeyCode.Delete:
                 case KeyCode.Backspace:
-                {
-                    float[] keysAtTime = clipModel.GetAllKeyTimes(smrPath);
-                    float match = -1f;
-                    foreach (float kt in keysAtTime)
-                        if (Mathf.Abs(kt - clipModel.CurrentTime) <= tol) { match = kt; break; }
-                    if (match >= 0f)
+                    if (m.HasAnyKeyframeAt(m.CurrentTime))
                     {
-                        preview.DeleteAllKeyframesAtTime(smrPath, match);
-                        preview.SampleAt(clipModel.CurrentTime);
+                        mode.Editor.DeleteKeysAtTime(m.CurrentTime);
+                        mode.Preview.SampleAt(m.CurrentTime);
                         e.Use();
                         window.Repaint();
                     }
                     break;
-                }
 
                 case KeyCode.C when e.control:
-                {
-                    _keyClipboard.Clear();
-                    var shapes = clipModel.GetShapeNamesWithKeys(smrPath);
-                    foreach (string shapeName in shapes)
-                    {
-                        float[] times = clipModel.GetKeyTimesForShape(shapeName, smrPath);
-                        foreach (float kt in times)
-                        {
-                            if (Mathf.Abs(kt - clipModel.CurrentTime) > tol) continue;
-                            _keyClipboard.Add(new KeyClipboardEntry
-                            {
-                                ShapeName    = shapeName,
-                                RelativeTime = 0f,
-                                Value        = clipModel.GetShapeKeyValue(shapeName, kt),
-                                Interp       = clipModel.GetKeyInterpolationType(shapeName, kt, smrPath),
-                            });
-                        }
-                    }
+                    CopyFrame(mode, m.CurrentTime);
                     e.Use();
                     break;
-                }
 
                 case KeyCode.V when e.control:
-                {
-                    if (!_hasClipboardData) break;
-                    foreach (var entry in _keyClipboard)
-                    {
-                        float pasteTime = Mathf.Clamp(
-                            clipModel.CurrentTime + entry.RelativeTime,
-                            0f, clipModel.ClipLength);
-                        pasteTime = Mathf.Round(pasteTime * clipModel.FPS) / clipModel.FPS;
-                        preview.RecordKeyframe(entry.ShapeName, smrPath, pasteTime, entry.Value, entry.Interp);
-                    }
-                    preview.SampleAt(clipModel.CurrentTime);
+                    PasteAtCurrentTime(mode, window);
                     e.Use();
-                    window.Repaint();
                     break;
-                }
             }
         }
 
         // ─── Playback controls ────────────────────────────────────────────────
 
-        private void DrawPlaybackControls(
-            AnimationClipModel clipModel, AnimationPreviewController preview, string smrPath,
-            ref bool isRecording, ref InterpolationType currentInterp, ref float playbackSpeed,
-            EditorWindow window,
-            ref bool isPlaying, ref double playStartRealTime, ref float playStartClipTime, System.Action startPreview)
+        private void DrawPlaybackControls(AnimationModeUI mode, ShapeKeyModel shapeModel, EditorWindow window)
         {
+            var m = mode.ClipModel;
             GUILayout.Space(4);
-            EnsureTimelineStyles();
 
-            // ─── Row 1: Global Settings ───
+            // ── Row 1: Global settings (FPS / Length / All-keys interpolation) ──
             EditorGUILayout.BeginHorizontal(DenEmoTheme.CardOuterStyle);
             GUILayout.Space(8);
             EditorGUILayout.BeginVertical();
@@ -158,38 +84,33 @@ namespace DenEmo.UI
 
             GUILayout.FlexibleSpace();
 
-            GUILayout.Label("FPS:", _timelineLabelStyle, GUILayout.Width(28), GUILayout.Height(20));
-            float newFps = EditorGUILayout.FloatField(clipModel.FPS, GUILayout.Width(40), GUILayout.Height(20));
-            if (!Mathf.Approximately(newFps, clipModel.FPS) && newFps > 0f)
-            {
-                Undo.RecordObject(clipModel.Clip, "Change FPS");
-                clipModel.FPS = newFps;
-                clipModel.Clip.frameRate = newFps;
-                EditorUtility.SetDirty(clipModel.Clip);
-            }
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.fps"), _timelineLabelStyle, GUILayout.Width(28), GUILayout.Height(20));
+            float newFps = EditorGUILayout.FloatField(m.FPS, GUILayout.Width(40), GUILayout.Height(20));
+            if (!Mathf.Approximately(newFps, m.FPS) && newFps > 0f)
+                mode.Editor.SetFrameRate(newFps);
 
             GUILayout.Space(16);
 
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "Len (s):" : "長さ (秒):", _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(20));
-            float newLen = EditorGUILayout.FloatField(clipModel.ClipLength, GUILayout.Width(40), GUILayout.Height(20));
-            if (!Mathf.Approximately(newLen, clipModel.ClipLength) && newLen > 0f)
-                clipModel.ClipLength = newLen;
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.length"), _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(20));
+            float newLen = EditorGUILayout.FloatField(m.ClipLength, GUILayout.Width(40), GUILayout.Height(20));
+            if (!Mathf.Approximately(newLen, m.ClipLength) && newLen > 0f)
+                m.ClipLength = newLen;
 
             GUILayout.Space(16);
 
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "All Keys Interp:" : "全キー一括補完:", _timelineLabelStyle, GUILayout.Width(85), GUILayout.Height(20));
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.allInterp"), _timelineLabelStyle, GUILayout.Width(85), GUILayout.Height(20));
             InterpolationType newInterp = (InterpolationType)GUILayout.Toolbar(
-                (int)currentInterp,
+                (int)mode.CurrentInterp,
                 new[] { "Step", "Linear", "Ease" },
                 DenEmoTheme.MiniButtonStyle,
                 GUILayout.Height(20),
                 GUILayout.ExpandWidth(false));
 
-            if (newInterp != currentInterp)
+            if (newInterp != mode.CurrentInterp)
             {
-                currentInterp = newInterp;
-                preview.ChangeAllKeyframesInterpolation(smrPath, currentInterp);
-                preview.SampleAt(clipModel.CurrentTime);
+                mode.CurrentInterp = newInterp;
+                mode.Editor.SetAllKeysInterpolation(newInterp);
+                mode.Preview.SampleAt(m.CurrentTime);
                 window.Repaint();
             }
 
@@ -203,116 +124,24 @@ namespace DenEmo.UI
 
             GUILayout.Space(12);
 
-            // ─── Row 2 (& 3 if detached): Transport and Settings ───
+            // ── Row 2 (& 3): Transport / current state ───────────────────────
+            bool isSeparate = window is DenEmoTimelineWindow;
+
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
 
-            // Playback buttons in a cohesive toolbar container
             EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle, GUILayout.ExpandWidth(false));
-
-            if (GUILayout.Button(
-                new GUIContent("|<", DenEmoLoc.EnglishMode ? "Go to start frame" : "先頭フレームへ移動"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                clipModel.CurrentTime = 0f;
-                preview.SampleAt(0f);
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(
-                new GUIContent("|◆", DenEmoLoc.EnglishMode ? "Go to previous keyframe" : "前のキーフレームへ移動"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
-                float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
-                float prev = -1f;
-                foreach (float kt in allKeys)
-                    if (kt < clipModel.CurrentTime - tol) prev = kt;
-                if (prev >= 0f) { clipModel.CurrentTime = prev; preview.SampleAt(prev); }
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(
-                new GUIContent("<", DenEmoLoc.EnglishMode ? "Step one frame backward" : "1フレーム戻る"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                clipModel.CurrentTime = Mathf.Max(0f, clipModel.CurrentTime - 1f / clipModel.FPS);
-                preview.SampleAt(clipModel.CurrentTime);
-                window.Repaint();
-            }
-
-            string playLabel = isPlaying ? "■" : "▶";
-            string playTip = isPlaying
-                ? (DenEmoLoc.EnglishMode ? "Stop playback" : "再生停止")
-                : (DenEmoLoc.EnglishMode ? "Start playback" : "再生開始");
-            if (GUILayout.Button(
-                new GUIContent(playLabel, playTip),
-                _playBtnStyle, GUILayout.Width(40), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = !isPlaying;
-                if (isPlaying)
-                {
-                    playStartRealTime = EditorApplication.timeSinceStartup;
-                    playStartClipTime = clipModel.CurrentTime;
-                }
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(
-                new GUIContent(">", DenEmoLoc.EnglishMode ? "Step one frame forward" : "1フレーム進む"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                clipModel.CurrentTime = Mathf.Min(clipModel.ClipLength, clipModel.CurrentTime + 1f / clipModel.FPS);
-                preview.SampleAt(clipModel.CurrentTime);
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(
-                new GUIContent("◆|", DenEmoLoc.EnglishMode ? "Go to next keyframe" : "次のキーフレームへ移動"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                float[] allKeys = clipModel.GetAllKeyTimes(smrPath);
-                float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
-                float next = -1f;
-                foreach (float kt in allKeys)
-                    if (kt > clipModel.CurrentTime + tol) { next = kt; break; }
-                if (next >= 0f) { clipModel.CurrentTime = next; preview.SampleAt(next); }
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(
-                new GUIContent(">|", DenEmoLoc.EnglishMode ? "Go to end frame" : "末尾フレームへ移動"),
-                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22)))
-            {
-                GUI.FocusControl(null);
-                isPlaying = false;
-                clipModel.CurrentTime = clipModel.ClipLength;
-                preview.SampleAt(clipModel.ClipLength);
-                window.Repaint();
-            }
-
+            DrawTransportButtons(mode, window);
             EditorGUILayout.EndHorizontal();
 
-            bool isSeparate = window.GetType().Name == "DenEmoTimelineWindow";
             if (!isSeparate)
             {
+                // メインウィンドウでは 2 行に分けて表示する
                 GUILayout.FlexibleSpace();
                 EditorGUILayout.EndHorizontal();
 
                 GUILayout.Space(8);
 
-                // ─── Row 3: Current State & Options ───
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.FlexibleSpace();
             }
@@ -322,80 +151,103 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle, GUILayout.ExpandWidth(false));
-
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "Frame:" : "フレーム:", _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(22));
-            int curFrame = clipModel.CurrentFrame;
-            int newFrame = EditorGUILayout.IntField(curFrame, GUILayout.Width(44), GUILayout.Height(22));
-            if (newFrame != curFrame)
-            {
-                isPlaying = false;
-                float t = Mathf.Clamp(newFrame / clipModel.FPS, 0f, clipModel.ClipLength);
-                clipModel.CurrentTime = t;
-                preview.SampleAt(t);
-                window.Repaint();
-            }
-
-            GUILayout.Space(16);
-
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "Speed:" : "速度:", _timelineLabelStyle, GUILayout.Width(32), GUILayout.Height(22));
-            float newSpeed = EditorGUILayout.FloatField(playbackSpeed, GUILayout.Width(40), GUILayout.Height(22));
-            if (!Mathf.Approximately(newSpeed, playbackSpeed))
-                playbackSpeed = Mathf.Clamp(newSpeed, 0.1f, 4f);
-
-            GUILayout.Space(16);
-
-            bool newSmoothLoop = GUILayout.Toggle(
-                clipModel.SmoothLoopEnabled,
-                new GUIContent(
-                    DenEmoLoc.EnglishMode ? " Loop Support" : " ループ対応",
-                    DenEmoLoc.EnglishMode ? "Aligns the last value to the first to connect smoothly" : "なめらかに繋げるために最後の値を最初に揃える機能"),
-                GUILayout.Height(22));
-            if (newSmoothLoop != clipModel.SmoothLoopEnabled)
-            {
-                clipModel.SmoothLoopEnabled = newSmoothLoop;
-                if (newSmoothLoop)
-                    preview.ApplyLoopKeysToSourceClip(smrPath);
-                else
-                    preview.RemoveLoopKeysFromSourceClip(smrPath);
-                preview.SetCacheDirty();
-                preview.SampleAt(clipModel.CurrentTime);
-                window.Repaint();
-            }
-
-            GUILayout.Space(16);
-
-            var prevColor = GUI.backgroundColor;
-            if (isRecording) GUI.backgroundColor = new Color(1f, 0.4f, 0.4f);
-            
-            Rect recBtnRect = GUILayoutUtility.GetRect(new GUIContent("🔴 REC"), isRecording ? _recOnStyle : _recOffStyle, GUILayout.Height(22), GUILayout.Width(64));
-            
-            if (Event.current.type == EventType.Repaint && !isRecording)
-            {
-                Color borderColor = new Color(0.8f, 0.2f, 0.2f, 0.8f);
-                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.y, recBtnRect.width, 1), borderColor);
-                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.yMax - 1, recBtnRect.width, 1), borderColor);
-                EditorGUI.DrawRect(new Rect(recBtnRect.x, recBtnRect.y, 1, recBtnRect.height), borderColor);
-                EditorGUI.DrawRect(new Rect(recBtnRect.xMax - 1, recBtnRect.y, 1, recBtnRect.height), borderColor);
-            }
-            
-            if (GUI.Button(recBtnRect,
-                new GUIContent("🔴 REC", DenEmoLoc.EnglishMode ? "Toggle recording mode" : "録画モード切替"),
-                isRecording ? _recOnStyle : _recOffStyle))
-            {
-                isRecording = !isRecording;
-                startPreview?.Invoke();
-                window.Repaint();
-            }
-            
-            GUI.backgroundColor = prevColor;
-
+            DrawStateControls(mode, shapeModel, window);
             EditorGUILayout.EndHorizontal();
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
             GUILayout.Space(8);
+        }
 
+        private void DrawTransportButtons(AnimationModeUI mode, EditorWindow window)
+        {
+            var m = mode.ClipModel;
+
+            if (TransportButton("|<", DenEmoLoc.T("ui.timeline.goStart.tip")))
+                SeekTo(mode, 0f, window);
+
+            if (TransportButton("|◆", DenEmoLoc.T("ui.timeline.prevKey.tip")))
+                GoToPrevKey(mode, window);
+
+            if (TransportButton("<", DenEmoLoc.T("ui.timeline.prevFrame.tip")))
+                StepFrame(mode, -1, window);
+
+            bool isPlaying = mode.Playback.IsPlaying;
+            string playLabel = isPlaying ? "■" : "▶";
+            string playTip   = isPlaying ? DenEmoLoc.T("ui.timeline.stop.tip") : DenEmoLoc.T("ui.timeline.play.tip");
+            if (GUILayout.Button(new GUIContent(playLabel, playTip), _playBtnStyle, GUILayout.Width(40), GUILayout.Height(22)))
+            {
+                GUI.FocusControl(null);
+                TogglePlay(mode, window);
+            }
+
+            if (TransportButton(">", DenEmoLoc.T("ui.timeline.nextFrame.tip")))
+                StepFrame(mode, +1, window);
+
+            if (TransportButton("◆|", DenEmoLoc.T("ui.timeline.nextKey.tip")))
+                GoToNextKey(mode, window);
+
+            if (TransportButton(">|", DenEmoLoc.T("ui.timeline.goEnd.tip")))
+                SeekTo(mode, m.ClipLength, window);
+        }
+
+        private static bool TransportButton(string label, string tip)
+        {
+            bool pressed = GUILayout.Button(
+                new GUIContent(label, tip),
+                DenEmoTheme.MiniButtonStyle, GUILayout.Width(28), GUILayout.Height(22));
+            if (pressed) GUI.FocusControl(null);
+            return pressed;
+        }
+
+        private void DrawStateControls(AnimationModeUI mode, ShapeKeyModel shapeModel, EditorWindow window)
+        {
+            var m = mode.ClipModel;
+
+            // ── Frame field ──────────────────────────────────────────────────
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.frame"), _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(22));
+            int curFrame = m.CurrentFrame;
+            int newFrame = EditorGUILayout.IntField(curFrame, GUILayout.Width(44), GUILayout.Height(22));
+            if (newFrame != curFrame)
+                SeekTo(mode, m.FrameToTime(newFrame), window);
+
+            GUILayout.Space(16);
+
+            // ── Playback speed ───────────────────────────────────────────────
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.speed"), _timelineLabelStyle, GUILayout.Width(32), GUILayout.Height(22));
+            float newSpeed = EditorGUILayout.FloatField(mode.Playback.Speed, GUILayout.Width(40), GUILayout.Height(22));
+            if (!Mathf.Approximately(newSpeed, mode.Playback.Speed))
+                mode.Playback.Speed = newSpeed;
+
+            GUILayout.Space(16);
+
+            // ── Smooth loop toggle ───────────────────────────────────────────
+            // ループ補正はプレビューと保存時にのみ反映され、編集中のクリップは変更しない。
+            bool newSmoothLoop = GUILayout.Toggle(
+                m.SmoothLoopEnabled,
+                new GUIContent(DenEmoLoc.T("ui.timeline.loop"), DenEmoLoc.T("ui.timeline.loop.tip")),
+                GUILayout.Height(22));
+            if (newSmoothLoop != m.SmoothLoopEnabled)
+            {
+                m.SmoothLoopEnabled = newSmoothLoop;
+                mode.Preview.SampleAt(m.CurrentTime);
+                window.Repaint();
+            }
+
+            GUILayout.Space(16);
+
+            // ── REC toggle ───────────────────────────────────────────────────
+            if (GUILayout.Button(
+                new GUIContent("🔴 REC", DenEmoLoc.T("ui.timeline.rec.tip")),
+                mode.IsRecording ? _recOnStyle : _recOffStyle,
+                GUILayout.Width(64), GUILayout.Height(22)))
+            {
+                mode.IsRecording = !mode.IsRecording;
+                if (mode.IsRecording && !mode.Preview.IsActive)
+                    mode.StartPreview(shapeModel);
+                window.Repaint();
+            }
         }
     }
 }

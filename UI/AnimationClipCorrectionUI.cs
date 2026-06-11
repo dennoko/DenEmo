@@ -8,15 +8,13 @@ using DenEmo.Core;
 namespace DenEmo.UI
 {
     /// <summary>
-    /// Collapsible section that remaps per-shape blend-shape value ranges
-    /// in the current animation clip.
+    /// クリップ内の各シェイプキー値レンジを再マップする折りたたみセクション。
     ///
-    /// Formula applied to every keyframe value v of a shape:
-    ///   new_v = v * (max - min) / 100 + min
+    /// 各キーフレーム値 v に対して: new_v = v * (max - min) / 100 + min
     ///
-    /// Keeping max=100 / min=0 (defaults) leaves the shape unchanged.
-    /// Setting max=80 scales all values into [0, 80].
-    /// Setting min=20 scales all values into [20, 100].
+    /// max=100 / min=0（既定値）のシェイプは変更されない。
+    /// max=80 にすると全値が [0, 80] にスケールされる。
+    /// min=20 にすると全値が [20, 100] にスケールされる。
     /// </summary>
     public class AnimationClipCorrectionUI
     {
@@ -29,8 +27,8 @@ namespace DenEmo.UI
 
         public void Draw(
             AnimationClipModel clipModel,
+            AnimationClipEditor editor,
             AnimationPreviewController preview,
-            string smrPath,
             Action<string, int> setStatus,
             EditorWindow window)
         {
@@ -64,7 +62,7 @@ namespace DenEmo.UI
             if (_expanded)
             {
                 DenEmoTheme.DrawSeparator(4);
-                DrawContent(clipModel, preview, smrPath, setStatus, window);
+                DrawContent(clipModel, editor, preview, setStatus, window);
             }
 
             GUILayout.EndVertical();
@@ -74,14 +72,14 @@ namespace DenEmo.UI
 
         private void DrawContent(
             AnimationClipModel clipModel,
+            AnimationClipEditor editor,
             AnimationPreviewController preview,
-            string smrPath,
             Action<string, int> setStatus,
             EditorWindow window)
         {
-            var shapeNames = clipModel.GetShapeNamesWithKeys(smrPath);
+            var tracks = clipModel.Tracks;
 
-            if (shapeNames.Count == 0)
+            if (tracks.Count == 0)
             {
                 GUILayout.Label(
                     DenEmoLoc.EnglishMode
@@ -125,8 +123,9 @@ namespace DenEmo.UI
             // Scrollable shape key list
             _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.MinHeight(300), GUILayout.MaxHeight(600));
 
-            foreach (var name in shapeNames)
+            foreach (var track in tracks)
             {
+                string name = track.ShapeName;
                 if (!_minValues.TryGetValue(name, out float min)) min = 0f;
                 if (!_maxValues.TryGetValue(name, out float max)) max = 100f;
 
@@ -157,87 +156,26 @@ namespace DenEmo.UI
                 DenEmoLoc.EnglishMode ? "Apply Correction" : "補正を反映",
                 DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
             {
-                ApplyCorrection(clipModel, preview, smrPath, setStatus);
+                bool changed = editor.ApplyValueCorrection(_minValues, _maxValues);
+                if (changed)
+                {
+                    if (preview.IsActive)
+                        preview.SampleAt(clipModel.CurrentTime);
+                    setStatus?.Invoke(
+                        DenEmoLoc.EnglishMode ? "Correction applied." : "補正を反映しました。", 1);
+                }
+                else
+                {
+                    setStatus?.Invoke(
+                        DenEmoLoc.EnglishMode
+                            ? "No corrections to apply (all values are at their defaults)."
+                            : "補正対象がありません（全て既定値です）。", 0);
+                }
                 window.Repaint();
             }
             GUILayout.Space(6);
             GUILayout.EndHorizontal();
             GUILayout.Space(6);
-        }
-
-        // ─── Correction logic ─────────────────────────────────────────────────
-
-        private void ApplyCorrection(
-            AnimationClipModel clipModel,
-            AnimationPreviewController preview,
-            string smrPath,
-            Action<string, int> setStatus)
-        {
-            if (clipModel.Clip == null) return;
-
-            Undo.RecordObject(clipModel.Clip, "Apply Shape Key Correction");
-            bool changed = false;
-
-            foreach (var binding in AnimationUtility.GetCurveBindings(clipModel.Clip))
-            {
-                if (binding.type != typeof(SkinnedMeshRenderer)) continue;
-                if (!binding.propertyName.StartsWith("blendShape.")) continue;
-                if (smrPath != null && binding.path != smrPath) continue;
-
-                string shapeName = binding.propertyName.Substring("blendShape.".Length);
-
-                float min = _minValues.TryGetValue(shapeName, out float storedMin) ? storedMin : 0f;
-                float max = _maxValues.TryGetValue(shapeName, out float storedMax) ? storedMax : 100f;
-
-                if (Mathf.Approximately(min, 0f) && Mathf.Approximately(max, 100f)) continue;
-
-                var curve = AnimationUtility.GetEditorCurve(clipModel.Clip, binding);
-                if (curve == null) continue;
-
-                float scale  = (max - min) / 100f;
-                float offset = min;
-
-                var keys = curve.keys;
-                for (int i = 0; i < keys.Length; i++)
-                {
-                    float newVal = Mathf.Clamp(keys[i].value * scale + offset, 0f, 100f);
-                    var newKey = new Keyframe(
-                        keys[i].time,
-                        newVal,
-                        keys[i].inTangent  * scale,
-                        keys[i].outTangent * scale);
-                    newKey.weightedMode = keys[i].weightedMode;
-                    newKey.inWeight     = keys[i].inWeight;
-                    newKey.outWeight    = keys[i].outWeight;
-                    keys[i] = newKey;
-                }
-
-                curve.keys = keys;
-                AnimationUtility.SetEditorCurve(clipModel.Clip, binding, curve);
-                changed = true;
-            }
-
-            if (changed)
-            {
-                EditorUtility.SetDirty(clipModel.Clip);
-                preview.SetCacheDirty();
-                if (preview.IsActive)
-                    preview.SampleAt(clipModel.CurrentTime);
-
-                setStatus?.Invoke(
-                    DenEmoLoc.EnglishMode
-                        ? "Correction applied."
-                        : "補正を反映しました。",
-                    1);
-            }
-            else
-            {
-                setStatus?.Invoke(
-                    DenEmoLoc.EnglishMode
-                        ? "No corrections to apply (all values are at their defaults)."
-                        : "補正対象がありません（全て既定値です）。",
-                    0);
-            }
         }
     }
 }

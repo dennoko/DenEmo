@@ -7,124 +7,123 @@ using DenEmo.Core;
 namespace DenEmo.UI
 {
     /// <summary>
-    /// Draws the mini-timeline strip (ruler, scrubber, playback controls, keyframe tracks).
-    /// All playback state is owned by the caller (AnimationModeUI) and passed via ref.
+    /// ミニタイムライン（ルーラー・スクラバー・再生コントロール・キーフレームトラック）を描画する。
+    /// 状態は AnimationModeUI（ClipModel / Editor / Preview / Playback）が所有し、
+    /// このクラスはビュー状態（ズーム・ドラッグ・クリップボード）のみを持つ。
+    /// キーフレームのクエリはすべて ClipModel のトラックキャッシュ経由で行い、
+    /// 描画中に AnimationUtility を直接呼ばない。
     /// </summary>
     public partial class AnimationTimelineUI
     {
         // ─── Layout constants ─────────────────────────────────────────────────
         private const float RULER_HEIGHT      = 38f;
         private const float SCRUBBER_HEIGHT   = 14f;
-        private const float CONTROLS_HEIGHT   = 36f;
         private const float TRACK_ROW_HEIGHT  = 24f;
+        private const float ACTION_ROW_HEIGHT = 36f;
         private const float RIGHT_PADDING     = 16f;
         private const float DIAMOND_SIZE      = 5f;
         private const float MAX_TRACKS_HEIGHT = 160f;
-        private const float SMALL_BUTTON_WIDTH = 28f;
-        private const float BUTTON_HEIGHT = 24f;
-        private const float PLAY_BUTTON_WIDTH = 44f;
+        private const float SCROLLBAR_HEIGHT  = 10f;
+        private const float MIN_VIEW_RANGE    = 1f / 50f; // 最大ズーム 5000%
 
-        // ─── Internal state ───────────────────────────────────────────────────
-        private float   _trackLabelWidth = 150f;
-        private bool    _isDraggingLabelWidth;
-        private bool    _isDraggingScrubber;
-        private Vector2 _tracksScroll;
-        private bool    _tracksCollapsed;
-
-        // Cached track geometry (set by DrawRulerAndScrubber; used by DrawTrackRow inside scroll view)
-        private float _cachedTrackX;
-        private float _cachedTrackW;
-
-        // Keyframe dragging state
-        private bool   _isDraggingKeyframe;
-        private int    _draggingOldFrame = -1;
-        private string _draggingShapeName; // null means "All Tracks"
-
-        // ─── Copy/paste clipboard ─────────────────────────────────────────────
-        private struct KeyClipboardEntry
-        {
-            public string            ShapeName;
-            public float             RelativeTime;
-            public float             Value;
-            public InterpolationType Interp;
-        }
-
-        private List<KeyClipboardEntry> _keyClipboard = new List<KeyClipboardEntry>();
-        private bool _hasClipboardData => _keyClipboard != null && _keyClipboard.Count > 0;
-
-        // ─── View (zoom & scroll) state ───────────────────────────────────────
+        // ─── View state（ズーム・スクロール、0〜1 正規化） ────────────────────
         private float _viewStart = 0f;
         private float _viewEnd   = 1f;
         private float ViewRange => Mathf.Max(0.01f, _viewEnd - _viewStart);
 
+        // ─── Interaction state ────────────────────────────────────────────────
+        private float   _trackLabelWidth = 150f;
+        private bool    _isDraggingLabelWidth;
+        private bool    _isDraggingScrubber;
+        private bool    _isDraggingViewScroll;
+        private float   _viewScrollGrabOffset;
+        private Vector2 _tracksScroll;
 
-        // Cached styles (re-created when null after domain reload)
-        private GUIStyle _kfLabelStyle;
+        // Keyframe dragging state
+        private bool   _isDraggingKeyframe;
+        private int    _draggingFrame = -1;
+        private string _draggingShapeName; // null = 全トラック
+
+        // Cached track geometry (DrawRulerAndScrubber が設定し、スクロールビュー内の行が使う)
+        private float _cachedTrackW;
+
+        // ─── Copy/paste clipboard（1 フレーム分のキー） ───────────────────────
+        private struct KeyClipboardEntry
+        {
+            public string            ShapeName;
+            public float             Value;
+            public InterpolationType Interp;
+        }
+
+        private readonly List<KeyClipboardEntry> _keyClipboard = new List<KeyClipboardEntry>();
+        private bool HasClipboardData => _keyClipboard.Count > 0;
+
+        // ─── Cached styles（ドメインリロード後に null チェックで再構築） ─────
         private GUIStyle _recOnStyle;
         private GUIStyle _recOffStyle;
         private GUIStyle _playBtnStyle;
-        private GUIStyle _clearBtnStyle;
         private GUIStyle _timelineLabelStyle;
-        private GUIStyle _hoverLabelStyle;
 
         private void EnsureTimelineStyles()
         {
-            EnsureRecStyles();
             if (_playBtnStyle == null || _playBtnStyle.normal.background == null)
             {
-                _playBtnStyle = new GUIStyle(DenEmoTheme.ActionButtonStyle);
-                _playBtnStyle.fixedHeight = 0;
+                _playBtnStyle = new GUIStyle(DenEmoTheme.ActionButtonStyle) { fixedHeight = 0 };
 
-                _clearBtnStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle);
-                _clearBtnStyle.fixedHeight = 0;
+                _timelineLabelStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                };
 
-                _timelineLabelStyle = new GUIStyle(DenEmoTheme.CaptionStyle);
-                _timelineLabelStyle.alignment = TextAnchor.MiddleLeft;
+                _recOnStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle)
+                {
+                    fontStyle   = FontStyle.Bold,
+                    fixedHeight = 0,
+                };
+                _recOnStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, DenEmoTheme.RecordingRed);
+                _recOnStyle.hover.background  = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, DenEmoTheme.RecordingRed);
+                _recOnStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), DenEmoTheme.RecordingRed);
+                DenEmoTheme.FixAllTextColors(_recOnStyle, DenEmoTheme.RecordingRed);
+                _recOnStyle.hover.textColor = new Color(1f, 0.4f, 0.4f);
+
+                _recOffStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle) { fixedHeight = 0 };
+                _recOffStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, new Color(0.8f, 0.2f, 0.2f, 0.8f));
+                _recOffStyle.hover.background  = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, DenEmoTheme.RecordingRed);
+                _recOffStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), DenEmoTheme.RecordingRed);
             }
         }
 
         // ─── Main Draw entry ──────────────────────────────────────────────────
 
-        public void Draw(
-            AnimationClipModel         clipModel,
-            AnimationPreviewController preview,
-            ShapeKeyModel              shapeModel,
-            string                     smrPath,
-            ref bool                   isRecording,
-            ref InterpolationType      currentInterp,
-            ref float                  playbackSpeed,
-            EditorWindow               window,
-            ref bool                   isPlaying,
-            ref double                 playStartRealTime,
-            ref float                  playStartClipTime,
-            System.Action              startPreview)
+        public void Draw(AnimationModeUI mode, ShapeKeyModel shapeModel, EditorWindow window)
         {
-            if (clipModel?.Clip == null) return;
+            if (mode?.ClipModel?.Clip == null) return;
             DenEmoTheme.Initialize();
+            EnsureTimelineStyles();
 
-            HandleKeyboardInput(clipModel, preview, smrPath,
-                ref isPlaying, ref playStartRealTime, ref playStartClipTime, window);
+            HandleKeyboardInput(mode, window);
 
             GUILayout.BeginVertical(DenEmoTheme.CardStyle);
 
-            // Section header + detach/attach button
+            // ── Section header + detach/attach button ────────────────────────
             GUILayout.BeginHorizontal();
-            GUILayout.Label(
-                DenEmoLoc.EnglishMode ? "TIMELINE" : "タイムライン",
-                DenEmoTheme.SectionHeaderStyle);
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.title"), DenEmoTheme.SectionHeaderStyle);
             GUILayout.FlexibleSpace();
-            
-            bool isSeparate = window.GetType().Name == "DenEmoTimelineWindow";
-            if (isSeparate)
+
+            if (window is DenEmoTimelineWindow)
             {
-                if (GUILayout.Button(new GUIContent(DenEmoLoc.EnglishMode ? "↘ Attach" : "↘ 結合", DenEmoLoc.EnglishMode ? "Return timeline to main window" : "メインウィンドウに戻す"), DenEmoTheme.MiniButtonStyle))
+                if (GUILayout.Button(
+                    new GUIContent(DenEmoLoc.T("ui.timeline.attach"), DenEmoLoc.T("ui.timeline.attach.tip")),
+                    DenEmoTheme.MiniButtonStyle))
                 {
                     window.Close();
                 }
             }
             else
             {
-                if (GUILayout.Button(new GUIContent(DenEmoLoc.EnglishMode ? "↗ Detach" : "↗ 別窓化", DenEmoLoc.EnglishMode ? "Open timeline in a separate window" : "別ウィンドウでタイムラインを開く"), DenEmoTheme.MiniButtonStyle))
+                if (GUILayout.Button(
+                    new GUIContent(DenEmoLoc.T("ui.timeline.detach"), DenEmoLoc.T("ui.timeline.detach.tip")),
+                    DenEmoTheme.MiniButtonStyle))
                 {
                     DenEmoTimelineWindow.ShowWindow();
                 }
@@ -133,30 +132,25 @@ namespace DenEmo.UI
 
             DenEmoTheme.DrawSeparator(2);
 
-            // Global Settings and Transport
-            DrawPlaybackControls(
-                clipModel, preview, smrPath, ref isRecording, ref currentInterp, ref playbackSpeed, window,
-                ref isPlaying, ref playStartRealTime, ref playStartClipTime, startPreview);
+            // ── Global settings & transport ──────────────────────────────────
+            DrawPlaybackControls(mode, shapeModel, window);
 
             GUILayout.Space(8);
 
-            // Timeline Area
-            EditorGUILayout.BeginVertical("box");
+            // ── Timeline area ─────────────────────────────────────────────────
+            EditorGUILayout.BeginVertical(DenEmoTheme.CardOuterStyle);
 
-            EnsureScrubberVisible(clipModel, window);
-            DrawRulerAndScrubber(clipModel, preview, window);
+            EnsureScrubberVisible(mode.ClipModel, window);
+            DrawRulerAndScrubber(mode, window);
+            DrawKeyframeTracks(mode, shapeModel, window);
+            DrawKeyframeActionRow(mode, shapeModel, window);
 
-            DrawKeyframeTracks(clipModel, preview, shapeModel, smrPath, currentInterp, window);
-
-            DrawKeyframeDeleteButtons(clipModel, preview, smrPath, shapeModel, currentInterp, window);
-
-            EditorGUILayout.EndVertical(); // end "box"
+            EditorGUILayout.EndVertical();
 
             GUILayout.EndVertical(); // end CardStyle
         }
 
-
-        // ─── Helpers ──────────────────────────────────────────────────────────
+        // ─── Coordinate helpers ───────────────────────────────────────────────
 
         private float TimeToPixel(float time, float clipLen, float trackX, float trackW)
         {
@@ -197,55 +191,70 @@ namespace DenEmo.UI
             return step;
         }
 
-        private void EnsureKfLabelStyle()
+        // ─── Shared seek / transport operations ──────────────────────────────
+        // キーボードショートカットとトランスポートボタンの両方から呼ばれる。
+
+        private void SeekTo(AnimationModeUI mode, float time, EditorWindow window)
         {
-            if (_kfLabelStyle == null || _kfLabelStyle.normal.background == null)
+            mode.Playback.Stop();
+            mode.ClipModel.CurrentTime = Mathf.Clamp(time, 0f, mode.ClipModel.ClipLength);
+            mode.Preview.SampleAt(mode.ClipModel.CurrentTime);
+            window.Repaint();
+        }
+
+        private void StepFrame(AnimationModeUI mode, int direction, EditorWindow window)
+        {
+            var m = mode.ClipModel;
+            SeekTo(mode, m.CurrentTime + direction / Mathf.Max(1f, m.FPS), window);
+        }
+
+        private void GoToPrevKey(AnimationModeUI mode, EditorWindow window)
+        {
+            float prev = mode.ClipModel.PrevKeyTime(mode.ClipModel.CurrentTime);
+            if (prev >= 0f) SeekTo(mode, prev, window);
+        }
+
+        private void GoToNextKey(AnimationModeUI mode, EditorWindow window)
+        {
+            float next = mode.ClipModel.NextKeyTime(mode.ClipModel.CurrentTime);
+            if (next >= 0f) SeekTo(mode, next, window);
+        }
+
+        private void TogglePlay(AnimationModeUI mode, EditorWindow window)
+        {
+            mode.Playback.Toggle();
+            window.Repaint();
+        }
+
+        // ─── Clipboard operations ─────────────────────────────────────────────
+
+        /// <summary>指定時刻にキーを持つ全シェイプの値と補間タイプをクリップボードへコピーする。</summary>
+        private void CopyFrame(AnimationModeUI mode, float time)
+        {
+            var m = mode.ClipModel;
+            _keyClipboard.Clear();
+            foreach (var track in m.Tracks)
             {
-                _kfLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+                if (AnimationClipModel.FindKeyIndex(track.Curve, time, m.FrameTolerance) < 0) continue;
+                _keyClipboard.Add(new KeyClipboardEntry
                 {
-                    normal = { textColor = DenEmoTheme.TextTertiary },
-                    fontSize = 9
-                };
+                    ShapeName = track.ShapeName,
+                    Value     = track.Curve.Evaluate(time),
+                    Interp    = m.GetKeyInterpolation(track.ShapeName, time),
+                });
             }
         }
 
-        private void EnsureHoverLabelStyle()
+        /// <summary>クリップボードの内容を現在時刻（フレームスナップ）にペーストする。</summary>
+        private void PasteAtCurrentTime(AnimationModeUI mode, EditorWindow window)
         {
-            if (_hoverLabelStyle == null)
-            {
-                _hoverLabelStyle = new GUIStyle(EditorStyles.miniLabel)
-                {
-                    fontSize = 9,
-                    normal   = { textColor = Color.white },
-                    padding  = new RectOffset(2, 2, 1, 1),
-                };
-            }
-        }
-
-        private void EnsureRecStyles()
-        {
-            if (_recOnStyle == null || _recOnStyle.normal.background == null)
-            {
-                _recOnStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle)
-                {
-                    fontStyle = FontStyle.Bold,
-                    fixedHeight = 0
-                };
-                _recOnStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, Color.red);
-                _recOnStyle.hover.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, Color.red);
-                _recOnStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), Color.red);
-                _recOnStyle.normal.textColor = Color.red;
-                _recOnStyle.hover.textColor = new Color(1f, 0.4f, 0.4f);
-                _recOnStyle.active.textColor = Color.red;
-            }
-            if (_recOffStyle == null || _recOffStyle.normal.background == null)
-            {
-                _recOffStyle = new GUIStyle(DenEmoTheme.SecondaryButtonStyle);
-                _recOffStyle.fixedHeight = 0;
-                _recOffStyle.normal.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface1, Color.red);
-                _recOffStyle.hover.background = DenEmoTheme.MakeBorderedTex(DenEmoTheme.Surface2, Color.red);
-                _recOffStyle.active.background = DenEmoTheme.MakeBorderedTex(Color.Lerp(DenEmoTheme.Surface1, Color.white, 0.10f), Color.red);
-            }
+            if (!HasClipboardData) return;
+            var m = mode.ClipModel;
+            float pasteTime = m.SnapToFrame(m.CurrentTime);
+            foreach (var entry in _keyClipboard)
+                mode.Editor.RecordKey(entry.ShapeName, pasteTime, entry.Value, entry.Interp);
+            mode.Preview.SampleAt(m.CurrentTime);
+            window.Repaint();
         }
     }
 }

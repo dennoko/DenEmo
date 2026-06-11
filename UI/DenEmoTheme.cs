@@ -4,6 +4,12 @@ using UnityEditor;
 
 namespace DenEmo.UI
 {
+    /// <summary>
+    /// dennokoworks フローティングデザインシステムのテーマ定義。
+    /// すべての GUIStyle を new GUIStyle() から構築し（EditorStyles 非継承）、
+    /// 全 state の色を固定することで Unity のライト/ダークテーマに依存しない外観を保証する。
+    /// OnGUI 先頭で Initialize() → PushEditorTheme()、finally で PopEditorTheme() を呼ぶこと。
+    /// </summary>
     internal static class DenEmoTheme
     {
         // ─── Colors ──────────────────────────────────────────────────────────
@@ -23,9 +29,10 @@ namespace DenEmo.UI
         public static readonly Color SemanticSuccess = Hex(0x4caf50);
         public static readonly Color SemanticInfo    = Hex(0x64b5f6);
 
-        public static readonly Color Accent       = Color.white;
-        public static readonly Color HoverOverlay = new Color(1f, 1f, 1f, 0.05f);
+        public static readonly Color Accent         = Color.white;
+        public static readonly Color HoverOverlay   = new Color(1f, 1f, 1f, 0.05f);
         public static readonly Color FavoriteActive = new Color(1f, 0.85f, 0.1f, 1f);
+        public static readonly Color RecordingRed   = new Color(0.95f, 0.25f, 0.25f, 1f);
 
         // ─── Cached Textures ─────────────────────────────────────────────────
 
@@ -56,6 +63,14 @@ namespace DenEmo.UI
         public static GUIStyle SecondaryTextStyle    { get; private set; }
         public static GUIStyle CaptionStyle          { get; private set; }
         public static GUIStyle GroupLabelStyle       { get; private set; }
+
+        // タイムライン用の小型ラベル（毎フレーム new GUIStyle しないためテーマ側で保持）
+        public static GUIStyle SmallLabelStyle       { get; private set; } // 9px 目盛りラベル
+        public static GUIStyle TinyLabelStyle        { get; private set; } // 8px 秒ラベル
+        public static GUIStyle HoverTipStyle         { get; private set; } // ホバーツールチップ（白文字）
+        public static GUIStyle KeyDiamondStyle       { get; private set; } // ◆（非カレント）
+        public static GUIStyle KeyDiamondActiveStyle { get; private set; } // ◆（カレントフレーム上）
+        public static GUIStyle CenterCaptionStyle    { get; private set; } // 中央寄せキャプション（＝ ハンドル等）
 
         public static GUIStyle ActionButtonStyle    { get; private set; }
         public static GUIStyle SecondaryButtonStyle { get; private set; }
@@ -129,132 +144,211 @@ namespace DenEmo.UI
             RowHoverStyle.margin  = new RectOffset(0, 0, 1, 1);
 
             // ── Typography ───────────────────────────────────────────────────
+            // すべて new GUIStyle() から構築し、FixAllTextColors で全 state を固定する。
 
-            TitleStyle = new GUIStyle(EditorStyles.boldLabel);
-            TitleStyle.fontSize = 14;
-            TitleStyle.normal.textColor = TextPrimary;
+            TitleStyle = new GUIStyle();
+            TitleStyle.fontStyle = FontStyle.Bold;
+            TitleStyle.fontSize  = 14;
+            TitleStyle.alignment = TextAnchor.MiddleLeft;
+            FixAllTextColors(TitleStyle, TextPrimary);
 
-            SectionHeaderStyle = new GUIStyle(EditorStyles.boldLabel);
-            SectionHeaderStyle.fontSize = 10;
-            SectionHeaderStyle.normal.textColor = TextTertiary;
-            SectionHeaderStyle.margin = new RectOffset(0, 0, 0, 2);
+            SectionHeaderStyle = new GUIStyle();
+            SectionHeaderStyle.fontStyle = FontStyle.Bold;
+            SectionHeaderStyle.fontSize  = 10;
+            SectionHeaderStyle.margin    = new RectOffset(0, 0, 0, 2);
+            FixAllTextColors(SectionHeaderStyle, TextTertiary);
 
-            ToggleSectionOnStyle = new GUIStyle(EditorStyles.boldLabel);
-            ToggleSectionOnStyle.fontSize = 10;
-            ToggleSectionOnStyle.normal.textColor = TextPrimary;
+            ToggleSectionOnStyle = new GUIStyle();
+            ToggleSectionOnStyle.fontStyle = FontStyle.Bold;
+            ToggleSectionOnStyle.fontSize  = 10;
+            ToggleSectionOnStyle.margin    = new RectOffset(0, 0, 0, 2);
+            FixAllTextColors(ToggleSectionOnStyle, TextPrimary);
 
-            ToggleSectionOffStyle = new GUIStyle(EditorStyles.boldLabel);
-            ToggleSectionOffStyle.fontSize = 10;
-            ToggleSectionOffStyle.normal.textColor = TextTertiary;
+            ToggleSectionOffStyle = new GUIStyle();
+            ToggleSectionOffStyle.fontStyle = FontStyle.Bold;
+            ToggleSectionOffStyle.fontSize  = 10;
+            ToggleSectionOffStyle.margin    = new RectOffset(0, 0, 0, 2);
+            FixAllTextColors(ToggleSectionOffStyle, TextTertiary);
 
-            SecondaryTextStyle = new GUIStyle(EditorStyles.label);
-            SecondaryTextStyle.normal.textColor = TextSecondary;
-            SecondaryTextStyle.wordWrap = true;
+            SecondaryTextStyle = new GUIStyle();
+            SecondaryTextStyle.fontSize  = 11;
+            SecondaryTextStyle.wordWrap  = true;
+            SecondaryTextStyle.alignment = TextAnchor.MiddleLeft;
+            SecondaryTextStyle.padding   = new RectOffset(2, 2, 1, 2);
+            FixAllTextColors(SecondaryTextStyle, TextSecondary);
 
-            CaptionStyle = new GUIStyle(EditorStyles.miniLabel);
-            CaptionStyle.normal.textColor = TextTertiary;
+            CaptionStyle = new GUIStyle();
+            CaptionStyle.fontSize  = 10;
+            CaptionStyle.alignment = TextAnchor.MiddleLeft;
+            CaptionStyle.padding   = new RectOffset(2, 2, 1, 2);
+            FixAllTextColors(CaptionStyle, TextTertiary);
 
-            GroupLabelStyle = new GUIStyle(EditorStyles.boldLabel);
-            GroupLabelStyle.fontSize = 11;
-            GroupLabelStyle.normal.textColor = TextSecondary;
+            GroupLabelStyle = new GUIStyle();
+            GroupLabelStyle.fontStyle = FontStyle.Bold;
+            GroupLabelStyle.fontSize  = 11;
+            GroupLabelStyle.alignment = TextAnchor.MiddleLeft;
+            FixAllTextColors(GroupLabelStyle, TextSecondary);
+
+            SmallLabelStyle = new GUIStyle();
+            SmallLabelStyle.fontSize  = 9;
+            SmallLabelStyle.alignment = TextAnchor.UpperLeft;
+            FixAllTextColors(SmallLabelStyle, TextTertiary);
+
+            TinyLabelStyle = new GUIStyle();
+            TinyLabelStyle.fontSize  = 8;
+            TinyLabelStyle.alignment = TextAnchor.UpperLeft;
+            FixAllTextColors(TinyLabelStyle, TextTertiary);
+
+            HoverTipStyle = new GUIStyle();
+            HoverTipStyle.fontSize  = 9;
+            HoverTipStyle.padding   = new RectOffset(2, 2, 1, 1);
+            HoverTipStyle.alignment = TextAnchor.MiddleLeft;
+            FixAllTextColors(HoverTipStyle, Color.white);
+
+            KeyDiamondStyle = new GUIStyle();
+            KeyDiamondStyle.fontSize  = 10;
+            KeyDiamondStyle.alignment = TextAnchor.MiddleCenter;
+            FixAllTextColors(KeyDiamondStyle, SemanticInfo);
+
+            KeyDiamondActiveStyle = new GUIStyle();
+            KeyDiamondActiveStyle.fontSize  = 10;
+            KeyDiamondActiveStyle.alignment = TextAnchor.MiddleCenter;
+            FixAllTextColors(KeyDiamondActiveStyle, Color.white);
+
+            CenterCaptionStyle = new GUIStyle();
+            CenterCaptionStyle.fontSize  = 10;
+            CenterCaptionStyle.alignment = TextAnchor.MiddleCenter;
+            FixAllTextColors(CenterCaptionStyle, TextSecondary);
 
             // ── Buttons ──────────────────────────────────────────────────────
+            // GUI.skin.button / EditorStyles.miniButton を継承すると角丸・グラデーション・
+            // scaledBackgrounds が混入するため、new GUIStyle() から全プロパティを明示構築する。
 
             ActionButtonStyle = new GUIStyle();
             ActionButtonStyle.normal.background  = _texAccentCard;
-            ActionButtonStyle.normal.textColor   = TextPrimary;
             ActionButtonStyle.hover.background   = MakeTex(Color.Lerp(Surface2, Color.white, 0.07f));
-            ActionButtonStyle.hover.textColor    = TextPrimary;
             ActionButtonStyle.active.background  = MakeTex(Color.Lerp(Surface2, Color.white, 0.15f));
-            ActionButtonStyle.active.textColor   = TextPrimary;
-            ActionButtonStyle.border     = new RectOffset(1, 1, 1, 1);
-            ActionButtonStyle.fontSize   = 12;
-            ActionButtonStyle.fontStyle  = FontStyle.Bold;
-            ActionButtonStyle.fixedHeight = 32;
-            ActionButtonStyle.alignment  = TextAnchor.MiddleCenter;
+            ActionButtonStyle.border       = new RectOffset(1, 1, 1, 1);
+            ActionButtonStyle.margin       = new RectOffset(4, 4, 2, 2);
+            ActionButtonStyle.padding      = new RectOffset(6, 6, 3, 3);
+            ActionButtonStyle.fontSize     = 12;
+            ActionButtonStyle.fontStyle    = FontStyle.Bold;
+            ActionButtonStyle.fixedHeight  = 32;
+            ActionButtonStyle.alignment    = TextAnchor.MiddleCenter;
+            ActionButtonStyle.stretchWidth = true;
+            FixAllTextColors(ActionButtonStyle, TextPrimary);
 
             SecondaryButtonStyle = new GUIStyle();
             SecondaryButtonStyle.normal.background = MakeBorderedTex(Surface1, Outline);
-            SecondaryButtonStyle.normal.textColor  = TextSecondary;
             SecondaryButtonStyle.hover.background  = _texAccentCard;
-            SecondaryButtonStyle.hover.textColor   = TextPrimary;
             SecondaryButtonStyle.active.background = MakeTex(Color.Lerp(Surface1, Color.white, 0.10f));
-            SecondaryButtonStyle.active.textColor  = TextPrimary;
-            SecondaryButtonStyle.border     = new RectOffset(1, 1, 1, 1);
-            SecondaryButtonStyle.fontSize   = 11;
-            SecondaryButtonStyle.fixedHeight = 26;
-            SecondaryButtonStyle.alignment  = TextAnchor.MiddleCenter;
+            SecondaryButtonStyle.border       = new RectOffset(1, 1, 1, 1);
+            SecondaryButtonStyle.margin       = new RectOffset(4, 4, 2, 2);
+            SecondaryButtonStyle.padding      = new RectOffset(6, 6, 3, 3);
+            SecondaryButtonStyle.fontSize     = 11;
+            SecondaryButtonStyle.fixedHeight  = 26;
+            SecondaryButtonStyle.alignment    = TextAnchor.MiddleCenter;
+            SecondaryButtonStyle.stretchWidth = true;
+            SecondaryButtonStyle.normal.textColor    = TextSecondary;
+            SecondaryButtonStyle.hover.textColor     = TextPrimary;
+            SecondaryButtonStyle.active.textColor    = TextPrimary;
+            SecondaryButtonStyle.focused.textColor   = TextSecondary;
+            SecondaryButtonStyle.onNormal.textColor  = TextSecondary;
+            SecondaryButtonStyle.onHover.textColor   = TextPrimary;
+            SecondaryButtonStyle.onActive.textColor  = TextPrimary;
+            SecondaryButtonStyle.onFocused.textColor = TextSecondary;
 
-            MiniButtonStyle = new GUIStyle(EditorStyles.miniButton);
-            MiniButtonStyle.normal.textColor  = TextTertiary;
-            MiniButtonStyle.hover.textColor   = TextSecondary;
-            MiniButtonStyle.active.textColor  = TextPrimary;
+            // fixedHeight は 0 のまま（呼び出し側が GUILayout.Height で制御する）
+            MiniButtonStyle = new GUIStyle();
+            MiniButtonStyle.normal.background = _texAccentCard;
+            MiniButtonStyle.hover.background  = MakeTex(Color.Lerp(Surface2, Color.white, 0.10f));
+            MiniButtonStyle.active.background = MakeTex(Color.Lerp(Surface2, Color.white, 0.18f));
+            MiniButtonStyle.border    = new RectOffset(1, 1, 1, 1);
+            MiniButtonStyle.margin    = new RectOffset(2, 2, 1, 1);
+            MiniButtonStyle.padding   = new RectOffset(4, 4, 2, 3);
+            MiniButtonStyle.fontSize  = 10;
+            MiniButtonStyle.alignment = TextAnchor.MiddleCenter;
+            MiniButtonStyle.normal.textColor    = TextTertiary;
+            MiniButtonStyle.hover.textColor     = TextSecondary;
+            MiniButtonStyle.active.textColor    = TextPrimary;
+            MiniButtonStyle.focused.textColor   = TextTertiary;
+            MiniButtonStyle.onNormal.textColor  = TextPrimary;
+            MiniButtonStyle.onHover.textColor   = TextPrimary;
+            MiniButtonStyle.onActive.textColor  = TextPrimary;
+            MiniButtonStyle.onFocused.textColor = TextPrimary;
 
             // フィルターチップ（トグルボタン）
             ChipOnStyle = new GUIStyle();
             ChipOnStyle.normal.background  = MakeBorderedTex(Surface2, Accent);
-            ChipOnStyle.normal.textColor   = TextPrimary;
             ChipOnStyle.hover.background   = MakeBorderedTex(Color.Lerp(Surface2, Accent, 0.1f), Accent);
-            ChipOnStyle.hover.textColor    = TextPrimary;
             ChipOnStyle.active.background  = MakeBorderedTex(Color.Lerp(Surface2, Accent, 0.2f), Accent);
-            ChipOnStyle.active.textColor   = TextPrimary;
-            ChipOnStyle.border     = new RectOffset(1, 1, 1, 1);
-            ChipOnStyle.fontSize   = 10;
+            ChipOnStyle.border      = new RectOffset(1, 1, 1, 1);
+            ChipOnStyle.fontSize    = 10;
             ChipOnStyle.fixedHeight = 20;
-            ChipOnStyle.padding    = new RectOffset(6, 6, 2, 2);
-            ChipOnStyle.alignment  = TextAnchor.MiddleCenter;
+            ChipOnStyle.padding     = new RectOffset(6, 6, 2, 2);
+            ChipOnStyle.margin      = new RectOffset(2, 2, 1, 1);
+            ChipOnStyle.alignment   = TextAnchor.MiddleCenter;
+            FixAllTextColors(ChipOnStyle, TextPrimary);
 
             ChipOffStyle = new GUIStyle();
-            ChipOffStyle.normal.background  = MakeBorderedTex(Surface1, Outline);
-            ChipOffStyle.normal.textColor   = TextTertiary;
-            ChipOffStyle.hover.background   = MakeBorderedTex(Surface2, Outline);
-            ChipOffStyle.hover.textColor    = TextSecondary;
-            ChipOffStyle.active.background  = MakeTex(Color.Lerp(Surface1, Color.white, 0.10f));
-            ChipOffStyle.active.textColor   = TextPrimary;
-            ChipOffStyle.border     = new RectOffset(1, 1, 1, 1);
-            ChipOffStyle.fontSize   = 10;
+            ChipOffStyle.normal.background = MakeBorderedTex(Surface1, Outline);
+            ChipOffStyle.hover.background  = MakeBorderedTex(Surface2, Outline);
+            ChipOffStyle.active.background = MakeTex(Color.Lerp(Surface1, Color.white, 0.10f));
+            ChipOffStyle.border      = new RectOffset(1, 1, 1, 1);
+            ChipOffStyle.fontSize    = 10;
             ChipOffStyle.fixedHeight = 20;
-            ChipOffStyle.padding    = new RectOffset(6, 6, 2, 2);
-            ChipOffStyle.alignment  = TextAnchor.MiddleCenter;
+            ChipOffStyle.padding     = new RectOffset(6, 6, 2, 2);
+            ChipOffStyle.margin      = new RectOffset(2, 2, 1, 1);
+            ChipOffStyle.alignment   = TextAnchor.MiddleCenter;
+            ChipOffStyle.normal.textColor    = TextTertiary;
+            ChipOffStyle.hover.textColor     = TextSecondary;
+            ChipOffStyle.active.textColor    = TextPrimary;
+            ChipOffStyle.focused.textColor   = TextTertiary;
+            ChipOffStyle.onNormal.textColor  = TextSecondary;
+            ChipOffStyle.onHover.textColor   = TextSecondary;
+            ChipOffStyle.onActive.textColor  = TextPrimary;
+            ChipOffStyle.onFocused.textColor = TextTertiary;
 
-            // お気に入り星ボタン
-            FavOnStyle = new GUIStyle(EditorStyles.label);
-            FavOnStyle.normal.textColor = FavoriteActive;
-            FavOnStyle.hover.textColor  = new Color(1f, 0.95f, 0.4f, 1f);
-            FavOnStyle.fontSize   = 13;
-            FavOnStyle.alignment  = TextAnchor.MiddleCenter;
-            FavOnStyle.padding    = new RectOffset(0, 0, 0, 0);
+            // お気に入り星ボタン（背景なし・文字色のみ）
+            FavOnStyle = new GUIStyle();
+            FavOnStyle.fontSize  = 13;
+            FavOnStyle.alignment = TextAnchor.MiddleCenter;
+            FavOnStyle.padding   = new RectOffset(0, 0, 0, 0);
+            FixAllTextColors(FavOnStyle, FavoriteActive);
+            FavOnStyle.hover.textColor = new Color(1f, 0.95f, 0.4f, 1f);
 
-            FavOffStyle = new GUIStyle(EditorStyles.label);
-            FavOffStyle.normal.textColor = TextDisabled;
-            FavOffStyle.hover.textColor  = new Color(0.7f, 0.7f, 0.7f, 1f);
-            FavOffStyle.fontSize   = 13;
-            FavOffStyle.alignment  = TextAnchor.MiddleCenter;
-            FavOffStyle.padding    = new RectOffset(0, 0, 0, 0);
+            FavOffStyle = new GUIStyle();
+            FavOffStyle.fontSize  = 13;
+            FavOffStyle.alignment = TextAnchor.MiddleCenter;
+            FavOffStyle.padding   = new RectOffset(0, 0, 0, 0);
+            FixAllTextColors(FavOffStyle, TextDisabled);
+            FavOffStyle.hover.textColor = new Color(0.7f, 0.7f, 0.7f, 1f);
 
             // ── Status Bar ───────────────────────────────────────────────────
 
             var statusBase = new GUIStyle();
-            statusBase.border  = new RectOffset(1, 1, 1, 1);
-            statusBase.padding = new RectOffset(10, 10, 5, 5);
-            statusBase.margin  = new RectOffset(0, 0, 0, 0);
-            statusBase.fontSize = 11;
+            statusBase.border    = new RectOffset(1, 1, 1, 1);
+            statusBase.padding   = new RectOffset(10, 10, 5, 5);
+            statusBase.margin    = new RectOffset(0, 0, 0, 0);
+            statusBase.fontSize  = 11;
+            statusBase.wordWrap  = true;
+            statusBase.alignment = TextAnchor.MiddleLeft;
 
             StatusInfoStyle = new GUIStyle(statusBase);
             StatusInfoStyle.normal.background = _texSurface1;
-            StatusInfoStyle.normal.textColor  = TextSecondary;
+            FixAllTextColors(StatusInfoStyle, TextSecondary);
 
             StatusSuccessStyle = new GUIStyle(statusBase);
             StatusSuccessStyle.normal.background = MakeTex(Color.Lerp(Surface1, SemanticSuccess, 0.25f));
-            StatusSuccessStyle.normal.textColor  = SemanticSuccess;
+            FixAllTextColors(StatusSuccessStyle, SemanticSuccess);
 
             StatusWarningStyle = new GUIStyle(statusBase);
             StatusWarningStyle.normal.background = MakeTex(Color.Lerp(Surface1, SemanticWarning, 0.20f));
-            StatusWarningStyle.normal.textColor  = SemanticWarning;
+            FixAllTextColors(StatusWarningStyle, SemanticWarning);
 
             StatusErrorStyle = new GUIStyle(statusBase);
             StatusErrorStyle.normal.background = MakeTex(Color.Lerp(Surface1, SemanticError, 0.50f));
-            StatusErrorStyle.normal.textColor  = new Color(1f, 0.65f, 0.65f);
+            FixAllTextColors(StatusErrorStyle, new Color(1f, 0.65f, 0.65f));
         }
 
         public static GUIStyle GetStatusStyle(int level)
@@ -266,6 +360,167 @@ namespace DenEmo.UI
                 3 => StatusErrorStyle,
                 _ => StatusInfoStyle,
             };
+        }
+
+        // ─── Editor Style Override（ライト/ダーク両対応） ─────────────────────
+        // EditorGUILayout.Toggle / ObjectField / Slider 等の組み込みコントロールは
+        // EditorStyles を直接参照するため、OnGUI スコープ内でのみ一時上書きする。
+
+        private static bool _overrideActive;
+        public static bool IsOverrideActive => _overrideActive;
+
+        private class GUIStyleBackup
+        {
+            private readonly GUIStyle _style;
+            private readonly Color _normal, _hover, _active, _focused;
+            private readonly Color _onNormal, _onHover, _onActive, _onFocused;
+            private readonly Texture2D _normalBg, _hoverBg, _activeBg, _focusedBg;
+            private readonly Texture2D _onNormalBg, _onHoverBg, _onActiveBg, _onFocusedBg;
+            private readonly RectOffset _border;
+            private readonly RectOffset _padding;
+
+            public GUIStyleBackup(GUIStyle style)
+            {
+                _style     = style;
+                _normal    = style.normal.textColor;
+                _hover     = style.hover.textColor;
+                _active    = style.active.textColor;
+                _focused   = style.focused.textColor;
+                _onNormal  = style.onNormal.textColor;
+                _onHover   = style.onHover.textColor;
+                _onActive  = style.onActive.textColor;
+                _onFocused = style.onFocused.textColor;
+
+                _normalBg    = style.normal.background;
+                _hoverBg     = style.hover.background;
+                _activeBg    = style.active.background;
+                _focusedBg   = style.focused.background;
+                _onNormalBg  = style.onNormal.background;
+                _onHoverBg   = style.onHover.background;
+                _onActiveBg  = style.onActive.background;
+                _onFocusedBg = style.onFocused.background;
+
+                _border  = new RectOffset(style.border.left,  style.border.right,  style.border.top,  style.border.bottom);
+                _padding = new RectOffset(style.padding.left, style.padding.right, style.padding.top, style.padding.bottom);
+            }
+
+            public void Restore()
+            {
+                _style.normal.textColor    = _normal;
+                _style.hover.textColor     = _hover;
+                _style.active.textColor    = _active;
+                _style.focused.textColor   = _focused;
+                _style.onNormal.textColor  = _onNormal;
+                _style.onHover.textColor   = _onHover;
+                _style.onActive.textColor  = _onActive;
+                _style.onFocused.textColor = _onFocused;
+
+                _style.normal.background    = _normalBg;
+                _style.hover.background     = _hoverBg;
+                _style.active.background    = _activeBg;
+                _style.focused.background   = _focusedBg;
+                _style.onNormal.background  = _onNormalBg;
+                _style.onHover.background   = _onHoverBg;
+                _style.onActive.background  = _onActiveBg;
+                _style.onFocused.background = _onFocusedBg;
+
+                _style.border  = _border;
+                _style.padding = _padding;
+            }
+        }
+
+        private static GUIStyleBackup[] _backups;
+
+        /// <summary>
+        /// OnGUI 先頭（Initialize の直後）で呼ぶ。EditorStyles をテーマ色に一時上書きする。
+        /// 必ず finally ブロックで PopEditorTheme() を呼ぶこと。
+        /// </summary>
+        public static void PushEditorTheme()
+        {
+            if (_overrideActive) return; // 入れ子（PopupWindow 等）の二重 Push を防ぐ
+            _overrideActive = true;
+
+            // バックアップはドメインリロードで消えるため都度確認
+            if (_backups == null)
+            {
+                _backups = new[]
+                {
+                    new GUIStyleBackup(EditorStyles.label),
+                    new GUIStyleBackup(EditorStyles.objectField),
+                    new GUIStyleBackup(EditorStyles.numberField),
+                    new GUIStyleBackup(EditorStyles.textField),
+                    new GUIStyleBackup(EditorStyles.popup),
+                    new GUIStyleBackup(EditorStyles.toggle),
+                };
+            }
+
+            FixAllTextColors(EditorStyles.label,       TextSecondary);
+            FixAllTextColors(EditorStyles.objectField, TextSecondary);
+            FixAllTextColors(EditorStyles.numberField, TextSecondary);
+            FixAllTextColors(EditorStyles.textField,   TextSecondary);
+            FixAllTextColors(EditorStyles.popup,       TextSecondary);
+            FixAllTextColors(EditorStyles.toggle,      TextSecondary);
+
+            // 入力欄の背景を全 state でダーク色に固定（ホバー・フォーカス時の白背景リーク防止）
+            FixAllStateBackgrounds(EditorStyles.objectField, _texSurface1);
+            FixAllStateBackgrounds(EditorStyles.numberField, _texSurface1);
+            FixAllStateBackgrounds(EditorStyles.textField,   _texSurface1);
+
+            // ポップアップは枠線付きテクスチャ + 1px 境界で縞ノイズを防ぐ
+            FixAllStateBackgrounds(EditorStyles.popup, _texCard);
+            EditorStyles.popup.border  = new RectOffset(1, 1, 1, 1);
+            EditorStyles.popup.padding = new RectOffset(6, 18, 4, 4);
+        }
+
+        /// <summary>OnGUI 末尾の finally ブロックで必ず呼ぶ。EditorStyles を元へ復元する。</summary>
+        public static void PopEditorTheme()
+        {
+            if (!_overrideActive) return;
+            _overrideActive = false;
+
+            if (_backups != null)
+                foreach (var b in _backups)
+                    b.Restore();
+        }
+
+        /// <summary>
+        /// Popup の背景上書きで消えるドロップダウン矢印（▼）を直前のコントロール右端に重ね描きする。
+        /// EditorGUILayout.Popup の直後に呼ぶ。
+        /// </summary>
+        public static void DrawPopupArrowOverlay()
+        {
+            if (!_overrideActive) return;
+            if (Event.current.type != EventType.Repaint) return;
+            Rect rect = GUILayoutUtility.GetLastRect();
+            var arrowRect = new Rect(rect.xMax - 14, rect.y + (rect.height - 12) * 0.5f, 12, 12);
+            GUI.Label(arrowRect, "▼", SmallLabelStyle);
+        }
+
+        // ─── Style Utilities ─────────────────────────────────────────────────
+
+        /// <summary>全 state の textColor を同一色に固定する（onNormal がトグル ON 状態に使われる点に注意）。</summary>
+        internal static void FixAllTextColors(GUIStyle style, Color color)
+        {
+            style.normal.textColor    = color;
+            style.hover.textColor     = color;
+            style.active.textColor    = color;
+            style.focused.textColor   = color;
+            style.onNormal.textColor  = color;
+            style.onHover.textColor   = color;
+            style.onActive.textColor  = color;
+            style.onFocused.textColor = color;
+        }
+
+        private static void FixAllStateBackgrounds(GUIStyle style, Texture2D tex)
+        {
+            style.normal.background    = tex;
+            style.hover.background     = tex;
+            style.active.background    = tex;
+            style.focused.background   = tex;
+            style.onNormal.background  = tex;
+            style.onHover.background   = tex;
+            style.onActive.background  = tex;
+            style.onFocused.background = tex;
         }
 
         // ─── Separator ───────────────────────────────────────────────────────
@@ -293,7 +548,7 @@ namespace DenEmo.UI
 
         // ─── Texture Utilities ───────────────────────────────────────────────
 
-        private static Texture2D MakeTex(Color color)
+        internal static Texture2D MakeTex(Color color)
         {
             var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
             tex.SetPixel(0, 0, color);
@@ -323,6 +578,9 @@ namespace DenEmo.UI
         // ドメインリロード前に全テクスチャを破棄する（DenEmoThemeCleanupから呼ばれる）
         internal static void DisposeTextures()
         {
+            // EditorStyles を上書きしたまま破棄するとエディタ全体が壊れるため先に復元
+            PopEditorTheme();
+
             foreach (var tex in _allTextures)
                 if (tex != null) Object.DestroyImmediate(tex);
             _allTextures.Clear();
@@ -334,6 +592,7 @@ namespace DenEmo.UI
             _texAccentCard = null;
             _texRowHover   = null;
             _initialized   = false;
+            _backups       = null;
         }
 
         private static Color Hex(int rgb) => new Color(

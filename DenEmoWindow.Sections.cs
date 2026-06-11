@@ -284,6 +284,7 @@ namespace DenEmo
                 var meshOpts      = BuildMeshFilterOptions(allTargets);
                 int displayIdx    = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
                 int newDisplayIdx = EditorGUILayout.Popup(displayIdx, meshOpts, GUILayout.MinWidth(70), GUILayout.ExpandWidth(false));
+                DenEmoTheme.DrawPopupArrowOverlay();
                 int newFilterIdx  = newDisplayIdx <= 0 ? -1 : newDisplayIdx - 1;
 
                 if (newFilterIdx != _meshFilterIndex)
@@ -412,9 +413,8 @@ namespace DenEmo
             // Show keyframe statistics when a clip is loaded
             if (_animModeUI.ClipModel.Clip != null)
             {
-                var tracks = _animModeUI.ClipModel.GetShapeNamesWithKeys();
-                int trackCount = tracks.Count;
-                if (trackCount == 0)
+                var tracks = _animModeUI.ClipModel.Tracks;
+                if (tracks.Count == 0)
                 {
                     if (_animNoKeyWarnStyle == null)
                     {
@@ -422,16 +422,16 @@ namespace DenEmo
                         {
                             wordWrap = true,
                         };
-                        _animNoKeyWarnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
+                        DenEmoTheme.FixAllTextColors(_animNoKeyWarnStyle, DenEmoTheme.SemanticWarning);
                     }
                     GUILayout.Label(DenEmoLoc.T("ui.animMode.noKeys.warn"), _animNoKeyWarnStyle);
                 }
                 else
                 {
                     int keyTotal = 0;
-                    foreach (var tn in tracks)
-                        keyTotal += _animModeUI.ClipModel.GetKeyTimesForShape(tn).Length;
-                    GUILayout.Label(DenEmoLoc.Tf("ui.animMode.keyStats", trackCount, keyTotal), DenEmoTheme.CaptionStyle);
+                    foreach (var track in tracks)
+                        keyTotal += track.KeyTimes.Length;
+                    GUILayout.Label(DenEmoLoc.Tf("ui.animMode.keyStats", tracks.Count, keyTotal), DenEmoTheme.CaptionStyle);
                 }
                 GUILayout.Space(4);
             }

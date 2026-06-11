@@ -163,6 +163,11 @@ namespace DenEmo.Core
             }
         }
 
+        /// <summary>
+        /// マルチフレームモードのクリップを保存する。
+        /// ループ対応が有効な場合、編集中は仮想的だったループ末尾キーを保存時に実体化し、
+        /// loopTime を設定する。
+        /// </summary>
         public static string SaveMultiFrameClip(AnimationClipModel clipModel, string path)
         {
             if (clipModel == null || clipModel.Clip == null) return DenEmoLoc.T("dlg.apply.noClip");
@@ -173,36 +178,42 @@ namespace DenEmo.Core
 
             if (existing == clip)
             {
+                // 同一アセットへの上書き：ループキーをクリップ本体へ書き込む
                 if (clipModel.SmoothLoopEnabled)
                 {
-                    var settings = AnimationUtility.GetAnimationClipSettings(clip);
-                    settings.loopTime = true;
-                    AnimationUtility.SetAnimationClipSettings(clip, settings);
+                    Undo.RecordObject(clip, "Save Animation Clip");
+                    MaterializeLoopKeys(clip, clipModel);
+                    SetLoopTime(clip);
+                    clipModel.MarkDirty();
                 }
                 EditorUtility.SetDirty(clip);
                 AssetDatabase.SaveAssets();
             }
-            else if (existing != null)
-            {
-                Undo.RecordObject(existing, "Save Animation Clip");
-                existing.ClearCurves();
-                existing.frameRate = clip.frameRate;
-                ApplyCurvesWithOptionalLoop(clip, existing, clipModel);
-                EditorUtility.SetDirty(existing);
-                AssetDatabase.SaveAssets();
-            }
             else
             {
-                string dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                AnimationClip target;
+                if (existing != null)
                 {
-                    try { Directory.CreateDirectory(dir); } catch { }
+                    Undo.RecordObject(existing, "Save Animation Clip");
+                    existing.ClearCurves();
+                    existing.frameRate = clip.frameRate;
+                    target = existing;
+                }
+                else
+                {
+                    string dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    {
+                        try { Directory.CreateDirectory(dir); } catch { }
+                    }
+                    target = new AnimationClip { frameRate = clip.frameRate };
                 }
 
-                var newClip = new AnimationClip { frameRate = clip.frameRate };
-                ApplyCurvesWithOptionalLoop(clip, newClip, clipModel);
+                CopyCurves(clip, target, clipModel);
+                if (clipModel.SmoothLoopEnabled) SetLoopTime(target);
 
-                AssetDatabase.CreateAsset(newClip, path);
+                if (existing != null) EditorUtility.SetDirty(target);
+                else                  AssetDatabase.CreateAsset(target, path);
                 AssetDatabase.SaveAssets();
             }
 
@@ -215,53 +226,44 @@ namespace DenEmo.Core
             return null;
         }
 
-        private static void ApplyCurvesWithOptionalLoop(AnimationClip source, AnimationClip target, AnimationClipModel clipModel)
+        /// <summary>全カーブをコピーする。ループ対応時はブレンドシェイプカーブにのみループ末尾キーを適用する。</summary>
+        private static void CopyCurves(AnimationClip source, AnimationClip target, AnimationClipModel clipModel)
         {
             foreach (var b in AnimationUtility.GetCurveBindings(source))
             {
                 var curve = AnimationUtility.GetEditorCurve(source, b);
-                if (curve != null)
-                {
-                    if (clipModel.SmoothLoopEnabled && curve.keys.Length > 0 && clipModel.ClipLength > 0f)
-                    {
-                        var loopCurve = new AnimationCurve(curve.keys);
-                        float valZero = loopCurve.Evaluate(0f);
-                        float tol = clipModel.FPS > 0f ? 0.5f / clipModel.FPS : 0.01f;
+                if (curve == null) continue;
 
-                        int endIdx = -1;
-                        for (int i = 0; i < loopCurve.keys.Length; i++)
-                            if (Mathf.Abs(loopCurve.keys[i].time - clipModel.ClipLength) <= tol) { endIdx = i; break; }
+                bool isBlendShape = b.type == typeof(SkinnedMeshRenderer)
+                                    && b.propertyName.StartsWith("blendShape.");
 
-                        if (endIdx >= 0)
-                            loopCurve.RemoveKey(endIdx);
-
-                        int newIdx = loopCurve.AddKey(new Keyframe(clipModel.ClipLength, valZero));
-
-                        int startIdx = -1;
-                        for (int i = 0; i < loopCurve.keys.Length; i++)
-                            if (Mathf.Abs(loopCurve.keys[i].time) <= tol) { startIdx = i; break; }
-
-                        if (startIdx >= 0)
-                        {
-                            AnimationUtility.SetKeyLeftTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyLeftTangentMode(loopCurve, startIdx));
-                            AnimationUtility.SetKeyRightTangentMode(loopCurve, newIdx, AnimationUtility.GetKeyRightTangentMode(loopCurve, startIdx));
-                        }
-
-                        AnimationUtility.SetEditorCurve(target, b, loopCurve);
-                    }
-                    else
-                    {
-                        AnimationUtility.SetEditorCurve(target, b, curve);
-                    }
-                }
+                if (clipModel.SmoothLoopEnabled && isBlendShape && curve.keys.Length > 0 && clipModel.ClipLength > 0f)
+                    AnimationUtility.SetEditorCurve(target, b, clipModel.BuildLoopCurve(curve));
+                else
+                    AnimationUtility.SetEditorCurve(target, b, curve);
             }
+        }
 
-            if (clipModel.SmoothLoopEnabled)
+        /// <summary>クリップ本体のブレンドシェイプカーブにループ末尾キーを書き込む（同一アセット上書き保存用）。</summary>
+        private static void MaterializeLoopKeys(AnimationClip clip, AnimationClipModel clipModel)
+        {
+            foreach (var b in AnimationUtility.GetCurveBindings(clip))
             {
-                var settings = AnimationUtility.GetAnimationClipSettings(target);
-                settings.loopTime = true;
-                AnimationUtility.SetAnimationClipSettings(target, settings);
+                if (b.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!b.propertyName.StartsWith("blendShape.")) continue;
+
+                var curve = AnimationUtility.GetEditorCurve(clip, b);
+                if (curve == null || curve.keys.Length == 0) continue;
+
+                AnimationUtility.SetEditorCurve(clip, b, clipModel.BuildLoopCurve(curve));
             }
+        }
+
+        private static void SetLoopTime(AnimationClip clip)
+        {
+            var settings = AnimationUtility.GetAnimationClipSettings(clip);
+            settings.loopTime = true;
+            AnimationUtility.SetAnimationClipSettings(clip, settings);
         }
 
         public static string ApplyAnimationToMesh(AnimationClip clip, ShapeKeyModel model)

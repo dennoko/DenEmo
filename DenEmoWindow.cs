@@ -255,11 +255,8 @@ namespace DenEmo
         private void OnUndoRedo()
         {
             _model.SyncValuesFromMesh();
-            if (_currentMode == EditorMode.Animation && _animModeUI.Preview.IsActive)
-            {
-                _animModeUI.Preview.SetCacheDirty();
-                _animModeUI.Preview.SampleAt(_animModeUI.ClipModel.CurrentTime);
-            }
+            if (_currentMode == EditorMode.Animation)
+                _animModeUI.OnUndoRedo();
             Repaint();
         }
 
@@ -268,6 +265,19 @@ namespace DenEmo
         private void OnGUI()
         {
             DenEmoTheme.Initialize();
+            DenEmoTheme.PushEditorTheme();
+            try
+            {
+                DrawWindowContents();
+            }
+            finally
+            {
+                DenEmoTheme.PopEditorTheme();
+            }
+        }
+
+        private void DrawWindowContents()
+        {
             TickStatusAutoClear();
 
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
