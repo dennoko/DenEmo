@@ -42,6 +42,7 @@ namespace DenEmo.UI
         private static Texture2D _texCard;
         private static Texture2D _texAccentCard;
         private static Texture2D _texRowHover;
+        private static Texture2D _texSearchField;
 
         // 生成したすべてのテクスチャを追跡してドメインリロード前に確実に破棄する
         private static readonly List<Texture2D> _allTextures = new List<Texture2D>();
@@ -49,12 +50,14 @@ namespace DenEmo.UI
         // ─── Styles ──────────────────────────────────────────────────────────
 
         private static bool _initialized;
+        private static bool _lastIsProSkin;
 
         public static GUIStyle CardStyle        { get; private set; }
         public static GUIStyle CardOuterStyle   { get; private set; }
         public static GUIStyle ToolbarStyle     { get; private set; }
         public static GUIStyle RowStyle         { get; private set; }
         public static GUIStyle RowHoverStyle    { get; private set; }
+        public static GUIStyle SearchTextFieldStyle  { get; private set; }
 
         public static GUIStyle TitleStyle            { get; private set; }
         public static GUIStyle SectionHeaderStyle    { get; private set; }
@@ -89,6 +92,13 @@ namespace DenEmo.UI
 
         public static void Initialize()
         {
+            bool currentProSkin = EditorGUIUtility.isProSkin;
+            if (_initialized && _lastIsProSkin != currentProSkin)
+            {
+                DisposeTextures();
+            }
+            _lastIsProSkin = currentProSkin;
+
             // テクスチャはドメインリロードで破棄されるので毎回チェック
             EnsureTextures();
             if (_initialized) return;
@@ -104,6 +114,7 @@ namespace DenEmo.UI
             if (!_texCard)       _texCard       = MakeBorderedTex(Surface1, Outline);
             if (!_texAccentCard) _texAccentCard = MakeBorderedTex(Surface2, Outline);
             if (!_texRowHover)   _texRowHover   = MakeTex(Surface2);
+            if (!_texSearchField) _texSearchField = MakeBorderedTex(Surface2, Hex(0x5a5a5a));
 
             // テクスチャが再生成された場合はスタイルも再構築
             if (_initialized && (CardStyle == null || CardStyle.normal.background == null))
@@ -349,6 +360,13 @@ namespace DenEmo.UI
             StatusErrorStyle = new GUIStyle(statusBase);
             StatusErrorStyle.normal.background = MakeTex(Color.Lerp(Surface1, SemanticError, 0.50f));
             FixAllTextColors(StatusErrorStyle, new Color(1f, 0.65f, 0.65f));
+
+            // ─── Search Text Field Style ──────────────────────────────────────
+            SearchTextFieldStyle = new GUIStyle(EditorStyles.textField);
+            FixAllStateBackgrounds(SearchTextFieldStyle, _texSearchField);
+            SearchTextFieldStyle.border = new RectOffset(1, 1, 1, 1);
+            SearchTextFieldStyle.padding = new RectOffset(6, 6, 3, 3);
+            FixAllTextColors(SearchTextFieldStyle, TextPrimary);
         }
 
         public static GUIStyle GetStatusStyle(int level)
@@ -368,6 +386,10 @@ namespace DenEmo.UI
 
         private static bool _overrideActive;
         public static bool IsOverrideActive => _overrideActive;
+
+        private static Color _backupCursorColor;
+        private static Color _backupSelectionColor;
+        private static bool _settingsBackupActive;
 
         private class GUIStyleBackup
         {
@@ -451,7 +473,16 @@ namespace DenEmo.UI
                     new GUIStyleBackup(EditorStyles.textField),
                     new GUIStyleBackup(EditorStyles.popup),
                     new GUIStyleBackup(EditorStyles.toggle),
+                    new GUIStyleBackup(GUI.skin.textField),
+                    new GUIStyleBackup(GUI.skin.label),
                 };
+            }
+
+            if (!_settingsBackupActive)
+            {
+                _backupCursorColor = GUI.skin.settings.cursorColor;
+                _backupSelectionColor = GUI.skin.settings.selectionColor;
+                _settingsBackupActive = true;
             }
 
             FixAllTextColors(EditorStyles.label,       TextSecondary);
@@ -460,11 +491,26 @@ namespace DenEmo.UI
             FixAllTextColors(EditorStyles.textField,   TextSecondary);
             FixAllTextColors(EditorStyles.popup,       TextSecondary);
             FixAllTextColors(EditorStyles.toggle,      TextSecondary);
+            FixAllTextColors(GUI.skin.textField,       TextSecondary);
+            FixAllTextColors(GUI.skin.label,           TextSecondary);
 
-            // 入力欄の背景を全 state でダーク色に固定（ホバー・フォーカス時の白背景リーク防止）
-            FixAllStateBackgrounds(EditorStyles.objectField, _texSurface1);
-            FixAllStateBackgrounds(EditorStyles.numberField, _texSurface1);
-            FixAllStateBackgrounds(EditorStyles.textField,   _texSurface1);
+            // 入力欄の背景を全 state でダーク色＋ボーダーに固定（ホバー・フォーカス時の白背景リーク防止）
+            FixAllStateBackgrounds(EditorStyles.objectField, _texSearchField);
+            EditorStyles.objectField.border = new RectOffset(1, 1, 1, 1);
+
+            FixAllStateBackgrounds(EditorStyles.numberField, _texSearchField);
+            EditorStyles.numberField.border = new RectOffset(1, 1, 1, 1);
+
+            FixAllStateBackgrounds(EditorStyles.textField,   _texSearchField);
+            EditorStyles.textField.border = new RectOffset(1, 1, 1, 1);
+            EditorStyles.textField.padding = new RectOffset(6, 6, 3, 3);
+
+            FixAllStateBackgrounds(GUI.skin.textField,       _texSearchField);
+            GUI.skin.textField.border = new RectOffset(1, 1, 1, 1);
+            GUI.skin.textField.padding = new RectOffset(6, 6, 3, 3);
+
+            GUI.skin.settings.cursorColor = TextPrimary;
+            GUI.skin.settings.selectionColor = new Color(1f, 1f, 1f, 0.25f);
 
             // ポップアップは枠線付きテクスチャ + 1px 境界で縞ノイズを防ぐ
             FixAllStateBackgrounds(EditorStyles.popup, _texCard);
@@ -481,6 +527,13 @@ namespace DenEmo.UI
             if (_backups != null)
                 foreach (var b in _backups)
                     b.Restore();
+
+            if (_settingsBackupActive)
+            {
+                GUI.skin.settings.cursorColor = _backupCursorColor;
+                GUI.skin.settings.selectionColor = _backupSelectionColor;
+                _settingsBackupActive = false;
+            }
         }
 
         /// <summary>
@@ -591,6 +644,7 @@ namespace DenEmo.UI
             _texCard       = null;
             _texAccentCard = null;
             _texRowHover   = null;
+            _texSearchField = null;
             _initialized   = false;
             _backups       = null;
         }

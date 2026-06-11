@@ -34,19 +34,23 @@ namespace DenEmo.Core
 
         // ─── Keyframe write ──────────────────────────────────────────────────
 
-        /// <summary>指定時刻にキーを記録（既存キーは上書き）。</summary>
-        public void RecordKey(string shapeName, float time, float value, InterpolationType interp)
+        /// <summary>
+        /// 指定時刻にキーを記録（既存キーは上書き）。
+        /// recordUndo=false でドラッグジェスチャ中の 2 回目以降の Undo スナップショットを省略できる
+        /// （Undo.RecordObject はクリップ全体をシリアライズするため、同一 Undo グループ内では 1 回で十分）。
+        /// </summary>
+        public void RecordKey(string shapeName, float time, float value, InterpolationType interp, bool recordUndo = true)
         {
             if (Clip == null) return;
 
             var binding = MakeBinding(shapeName);
-            Undo.RecordObject(Clip, "Record Keyframe");
+            if (recordUndo) Undo.RecordObject(Clip, "Record Keyframe");
 
             var curve = AnimationUtility.GetEditorCurve(Clip, binding) ?? new AnimationCurve();
             WriteKey(curve, time, value, interp, _model.FrameTolerance);
 
             AnimationUtility.SetEditorCurve(Clip, binding, curve);
-            Commit();
+            CommitTrack(shapeName, curve);
         }
 
         /// <summary>複数シェイプのキーを 1 回の Undo 操作でまとめて記録する。</summary>
@@ -56,18 +60,23 @@ namespace DenEmo.Core
 
             Undo.RecordObject(Clip, "Insert Keyframe (All)");
             float tol = _model.FrameTolerance;
-            bool changed = false;
+            var bindings = new List<EditorCurveBinding>();
+            var curves   = new List<AnimationCurve>();
 
             foreach (var (shapeName, value) in entries)
             {
                 var binding = MakeBinding(shapeName);
                 var curve = AnimationUtility.GetEditorCurve(Clip, binding) ?? new AnimationCurve();
                 WriteKey(curve, time, value, interp, tol);
-                AnimationUtility.SetEditorCurve(Clip, binding, curve);
-                changed = true;
+                bindings.Add(binding);
+                curves.Add(curve);
             }
 
-            if (changed) Commit();
+            if (bindings.Count > 0)
+            {
+                SetEditorCurvesBatch(bindings, curves);
+                Commit();
+            }
         }
 
         // ─── Keyframe delete ─────────────────────────────────────────────────
@@ -86,8 +95,10 @@ namespace DenEmo.Core
 
             Undo.RecordObject(Clip, "Delete Keyframe");
             curve.RemoveKey(idx);
-            AnimationUtility.SetEditorCurve(Clip, binding, curve.keys.Length > 0 ? curve : null);
-            Commit();
+            bool hasKeys = curve.keys.Length > 0;
+            AnimationUtility.SetEditorCurve(Clip, binding, hasKeys ? curve : null);
+            if (hasKeys) CommitTrack(shapeName, curve);
+            else         Commit();
         }
 
         /// <summary>指定時刻にある全トラックのキーを 1 回の Undo 操作で削除する。</summary>
@@ -97,18 +108,62 @@ namespace DenEmo.Core
 
             float tol = _model.FrameTolerance;
             Undo.RecordObject(Clip, "Delete Frame Keys");
-            bool changed = false;
+            var bindings = new List<EditorCurveBinding>();
+            var curves   = new List<AnimationCurve>();
 
             foreach (var track in _model.Tracks)
             {
                 int idx = AnimationClipModel.FindKeyIndex(track.Curve, time, tol);
                 if (idx < 0) continue;
                 track.Curve.RemoveKey(idx);
-                AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve.keys.Length > 0 ? track.Curve : null);
-                changed = true;
+                bindings.Add(track.Binding);
+                curves.Add(track.Curve.keys.Length > 0 ? track.Curve : null);
             }
 
-            if (changed) Commit();
+            if (bindings.Count > 0)
+            {
+                SetEditorCurvesBatch(bindings, curves);
+                Commit();
+            }
+        }
+
+        /// <summary>
+        /// 指定時刻より後ろにある全キーを削除する（クリップ長短縮時の整理用）。
+        /// 削除したキー数を返す。
+        /// </summary>
+        public int DeleteKeysAfter(float time)
+        {
+            if (Clip == null) return 0;
+
+            float tol = _model.FrameTolerance;
+            Undo.RecordObject(Clip, "Delete Keys Beyond Length");
+            var bindings = new List<EditorCurveBinding>();
+            var curves   = new List<AnimationCurve>();
+            int deleted  = 0;
+
+            foreach (var track in _model.Tracks)
+            {
+                var keys = track.Curve.keys;
+                int removeCount = 0;
+                for (int i = keys.Length - 1; i >= 0; i--)
+                {
+                    if (keys[i].time <= time + tol) break;
+                    track.Curve.RemoveKey(i);
+                    removeCount++;
+                }
+                if (removeCount == 0) continue;
+
+                deleted += removeCount;
+                bindings.Add(track.Binding);
+                curves.Add(track.Curve.keys.Length > 0 ? track.Curve : null);
+            }
+
+            if (deleted > 0)
+            {
+                SetEditorCurvesBatch(bindings, curves);
+                Commit();
+            }
+            return deleted;
         }
 
         /// <summary>指定シェイプの全キー（トラックごと）を削除する。</summary>
@@ -128,8 +183,9 @@ namespace DenEmo.Core
         /// oldFrame にあるキーを newFrame 方向へ移動する。途中に他のキーがある場合は
         /// その手前で停止する（ブロッキング）。shapeName が null なら全トラックを同時移動。
         /// 実際に到達したフレームを返す。
+        /// recordUndo はドラッグジェスチャの最初の移動でのみ true を渡せば十分。
         /// </summary>
-        public int MoveKeys(int oldFrame, int newFrame, string shapeName = null)
+        public int MoveKeys(int oldFrame, int newFrame, string shapeName = null, bool recordUndo = true)
         {
             if (Clip == null || oldFrame == newFrame) return oldFrame;
 
@@ -165,18 +221,21 @@ namespace DenEmo.Core
 
             if (moving.Count == 0 || reached == oldFrame) return oldFrame;
 
-            Undo.RecordObject(Clip, shapeName == null ? "Move All Keyframes" : "Move Keyframe");
+            if (recordUndo)
+                Undo.RecordObject(Clip, shapeName == null ? "Move All Keyframes" : "Move Keyframe");
             float newTime = reached / fps;
 
+            EditorUtility.SetDirty(Clip);
             foreach (var (track, keyIndex) in moving)
             {
                 var k = track.Curve.keys[keyIndex];
                 k.time = newTime;
                 track.Curve.MoveKey(keyIndex, k);
                 AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
+                // キャッシュは全再構築せず、移動したトラックのみ更新する（ドラッグ中の負荷対策）
+                _model.UpdateTrackCurve(track.ShapeName, track.Curve);
             }
 
-            Commit();
             return reached;
         }
 
@@ -194,7 +253,7 @@ namespace DenEmo.Core
             Undo.RecordObject(Clip, "Change Interpolation");
             ApplyTangentMode(track.Curve, idx, interp);
             AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
-            Commit();
+            CommitTrack(shapeName, track.Curve);
         }
 
         /// <summary>全トラックの全キーの補間タイプを一括変更する。</summary>
@@ -203,17 +262,22 @@ namespace DenEmo.Core
             if (Clip == null) return;
 
             Undo.RecordObject(Clip, "Change All Interpolation");
-            bool changed = false;
+            var bindings = new List<EditorCurveBinding>();
+            var curves   = new List<AnimationCurve>();
 
             foreach (var track in _model.Tracks)
             {
                 for (int i = 0; i < track.Curve.keys.Length; i++)
                     ApplyTangentMode(track.Curve, i, interp);
-                AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
-                changed = true;
+                bindings.Add(track.Binding);
+                curves.Add(track.Curve);
             }
 
-            if (changed) Commit();
+            if (bindings.Count > 0)
+            {
+                SetEditorCurvesBatch(bindings, curves);
+                Commit();
+            }
         }
 
         // ─── Value correction ────────────────────────────────────────────────
@@ -229,7 +293,8 @@ namespace DenEmo.Core
             if (Clip == null) return false;
 
             Undo.RecordObject(Clip, "Apply Shape Key Correction");
-            bool changed = false;
+            var bindings = new List<EditorCurveBinding>();
+            var curves   = new List<AnimationCurve>();
 
             foreach (var track in _model.Tracks)
             {
@@ -258,12 +323,17 @@ namespace DenEmo.Core
                 }
 
                 track.Curve.keys = keys;
-                AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
-                changed = true;
+                bindings.Add(track.Binding);
+                curves.Add(track.Curve);
             }
 
-            if (changed) Commit();
-            return changed;
+            if (bindings.Count > 0)
+            {
+                SetEditorCurvesBatch(bindings, curves);
+                Commit();
+                return true;
+            }
+            return false;
         }
 
         // ─── Private helpers ─────────────────────────────────────────────────
@@ -272,6 +342,28 @@ namespace DenEmo.Core
         {
             EditorUtility.SetDirty(Clip);
             _model.MarkDirty();
+        }
+
+        /// <summary>単一トラック変更用のコミット。キャッシュ全体を無効化せず該当トラックのみ更新する。</summary>
+        private void CommitTrack(string shapeName, AnimationCurve curve)
+        {
+            EditorUtility.SetDirty(Clip);
+            _model.UpdateTrackCurve(shapeName, curve);
+        }
+
+        /// <summary>
+        /// 複数カーブの一括書き込み。SetEditorCurve はクリップ全体の再構築を伴うため、
+        /// 対応バージョンでは複数形 API でまとめてコミットする（A-4 対策）。
+        /// curves の要素に null を渡すとそのバインディングのカーブを削除する。
+        /// </summary>
+        private void SetEditorCurvesBatch(List<EditorCurveBinding> bindings, List<AnimationCurve> curves)
+        {
+#if UNITY_2022_1_OR_NEWER
+            AnimationUtility.SetEditorCurves(Clip, bindings.ToArray(), curves.ToArray());
+#else
+            for (int i = 0; i < bindings.Count; i++)
+                AnimationUtility.SetEditorCurve(Clip, bindings[i], curves[i]);
+#endif
         }
 
         private EditorCurveBinding MakeBinding(string shapeName)

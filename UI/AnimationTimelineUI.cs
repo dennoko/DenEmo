@@ -42,7 +42,12 @@ namespace DenEmo.UI
         // Keyframe dragging state
         private bool   _isDraggingKeyframe;
         private int    _draggingFrame = -1;
-        private string _draggingShapeName; // null = 全トラック
+        private string _draggingShapeName;   // null = 全トラック
+        private bool   _dragKeyUndoRecorded; // ジェスチャ内の Undo スナップショットを 1 回に抑える
+
+        // キードラッグが他キーにブロックされたときの一時ハイライト
+        private int    _blockFlashFrame = -1;
+        private double _blockFlashUntil;
 
         // Cached track geometry (DrawRulerAndScrubber が設定し、スクロールビュー内の行が使う)
         private float _cachedTrackW;
@@ -105,10 +110,16 @@ namespace DenEmo.UI
 
             GUILayout.BeginVertical(DenEmoTheme.CardStyle);
 
-            // ── Section header + detach/attach button ────────────────────────
+            // ── Section header + help / detach / attach button ───────────────
             GUILayout.BeginHorizontal();
             GUILayout.Label(DenEmoLoc.T("ui.timeline.title"), DenEmoTheme.SectionHeaderStyle);
             GUILayout.FlexibleSpace();
+
+            // ？: ホバーでズーム操作とショートカット一覧を表示する（クリック動作なし）
+            GUILayout.Label(
+                new GUIContent("？", DenEmoLoc.T("ui.timeline.help.tip")),
+                DenEmoTheme.MiniButtonStyle, GUILayout.Width(22));
+            GUILayout.Space(4);
 
             if (window is DenEmoTimelineWindow)
             {
@@ -196,10 +207,15 @@ namespace DenEmo.UI
 
         private void SeekTo(AnimationModeUI mode, float time, EditorWindow window)
         {
+            // 移動前の時刻で未確定のキー記録をフラッシュし、未記録変更があれば警告する
+            mode.NotifyBeforeSeek();
             mode.Playback.Stop();
             mode.ClipModel.CurrentTime = Mathf.Clamp(time, 0f, mode.ClipModel.ClipLength);
             mode.Preview.SampleAt(mode.ClipModel.CurrentTime);
             window.Repaint();
+            // 分離ウィンドウからのシーク時はメインウィンドウのスライダー表示も追従させる
+            if (window is DenEmoTimelineWindow && DenEmoWindow.Instance != null)
+                DenEmoWindow.Instance.Repaint();
         }
 
         private void StepFrame(AnimationModeUI mode, int direction, EditorWindow window)
@@ -251,8 +267,12 @@ namespace DenEmo.UI
             if (!HasClipboardData) return;
             var m = mode.ClipModel;
             float pasteTime = m.SnapToFrame(m.CurrentTime);
+            bool first = true; // Undo スナップショットはペースト全体で 1 回
             foreach (var entry in _keyClipboard)
-                mode.Editor.RecordKey(entry.ShapeName, pasteTime, entry.Value, entry.Interp);
+            {
+                mode.Editor.RecordKey(entry.ShapeName, pasteTime, entry.Value, entry.Interp, recordUndo: first);
+                first = false;
+            }
             mode.Preview.SampleAt(m.CurrentTime);
             window.Repaint();
         }

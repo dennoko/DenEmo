@@ -84,21 +84,23 @@ namespace DenEmo.UI
 
             GUILayout.FlexibleSpace();
 
+            // FPS / 長さは入力途中の値で確定しないよう DelayedFloatField を使う
             GUILayout.Label(DenEmoLoc.T("ui.timeline.fps"), _timelineLabelStyle, GUILayout.Width(28), GUILayout.Height(20));
-            float newFps = EditorGUILayout.FloatField(m.FPS, GUILayout.Width(40), GUILayout.Height(20));
+            float newFps = EditorGUILayout.DelayedFloatField(m.FPS, GUILayout.Width(40), GUILayout.Height(20));
             if (!Mathf.Approximately(newFps, m.FPS) && newFps > 0f)
                 mode.Editor.SetFrameRate(newFps);
 
             GUILayout.Space(16);
 
             GUILayout.Label(DenEmoLoc.T("ui.timeline.length"), _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(20));
-            float newLen = EditorGUILayout.FloatField(m.ClipLength, GUILayout.Width(40), GUILayout.Height(20));
+            float newLen = EditorGUILayout.DelayedFloatField(m.ClipLength, GUILayout.Width(40), GUILayout.Height(20));
             if (!Mathf.Approximately(newLen, m.ClipLength) && newLen > 0f)
-                m.ClipLength = newLen;
+                ApplyClipLength(mode, newLen, window);
 
             GUILayout.Space(16);
 
-            GUILayout.Label(DenEmoLoc.T("ui.timeline.allInterp"), _timelineLabelStyle, GUILayout.Width(85), GUILayout.Height(20));
+            // 補間タイプの選択は「新規キーのデフォルト」のみ。既存キーへの一括適用は明示的なボタンに分離する
+            GUILayout.Label(DenEmoLoc.T("ui.timeline.interp"), _timelineLabelStyle, GUILayout.Width(100), GUILayout.Height(20));
             InterpolationType newInterp = (InterpolationType)GUILayout.Toolbar(
                 (int)mode.CurrentInterp,
                 new[] { "Step", "Linear", "Ease" },
@@ -107,11 +109,25 @@ namespace DenEmo.UI
                 GUILayout.ExpandWidth(false));
 
             if (newInterp != mode.CurrentInterp)
-            {
                 mode.CurrentInterp = newInterp;
-                mode.Editor.SetAllKeysInterpolation(newInterp);
-                mode.Preview.SampleAt(m.CurrentTime);
-                window.Repaint();
+
+            GUILayout.Space(4);
+
+            if (GUILayout.Button(
+                new GUIContent(DenEmoLoc.T("ui.timeline.applyInterpAll"), DenEmoLoc.T("ui.timeline.applyInterpAll.tip")),
+                DenEmoTheme.MiniButtonStyle, GUILayout.Height(20)))
+            {
+                string interpName = new[] { "Step", "Linear", "Ease" }[(int)mode.CurrentInterp];
+                if (EditorUtility.DisplayDialog(
+                    DenEmoLoc.T("dlg.timeline.applyInterpAll.title"),
+                    DenEmoLoc.Tf("dlg.timeline.applyInterpAll.msg", interpName),
+                    DenEmoLoc.T("dlg.yes"),
+                    DenEmoLoc.T("dlg.no")))
+                {
+                    mode.Editor.SetAllKeysInterpolation(mode.CurrentInterp);
+                    mode.Preview.SampleAt(m.CurrentTime);
+                    window.Repaint();
+                }
             }
 
             GUILayout.FlexibleSpace();
@@ -158,6 +174,37 @@ namespace DenEmo.UI
             EditorGUILayout.EndHorizontal();
 
             GUILayout.Space(8);
+        }
+
+        /// <summary>
+        /// クリップ長を変更する。短縮で範囲外に取り残されるキーがある場合は
+        /// 「キー維持 / キー削除 / キャンセル」を確認する。
+        /// </summary>
+        private void ApplyClipLength(AnimationModeUI mode, float newLen, EditorWindow window)
+        {
+            var m = mode.ClipModel;
+
+            int outside = 0;
+            foreach (float t in m.AllKeyTimes)
+                if (t > newLen + m.FrameTolerance) outside++;
+
+            if (outside > 0)
+            {
+                int choice = EditorUtility.DisplayDialogComplex(
+                    DenEmoLoc.T("dlg.timeline.shorten.title"),
+                    DenEmoLoc.Tf("dlg.timeline.shorten.msg", outside),
+                    DenEmoLoc.T("dlg.timeline.shorten.keep"),    // 0
+                    DenEmoLoc.T("dlg.cancel"),                   // 1
+                    DenEmoLoc.T("dlg.timeline.shorten.delete")); // 2
+                if (choice == 1) return;
+                if (choice == 2) mode.Editor.DeleteKeysAfter(newLen);
+            }
+
+            m.ClipLength = newLen;
+            if (m.CurrentTime > newLen)
+                m.CurrentTime = newLen;
+            mode.Preview.SampleAt(m.CurrentTime);
+            window.Repaint();
         }
 
         private void DrawTransportButtons(AnimationModeUI mode, EditorWindow window)
@@ -208,7 +255,7 @@ namespace DenEmo.UI
             // ── Frame field ──────────────────────────────────────────────────
             GUILayout.Label(DenEmoLoc.T("ui.timeline.frame"), _timelineLabelStyle, GUILayout.Width(50), GUILayout.Height(22));
             int curFrame = m.CurrentFrame;
-            int newFrame = EditorGUILayout.IntField(curFrame, GUILayout.Width(44), GUILayout.Height(22));
+            int newFrame = EditorGUILayout.DelayedIntField(curFrame, GUILayout.Width(44), GUILayout.Height(22));
             if (newFrame != curFrame)
                 SeekTo(mode, m.FrameToTime(newFrame), window);
 
@@ -216,7 +263,7 @@ namespace DenEmo.UI
 
             // ── Playback speed ───────────────────────────────────────────────
             GUILayout.Label(DenEmoLoc.T("ui.timeline.speed"), _timelineLabelStyle, GUILayout.Width(32), GUILayout.Height(22));
-            float newSpeed = EditorGUILayout.FloatField(mode.Playback.Speed, GUILayout.Width(40), GUILayout.Height(22));
+            float newSpeed = EditorGUILayout.DelayedFloatField(mode.Playback.Speed, GUILayout.Width(40), GUILayout.Height(22));
             if (!Mathf.Approximately(newSpeed, mode.Playback.Speed))
                 mode.Playback.Speed = newSpeed;
 

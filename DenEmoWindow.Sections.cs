@@ -202,7 +202,7 @@ namespace DenEmo
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label(DenEmoLoc.EnglishMode ? "🔍 Keyword" : "🔍 キーワード", GUILayout.Width(80));
             GUI.SetNextControlName("SearchField");
-            searchText = EditorGUILayout.TextField(searchText, GUILayout.ExpandWidth(true));
+            searchText = EditorGUILayout.TextField(searchText, DenEmoTheme.SearchTextFieldStyle, GUILayout.ExpandWidth(true));
             if (!string.IsNullOrEmpty(searchText))
             {
                 if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
@@ -337,7 +337,7 @@ namespace DenEmo
 
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label(DenEmoLoc.T("ui.footer.saveTo"), DenEmoTheme.CaptionStyle, GUILayout.Width(90));
-            saveFolder = EditorGUILayout.TextField(saveFolder, GUILayout.ExpandWidth(true));
+            saveFolder = EditorGUILayout.TextField(saveFolder, DenEmoTheme.SearchTextFieldStyle, GUILayout.ExpandWidth(true));
             if (GUILayout.Button(DenEmoLoc.T("ui.footer.browse"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(46)))
             {
                 var newPath = EditorUtility.OpenFolderPanel("フォルダを選択", Application.dataPath, "");

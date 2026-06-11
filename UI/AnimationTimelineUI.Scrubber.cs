@@ -28,7 +28,9 @@ namespace DenEmo.UI
             if (Event.current.type == EventType.Layout)
                 _showScrollbar = ViewRange < 1f - 0.001f;
 
-            HandleTimelineZoom(trackArea, trackX, trackW);
+            // メインウィンドウ埋め込み時は外側のスクロールビューとの競合を避けるため Ctrl 必須。
+            // 分離ウィンドウではホイール単独でもズームできる。
+            HandleTimelineZoom(trackArea, trackX, trackW, requireModifier: !(window is DenEmoTimelineWindow));
 
             if (_showScrollbar)
                 DrawTimelineScrollbar(trackX, trackW, window);
@@ -44,16 +46,18 @@ namespace DenEmo.UI
             }
 
             DrawZoomControls(rulerRect, window);
-            HandleScrubberInput(scrubRect, mode, window);
+            // ルーラー全域＋スクラバー帯をシーク対象にする（トラックラベル列・ズームボタン領域は trackX より左で対象外）
+            HandleScrubberInput(trackArea, mode, window);
         }
 
         // ─── Zoom（マウスホイール、カーソル位置中心） ─────────────────────────
 
-        private void HandleTimelineZoom(Rect trackRect, float trackX, float trackW)
+        private void HandleTimelineZoom(Rect trackRect, float trackX, float trackW, bool requireModifier)
         {
             Event e = Event.current;
             if (e.type != EventType.ScrollWheel) return;
             if (!trackRect.Contains(e.mousePosition)) return;
+            if (requireModifier && !e.control && !e.command) return; // 素のホイールは外側スクロールへ流す
 
             float mouseNorm = _viewStart + ((e.mousePosition.x - trackX) / trackW) * ViewRange;
             mouseNorm = Mathf.Clamp01(mouseNorm);
@@ -230,12 +234,13 @@ namespace DenEmo.UI
         }
 
         // ─── Scrubber input ───────────────────────────────────────────────────
+        // seekArea はルーラー＋スクラバー帯のトラック領域（ラベル列除外済み）。
 
-        private void HandleScrubberInput(Rect scrubRect, AnimationModeUI mode, EditorWindow window)
+        private void HandleScrubberInput(Rect seekArea, AnimationModeUI mode, EditorWindow window)
         {
-            float trackW = scrubRect.width - _trackLabelWidth - RIGHT_PADDING;
-            float trackX = scrubRect.x + _trackLabelWidth;
-            Rect trackR = new Rect(trackX, scrubRect.y, trackW, scrubRect.height);
+            float trackX = seekArea.x;
+            float trackW = seekArea.width;
+            Rect trackR = seekArea;
 
             Event e = Event.current;
 
@@ -280,8 +285,13 @@ namespace DenEmo.UI
             }
 
             // ── ◆+ 表示中の全シェイプにキーを挿入 ─────────────────────────────
+            // フィルター状態で対象が変わるため、ツールチップに対象件数を明示する
+            int insertCount = 0;
+            foreach (var it in shapeModel.Items)
+                if (it.IsVisible && !it.IsVrcShape && !it.IsLipSyncShape) insertCount++;
+
             Rect insertRect = new Rect(rowRect.x + 4, rowRect.y + 8, _trackLabelWidth - 12, 20);
-            if (GUI.Button(insertRect, new GUIContent("◆+", DenEmoLoc.T("ui.timeline.insertAll.tip")), DenEmoTheme.MiniButtonStyle))
+            if (GUI.Button(insertRect, new GUIContent("◆+", DenEmoLoc.Tf("ui.timeline.insertAll.tipN", insertCount)), DenEmoTheme.MiniButtonStyle))
             {
                 var smr = shapeModel.TargetSkinnedMesh;
                 if (smr != null && smr.sharedMesh != null)
@@ -290,6 +300,7 @@ namespace DenEmo.UI
                         .Where(i => i.IsVisible && !i.IsVrcShape && !i.IsLipSyncShape)
                         .Select(i => (i.Name, smr.GetBlendShapeWeight(i.Index)));
                     mode.Editor.RecordKeys(entries, m.CurrentTime, mode.CurrentInterp);
+                    mode.ClearUnrecordedTweaks();
                     mode.Preview.SampleAt(m.CurrentTime);
                     window.Repaint();
                 }
@@ -305,10 +316,10 @@ namespace DenEmo.UI
                 float kx = TimeToPixel(kTime, m.ClipLength, trackX, trackW);
                 if (kx < trackX - 10 || kx > trackX + trackW + 10) continue;
 
-                // ＝ ドラッグハンドル（フレーム上の全キーを移動）
+                // ↔ ドラッグハンドル（フレーム上の全キーを移動）
                 Rect dragRect = new Rect(kx - 10, rowRect.y + 2, 20, 12);
                 EditorGUIUtility.AddCursorRect(dragRect, MouseCursor.SlideArrow);
-                GUI.Label(dragRect, "＝", DenEmoTheme.CenterCaptionStyle);
+                GUI.Label(dragRect, new GUIContent("↔", DenEmoLoc.T("ui.timeline.moveFrame.tip")), DenEmoTheme.CenterCaptionStyle);
                 HandleKeyframeDrag(dragRect, kTime, null, mode, window, trackX, trackW);
 
                 // ✕ フレーム上の全キーを削除
@@ -343,9 +354,10 @@ namespace DenEmo.UI
 
             if (e.type == EventType.MouseDown && hitRect.Contains(e.mousePosition) && e.button == 0)
             {
-                _isDraggingKeyframe = true;
-                _draggingFrame      = frame;
-                _draggingShapeName  = shapeName;
+                _isDraggingKeyframe  = true;
+                _draggingFrame       = frame;
+                _draggingShapeName   = shapeName;
+                _dragKeyUndoRecorded = false;
                 GUI.FocusControl(null);
                 if (seekOnDown)
                 {
@@ -364,12 +376,22 @@ namespace DenEmo.UI
 
                 if (targetFrame != _draggingFrame)
                 {
-                    int reached = mode.Editor.MoveKeys(_draggingFrame, targetFrame, shapeName);
+                    int reached = mode.Editor.MoveKeys(
+                        _draggingFrame, targetFrame, shapeName,
+                        recordUndo: !_dragKeyUndoRecorded);
                     if (reached != _draggingFrame)
                     {
+                        _dragKeyUndoRecorded = true;
                         _draggingFrame = reached;
                         m.CurrentTime  = m.FrameToTime(reached);
                         mode.Preview.SampleAt(m.CurrentTime);
+                        window.Repaint();
+                    }
+                    if (reached != targetFrame)
+                    {
+                        // 他キーにブロックされた：停止位置の隣にあるブロック元キーを一瞬ハイライトする
+                        _blockFlashFrame = reached + (targetFrame > reached ? 1 : -1);
+                        _blockFlashUntil = EditorApplication.timeSinceStartup + 0.4;
                         window.Repaint();
                     }
                 }

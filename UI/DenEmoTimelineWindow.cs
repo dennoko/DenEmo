@@ -6,6 +6,9 @@ namespace DenEmo.UI
     /// <summary>タイムラインを別ウィンドウとして表示する（描画は DenEmoWindow に委譲）。</summary>
     public class DenEmoTimelineWindow : EditorWindow
     {
+        /// <summary>再生中の再描画用に AnimationModeUI が参照する。</summary>
+        public static DenEmoTimelineWindow Instance { get; private set; }
+
         private Vector2 _scrollPos;
 
         public static void ShowWindow()
@@ -48,14 +51,17 @@ namespace DenEmo.UI
             }
         }
 
+        // 常時 EditorApplication.update += Repaint で再描画し続けるとエディタが
+        // アイドル時もフル稼働するため購読しない。再生中の再描画は
+        // AnimationModeUI.OnUpdate がサンプル実行時のみ Instance.Repaint() を呼ぶ。
         private void OnEnable()
         {
-            EditorApplication.update += Repaint;
+            Instance = this;
         }
 
         private void OnDisable()
         {
-            EditorApplication.update -= Repaint;
+            if (Instance == this) Instance = null;
         }
     }
 }

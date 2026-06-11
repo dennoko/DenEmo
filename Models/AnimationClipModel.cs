@@ -104,6 +104,42 @@ namespace DenEmo.Models
         /// <summary>クリップ・長さ・SMR パス等が変わった後に呼ぶ。キャッシュは次回アクセス時に再構築される。</summary>
         public void MarkDirty() => _revision++;
 
+        /// <summary>
+        /// 既存トラック 1 本のカーブ変更をキャッシュへ直接反映する（全トラック再構築を避ける高速パス）。
+        /// キャッシュが古い・トラックが存在しない・カーブが空になった場合は MarkDirty() にフォールバックする。
+        /// Revision は変更しないため、トラック集合に依存するキャッシュ（サンプル対象マップ等）はそのまま有効。
+        /// </summary>
+        public void UpdateTrackCurve(string shapeName, AnimationCurve curve)
+        {
+            if (_cachedRevision != _revision ||
+                curve == null || curve.keys.Length == 0 ||
+                !_trackByName.TryGetValue(shapeName, out var track))
+            {
+                MarkDirty();
+                return;
+            }
+
+            track.Curve        = curve;
+            track.PreviewCurve = _smoothLoop ? BuildLoopCurve(curve) : curve;
+
+            var keys  = curve.keys;
+            var times = new float[keys.Length];
+            for (int i = 0; i < keys.Length; i++) times[i] = keys[i].time;
+            track.KeyTimes = times;
+
+            RebuildAllKeyTimes();
+        }
+
+        private void RebuildAllKeyTimes()
+        {
+            var timeSet = new SortedSet<float>();
+            foreach (var track in _tracks)
+                foreach (var t in track.KeyTimes)
+                    timeSet.Add(t);
+            _allKeyTimes = new float[timeSet.Count];
+            timeSet.CopyTo(_allKeyTimes);
+        }
+
         /// <summary>現在の SMR パスに属する全ブレンドシェイプトラック（キャッシュ済み）。</summary>
         public IReadOnlyList<AnimationTrack> Tracks
         {

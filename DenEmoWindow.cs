@@ -159,6 +159,7 @@ namespace DenEmo
             }
 
             _animModeUI.OnEnable(_model);
+            _animModeUI.StatusSink = (msg, lvl) => SetStatus(msg, lvl);
 
             _listUI.OnIncludeFlagsChanged = () =>
             {
