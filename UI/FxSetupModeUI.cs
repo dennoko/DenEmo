@@ -98,10 +98,15 @@ namespace DenEmo.UI
             _targetSmrPaths.Clear();
 
             var target = model?.TargetSkinnedMesh;
-            if (target == null) return;
+            if (target == null)
+            {
+                _hover.SetRoot(null);
+                return;
+            }
 
             _descriptor = VrcAvatarReflection.FindDescriptor(target.transform);
             _avatarRoot = _descriptor != null ? _descriptor.transform : target.transform.root;
+            _hover.SetRoot(_avatarRoot);
 
             // FX クリップのバインディングパスと突き合わせる対象メッシュのパス集合
             var meshes = (model.ActiveMeshes != null && model.ActiveMeshes.Count > 0)
