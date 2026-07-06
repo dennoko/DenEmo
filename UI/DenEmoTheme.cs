@@ -147,12 +147,12 @@ namespace DenEmo.UI
             RowStyle = new GUIStyle();
             RowStyle.normal.background = _texSurface1;
             RowStyle.padding = new RectOffset(4, 4, 2, 2);
-            RowStyle.margin  = new RectOffset(0, 0, 1, 1);
+            RowStyle.margin  = new RectOffset(0, 0, 0, 0);
 
             RowHoverStyle = new GUIStyle();
             RowHoverStyle.normal.background = _texRowHover;
             RowHoverStyle.padding = new RectOffset(4, 4, 2, 2);
-            RowHoverStyle.margin  = new RectOffset(0, 0, 1, 1);
+            RowHoverStyle.margin  = new RectOffset(0, 0, 0, 0);
 
             // ── Typography ───────────────────────────────────────────────────
             // すべて new GUIStyle() から構築し、FixAllTextColors で全 state を固定する。

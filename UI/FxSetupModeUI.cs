@@ -383,9 +383,6 @@ namespace DenEmo.UI
 
             string tooltip = BuildSlotTooltip(entry);
             GUILayout.Label(new GUIContent(label, tooltip), DenEmoTheme.SecondaryTextStyle, GUILayout.MinWidth(60));
-            if (Event.current.type == EventType.Repaint &&
-                GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
-                hoveredClip = entry.Clip;
 
             GUILayout.Label("→", DenEmoTheme.CaptionStyle, GUILayout.Width(16));
 
@@ -403,10 +400,6 @@ namespace DenEmo.UI
             }
             HandleSlotDragAndDrop(slotRect, entry, window);
 
-            if (mapping != null && mapping.NewClip != null &&
-                Event.current.type == EventType.Repaint && slotRect.Contains(Event.current.mousePosition))
-                hoveredClip = mapping.NewClip;
-
             // 割当て解除
             if (mapping != null)
             {
@@ -422,6 +415,19 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
+
+            // 行全体のホバー判定を Repaint イベントで行う
+            if (Event.current.type == EventType.Repaint)
+            {
+                var rowRect = GUILayoutUtility.GetLastRect();
+                if (rowRect.Contains(Event.current.mousePosition))
+                {
+                    if (mapping != null && mapping.NewClip != null && slotRect.Contains(Event.current.mousePosition))
+                        hoveredClip = mapping.NewClip;
+                    else
+                        hoveredClip = entry.Clip;
+                }
+            }
 
             // 割当て済み行の左端アクセントバー
             if (Event.current.type == EventType.Repaint && mapping != null && mapping.NewClip != null)
