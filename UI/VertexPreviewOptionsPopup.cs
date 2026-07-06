@@ -1,5 +1,7 @@
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace DenEmo.UI
 {
@@ -12,50 +14,58 @@ namespace DenEmo.UI
             _window = window;
         }
 
-        public override Vector2 GetWindowSize() => new Vector2(270, 116);
+        public override Vector2 GetWindowSize() => new Vector2(300, 152);
 
-        public override void OnGUI(Rect rect)
+        public override void OnOpen()
         {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
+            var root = editorWindow.rootVisualElement;
+            DenEmoUiAssets.SetupRoot(root);
+
+            var tree = DenEmoUiAssets.LoadVisualTree(DenEmoUiAssets.VertexPreviewPopupUxmlGuid);
+            if (tree == null) return;
+            tree.CloneTree(root);
+
+            root.Q<Label>("title-label").text = DenEmoLoc.T("ui.vertexPreview.title");
+
+            var normalField = root.Q<ColorField>("normal-color-field");
+            normalField.label = DenEmoLoc.T("ui.vertexPreview.normalColor");
+            normalField.value = DenEmoWindow.VertexPreviewColor;
+            normalField.labelElement.style.minWidth = 90;
+            normalField.RegisterValueChangedCallback(evt =>
             {
-                EditorGUI.DrawRect(rect, DenEmoTheme.Surface1);
+                DenEmoWindow.VertexPreviewColor = evt.newValue;
+                OnSettingsChanged();
+            });
 
-                GUILayout.Space(6);
-                GUILayout.Label(
-                    DenEmoLoc.EnglishMode ? "Vertex Preview Settings" : "頂点プレビュー設定",
-                    DenEmoTheme.GroupLabelStyle);
-                GUILayout.Space(2);
-
-                EditorGUI.BeginChangeCheck();
-
-                var newColor = EditorGUILayout.ColorField(
-                    new GUIContent(DenEmoLoc.EnglishMode ? "Normal Color" : "通常の色"),
-                    DenEmoWindow.VertexPreviewColor, true, false, false);
-
-                var newSelColor = EditorGUILayout.ColorField(
-                    new GUIContent(DenEmoLoc.EnglishMode ? "Selected Color" : "選択中の色"),
-                    DenEmoWindow.VertexPreviewSelectedColor, true, false, false);
-
-                var newSize = EditorGUILayout.Slider(
-                    DenEmoLoc.EnglishMode ? "Size" : "サイズ",
-                    DenEmoWindow.VertexPreviewSizeMultiplier, 0.1f, 5f);
-
-                if (EditorGUI.EndChangeCheck())
-                {
-                    DenEmoWindow.VertexPreviewColor          = newColor;
-                    DenEmoWindow.VertexPreviewSelectedColor  = newSelColor;
-                    DenEmoWindow.VertexPreviewSizeMultiplier = newSize;
-                    SavePrefs();
-                    SceneView.RepaintAll();
-                    _window?.Repaint();
-                }
-            }
-            finally
+            var selectedField = root.Q<ColorField>("selected-color-field");
+            selectedField.label = DenEmoLoc.T("ui.vertexPreview.selectedColor");
+            selectedField.value = DenEmoWindow.VertexPreviewSelectedColor;
+            selectedField.labelElement.style.minWidth = 90;
+            selectedField.RegisterValueChangedCallback(evt =>
             {
-                DenEmoTheme.PopEditorTheme();
-            }
+                DenEmoWindow.VertexPreviewSelectedColor = evt.newValue;
+                OnSettingsChanged();
+            });
+
+            var sizeSlider = root.Q<Slider>("size-slider");
+            sizeSlider.label = DenEmoLoc.T("ui.vertexPreview.size");
+            sizeSlider.value = DenEmoWindow.VertexPreviewSizeMultiplier;
+            sizeSlider.labelElement.style.minWidth = 90;
+            sizeSlider.RegisterValueChangedCallback(evt =>
+            {
+                DenEmoWindow.VertexPreviewSizeMultiplier = evt.newValue;
+                OnSettingsChanged();
+            });
+        }
+
+        // 描画は OnOpen() で構築した UI Toolkit 要素が行うため IMGUI は空
+        public override void OnGUI(Rect rect) { }
+
+        private void OnSettingsChanged()
+        {
+            SavePrefs();
+            SceneView.RepaintAll();
+            _window?.Repaint();
         }
 
         private static void SavePrefs()

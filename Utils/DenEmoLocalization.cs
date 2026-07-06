@@ -194,6 +194,30 @@ public static class DenEmoLoc
         ["ui.animMode.animWindowConflict"] = "⚠ Unity の Animation ウィンドウのプレビューが有効です。同じクリップを同時に編集すると、値の競合や動作が重くなる原因になります。Animation ウィンドウのプレビューを終了することをおすすめします。",
         ["status.anim.tweaksDiscarded"]    = "未記録のスライダー変更 {0} 件を破棄しました（◆ ボタンか REC で記録できます）",
 
+        // Animation mode – clip section / value correction (UI Toolkit)
+        ["ui.animMode.clip.section"]  = "アニメーションクリップ",
+        ["ui.correction.title"]       = "シェイプキー値補正",
+        ["ui.correction.desc"]        = "クリップ全体の各シェイプキーのキーフレーム値を再スケールします。\n表情改変によりシェイプキーの最大値が破綻する場合（VRChat のまばたき競合など）に使用してください。",
+        ["ui.correction.noTracks"]    = "このクリップにキーフレームのあるシェイプキーがありません。",
+        ["ui.correction.col.shape"]   = "シェイプキー",
+        ["ui.correction.col.min"]     = "最小値 (0–100)",
+        ["ui.correction.col.max"]     = "最大値 (0–100)",
+        ["ui.correction.col.min.tip"] = "補正後の下限値（デフォルト 0）。\n0 より大きい値にすると、元の値 0 がこの値になるようリスケールされます（元の値 100 は最大値の設定値に変わります）。\n例：Min=20 にすると、シェイプキーが完全にニュートラルに戻ることを防げます。",
+        ["ui.correction.col.max.tip"] = "補正後の上限値（デフォルト 100）。\n100 未満の値にすると、元の値 100 がこの値になるようリスケールされます（元の値 0 は最小値の設定値に変わります）。\n例：まばたきシェイプキーの Max=80 にすると、このアニメーション内で目が完全に閉じないように制限できます。",
+        ["ui.correction.apply"]       = "補正を反映",
+        ["status.correction.applied"] = "補正を反映しました。",
+        ["status.correction.none"]    = "補正対象がありません（全て既定値です）。",
+
+        // Shape key list (UI Toolkit)
+        ["ui.list.title"]     = "シェイプキー",
+        ["ui.list.noMatch"]   = "フィルター条件に一致するシェイプキーがありません。",
+        ["ui.fav.add"]        = "お気に入り追加",
+        ["ui.fav.remove"]     = "お気に入り解除",
+        ["ui.key.add"]        = "現在時刻にキーフレームを追加",
+        ["ui.key.remove"]     = "現在時刻のキーフレームを削除",
+        ["ui.row.zero.tip"]   = "値を0にリセット",
+        ["ui.row.zeroLR.tip"] = "左右の値を0にリセット",
+
         // FX setup mode (アバターへ適用)
         ["ui.fx.tab"]                    = "アバターへ適用",
         ["ui.fx.section.avatar"]         = "アバター / FXレイヤー",
@@ -247,6 +271,12 @@ public static class DenEmoLoc
         ["ui.fx.picker.empty"]           = "フォルダにシェイプキーアニメーションがありません",
         ["ui.fx.picker.folder.tip"]      = "参照フォルダを変更",
         ["status.fx.applied"]            = "表情の差し替えが完了しました",
+
+        // Vertex preview options popup
+        ["ui.vertexPreview.title"]         = "頂点プレビュー設定",
+        ["ui.vertexPreview.normalColor"]   = "通常の色",
+        ["ui.vertexPreview.selectedColor"] = "選択中の色",
+        ["ui.vertexPreview.size"]          = "サイズ",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -421,6 +451,30 @@ public static class DenEmoLoc
         ["ui.animMode.animWindowConflict"] = "⚠ Unity's Animation window preview is active. Editing the same clip in both tools can cause value conflicts and slowdowns. Consider exiting the Animation window preview.",
         ["status.anim.tweaksDiscarded"]    = "Discarded {0} unrecorded slider change(s) (use the ◆ button or REC to record them)",
 
+        // Animation mode – clip section / value correction (UI Toolkit)
+        ["ui.animMode.clip.section"]  = "ANIMATION CLIP",
+        ["ui.correction.title"]       = "SHAPE KEY VALUE CORRECTION",
+        ["ui.correction.desc"]        = "Rescale keyframe values of individual shape keys across the entire clip.\nUseful when an expression edit makes a shape key's full range look broken (e.g. blink conflicts in VRChat).",
+        ["ui.correction.noTracks"]    = "No shape keys with keyframes found in this clip.",
+        ["ui.correction.col.shape"]   = "Shape Key",
+        ["ui.correction.col.min"]     = "Min (0–100)",
+        ["ui.correction.col.max"]     = "Max (0–100)",
+        ["ui.correction.col.min.tip"] = "Lower bound after correction (default 0).\nWhen above 0, the original value 0 is raised to this value while the original 100 maps to the Max setting.\nExample: Min=20 prevents the shape key from fully returning to neutral.",
+        ["ui.correction.col.max.tip"] = "Upper bound after correction (default 100).\nWhen below 100, the original value 100 is lowered to this value while the original 0 maps to the Min setting.\nExample: Max=80 on a blink shape prevents the eye from fully closing in this animation.",
+        ["ui.correction.apply"]       = "Apply Correction",
+        ["status.correction.applied"] = "Correction applied.",
+        ["status.correction.none"]    = "No corrections to apply (all values are at their defaults).",
+
+        // Shape key list (UI Toolkit)
+        ["ui.list.title"]     = "SHAPE KEYS",
+        ["ui.list.noMatch"]   = "No results match the current filter.",
+        ["ui.fav.add"]        = "Add to favorites",
+        ["ui.fav.remove"]     = "Remove from favorites",
+        ["ui.key.add"]        = "Add keyframe at current time",
+        ["ui.key.remove"]     = "Remove keyframe at current time",
+        ["ui.row.zero.tip"]   = "Reset value to zero",
+        ["ui.row.zeroLR.tip"] = "Reset both L/R values to zero",
+
         // FX setup mode (Apply to Avatar)
         ["ui.fx.tab"]                    = "APPLY TO AVATAR",
         ["ui.fx.section.avatar"]         = "AVATAR / FX LAYER",
@@ -474,6 +528,12 @@ public static class DenEmoLoc
         ["ui.fx.picker.empty"]           = "No blendshape animations in this folder",
         ["ui.fx.picker.folder.tip"]      = "Change folder",
         ["status.fx.applied"]            = "Expressions replaced successfully",
+
+        // Vertex preview options popup
+        ["ui.vertexPreview.title"]         = "Vertex Preview Settings",
+        ["ui.vertexPreview.normalColor"]   = "Normal Color",
+        ["ui.vertexPreview.selectedColor"] = "Selected Color",
+        ["ui.vertexPreview.size"]          = "Size",
     };
 
     public static string T(string key)

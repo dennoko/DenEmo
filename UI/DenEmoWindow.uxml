@@ -1,0 +1,72 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <!-- ヘッダー: タイトル + 言語切替 -->
+    <ui:VisualElement name="header" class="dennoko-header">
+        <ui:Label name="title-label" text="DenEmo" class="dennoko-title" />
+        <ui:Button name="lang-button" text="EN" class="dennoko-lang-button" />
+    </ui:VisualElement>
+    <ui:VisualElement class="dennoko-separator" />
+
+    <!-- モードタブバー -->
+    <ui:VisualElement name="tab-bar" class="dennoko-tabbar">
+        <ui:Button name="tab-pose" text="Pose" class="dennoko-tab" />
+        <ui:Button name="tab-anim" text="Animation" class="dennoko-tab" />
+        <ui:Button name="tab-fx" text="FX" class="dennoko-tab" />
+    </ui:VisualElement>
+
+    <!-- Pose モード: IMGUI セクション + シェイプキーリスト（UI Toolkit） -->
+    <ui:ScrollView name="pose-scroll" style="flex-grow: 1; flex-basis: 0; display: none;">
+        <ui:IMGUIContainer name="pose-top-imgui" />
+        <ui:VisualElement name="pose-list-host" />
+        <ui:IMGUIContainer name="pose-bottom-imgui" />
+    </ui:ScrollView>
+
+    <!-- Animation モード: UI Toolkit セクション + IMGUI 領域（対象メッシュ / タイムライン以下） -->
+    <ui:ScrollView name="anim-scroll" style="flex-grow: 1; flex-basis: 0; display: none;">
+        <ui:IMGUIContainer name="anim-top-imgui" />
+
+        <!-- アニメーションクリップ設定 -->
+        <ui:VisualElement name="anim-clip-card" class="dennoko-card">
+            <ui:Label name="anim-clip-title" text="ANIMATION CLIP" class="dennoko-section-title dennoko-card-header" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="anim-clip-label" text="Clip" class="dennoko-text-tertiary dennoko-clip-label" />
+                <uie:ObjectField name="anim-clip-field" class="dennoko-clip-field" />
+                <ui:Button name="anim-clip-new" text="New" class="dennoko-mini-button" />
+            </ui:VisualElement>
+            <ui:VisualElement name="anim-clip-guide">
+                <ui:Label name="anim-guide-1" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:Label name="anim-guide-2" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:Label name="anim-guide-3" class="dennoko-text-tertiary dennoko-wrap" />
+            </ui:VisualElement>
+            <ui:Label name="anim-conflict-warn" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+        </ui:VisualElement>
+
+        <!-- シェイプキー値補正（折りたたみ） -->
+        <ui:VisualElement name="anim-correction-card" class="dennoko-card" style="display: none;">
+            <ui:Button name="correction-header" text="▶  SHAPE KEY VALUE CORRECTION" class="dennoko-fold-header" />
+            <ui:VisualElement name="correction-content" style="display: none;">
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Label name="correction-desc" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:VisualElement name="correction-columns" class="dennoko-hrow">
+                    <ui:Label name="correction-col-shape" class="dennoko-text-tertiary dennoko-col-grow" />
+                    <ui:Label name="correction-col-min" class="dennoko-text-tertiary dennoko-col-fixed" />
+                    <ui:Label name="correction-col-max" class="dennoko-text-tertiary dennoko-col-fixed" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Label name="correction-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+                <ui:ScrollView name="correction-rows" class="dennoko-correction-rows" />
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Button name="correction-apply" text="Apply Correction" class="dennoko-button-primary dennoko-action-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:IMGUIContainer name="anim-mid-imgui" />
+        <ui:VisualElement name="anim-list-host" />
+        <ui:IMGUIContainer name="anim-save-imgui" />
+    </ui:ScrollView>
+
+    <!-- コンテンツ: 移行完了まで既存 IMGUI 描画をホストする（FX モード） -->
+    <ui:IMGUIContainer name="content-imgui" style="flex-grow: 1;" />
+
+    <!-- ステータスバー -->
+    <ui:Label name="status-bar" text="" class="dennoko-status" />
+</ui:UXML>

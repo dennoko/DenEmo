@@ -1,5 +1,24 @@
 # UI Toolkit (USS) への移行計画
 
+## 進捗状況
+
+- [x] Step 1: `DennokoTheme.uss` の導入（`UI/DennokoTheme.uss`、GUID は `UI/DenEmoUiAssets.cs` に定数化）
+- [x] Step 2: `VertexPreviewOptionsPopup` の UI Toolkit 化（`UI/VertexPreviewOptionsPopup.uxml` + `OnOpen()` 構築）— 確認済み
+- [x] Step 4: メインウィンドウ `CreateGUI()` 化 & 外枠 UXML（`UI/DenEmoWindow.uxml` + `UI/DenEmoStyles.uss`。ヘッダー/タブバー/ステータスバーを UI Toolkit 化し、コンテンツ部は `IMGUIContainer` で既存描画をホスト）— 確認済み
+- [x] Step 3: アニメーション設定UI（`AnimationClipCorrectionUI` / `AnimationModeUI`）の移行 — 確認済み
+  - ※ これらはメインウィンドウの IMGUI 描画フロー内に埋め込まれているため、Step 4 の骨格移行を先に実施する順序に変更した
+  - Animation モードは UI Toolkit の `ScrollView`（`anim-scroll`）で構成: 対象メッシュ（IMGUI）→ クリップ設定カード（UXML）→ 値補正カード（UXML + 動的行）→ タイムライン以下（IMGUI）。Pose / FX は従来どおり `content-imgui`
+  - クリップ差し替え・Animation ウィンドウ競合・対象メッシュの有無は `schedule.Execute().Every(250)` のポーリングで UI に反映
+  - 確認時のフィードバック: ScrollView がコンテンツ実寸を希望サイズとして報告し、兄弟要素（ヘッダー等）が flex-shrink で潰れる問題を修正（クローム要素の `flex-shrink: 0` + `flex-basis: 0`）
+- [x] Step 5: シェイプキーリストの ScrollView 移行 — **Unity 上での動作確認待ち**
+  - `ShapeKeyListUI` を全面 UI Toolkit 化。外枠は `ShapeKeyList.uxml`、行は `ShapeKeyRow.uxml` を CloneTree して動的生成
+  - 行の集合（行プラン）を 150ms ポーリングで構築しシグネチャ比較、差分時のみ再構築。値・アイコン・グループカウント等は行バインディング経由で同期
+  - Pose モードも `pose-scroll`（UITK ScrollView）に移行: 対象メッシュ〜検索フィルター（IMGUI）→ リスト（UITK）→ 保存設定（IMGUI）。`content-imgui` は FX モード専用に
+  - Animation モードの `anim-bottom-imgui` を `anim-mid-imgui`（タイムライン〜検索）+ リスト（UITK）+ `anim-save-imgui`（保存）に分割。リスト要素はモード切替時にホスト間を移動
+  - スライダードラッグは PointerDown/Up/CaptureOut で検出し、Undo 1 回/ジェスチャ + SMR 反映スロットル（50ms）を維持。UITK スライダーは hotControl を使わないため、`AnimationDrawContext.OnSliderDragStateChanged` でキー記録フラッシュのジェスチャ検知を補完
+- [ ] Step 6: タイムラインの IMGUIContainer 統合
+- [ ] Step 7: 旧 `DenEmoTheme.cs` の完全削除（`DenEmoCommonUI.DrawHeader` / `DrawStatusBar` は未使用化済み。ここで削除する）
+
 本ドキュメントは、DenEmo の既存 IMGUI ベースの UI レイアウトから、**UI Toolkit (UXML/USS)** への移行計画をまとめたものである。移行にあたっては、`.claude/skills/dennokoworks_color_schema` スキルの USS 対応アップデートに準拠し、既存の UI レイアウトとフローティングデザイン（ダークテーマ）の維持を最優先する。
 
 ---

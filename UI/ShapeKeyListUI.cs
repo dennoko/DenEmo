@@ -2,11 +2,17 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 using DenEmo.Models;
-using DenEmo.Core;
 
 namespace DenEmo.UI
 {
+    /// <summary>
+    /// シェイプキーリスト（UI Toolkit）。
+    /// ShapeKeyList.uxml をルートとして生成し、行は ShapeKeyRow.uxml から動的生成する。
+    /// 構造（行の集合）は行プランのシグネチャをポーリングで比較して差分時のみ再構築し、
+    /// 値・アイコン・カウント等の動的状態は行バインディング経由で同期する。
+    /// </summary>
     public partial class ShapeKeyListUI
     {
         private const double APPLY_INTERVAL_SEC = 0.05;
@@ -17,13 +23,98 @@ namespace DenEmo.UI
         private Dictionary<string, (SkinnedMeshRenderer smr, int idx, float value)> _pendingApplies
             = new Dictionary<string, (SkinnedMeshRenderer, int, float)>();
 
-        private bool   isSliderDragging    = false;
-        private string _currentDraggingKey  = null;
-
         public Action                  OnIncludeFlagsChanged;
         public Action<string, bool>    OnFavoriteChanged;
         public Action                  OnSnapshotCreate;
         public Action                  OnSnapshotRestore;
+
+        // ─── Bind state ───────────────────────────────────────────────────────
+
+        private ShapeKeyModel        _model;
+        private HashSet<string>      _collapsedGroups;
+        private Func<bool>           _getSymmetryMode;
+        private AnimationDrawContext _animContext;
+
+        public VisualElement Root { get; private set; }
+
+        private Label           _title;
+        private Button          _snapCreate, _snapRestore;
+        private Label           _emptyLabel, _noMatchLabel;
+        private ScrollView      _rowsScroll;
+        private VisualTreeAsset _rowTemplate;
+
+        // ─── Structure diff state ─────────────────────────────────────────────
+
+        private readonly List<RowEntry>     _plan          = new List<RowEntry>();
+        private readonly List<RowBinding>   _rowBindings   = new List<RowBinding>();
+        private readonly List<GroupBinding> _groupBindings = new List<GroupBinding>();
+        private int  _planSignature  = 0;
+        private bool _structureDirty = true;
+        private bool _anyDragging    = false;
+
+        // ─── Bind ─────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// リストのルート要素を生成して返す。CreateGUI から一度だけ呼び、
+        /// 返った要素をモードごとのホストへ配置（再配置）する。
+        /// </summary>
+        public VisualElement Bind(ShapeKeyModel model, HashSet<string> collapsedGroups, Func<bool> getSymmetryMode)
+        {
+            _model           = model;
+            _collapsedGroups = collapsedGroups;
+            _getSymmetryMode = getSymmetryMode;
+
+            var tree     = DenEmoUiAssets.LoadVisualTree(DenEmoUiAssets.ShapeKeyListUxmlGuid);
+            _rowTemplate = DenEmoUiAssets.LoadVisualTree(DenEmoUiAssets.ShapeKeyRowUxmlGuid);
+            Root = tree != null ? (VisualElement)tree.CloneTree() : new VisualElement();
+            Root.style.flexShrink = 0;
+
+            _title        = Root.Q<Label>("shape-list-title");
+            _snapCreate   = Root.Q<Button>("shape-list-snap-create");
+            _snapRestore  = Root.Q<Button>("shape-list-snap-restore");
+            _emptyLabel   = Root.Q<Label>("shape-list-empty");
+            _noMatchLabel = Root.Q<Label>("shape-list-nomatch");
+            _rowsScroll   = Root.Q<ScrollView>("shape-list-scroll");
+
+            if (_rowsScroll == null) return Root; // UXML ロード失敗時は空のまま返す
+
+            _snapCreate.clicked  += () => OnSnapshotCreate?.Invoke();
+            _snapRestore.clicked += () => OnSnapshotRestore?.Invoke();
+
+            // スライダードラッグ中の SMR 反映スロットルと、構造/動的状態の同期
+            Root.schedule.Execute(ApplyPending).Every(50);
+            Root.schedule.Execute(TickStructureAndSync).Every(150);
+
+            RefreshLabels();
+            _structureDirty = true;
+            return Root;
+        }
+
+        /// <summary>
+        /// Animation モードの描画コンテキストを設定する（null = Pose 動作）。
+        /// クリップの有無やトラックフィルターが変わるため、モード側からポーリングで毎回渡してよい。
+        /// </summary>
+        public void SetAnimContext(AnimationDrawContext ctx)
+        {
+            bool presenceChanged = (ctx == null) != (_animContext == null);
+            _animContext = ctx;
+            if (presenceChanged) _structureDirty = true;
+        }
+
+        /// <summary>フィルターや対象メッシュの変更後に呼ぶ。次の同期ティックで行を再構築する。</summary>
+        public void MarkStructureDirty() => _structureDirty = true;
+
+        /// <summary>言語切替時に呼ぶ。</summary>
+        public void RefreshLabels()
+        {
+            if (_title == null) return;
+            _title.text       = DenEmoLoc.T("ui.list.title");
+            _snapCreate.text  = DenEmoLoc.T("ui.snapshot.create");
+            _snapRestore.text = DenEmoLoc.T("ui.snapshot.restore");
+            _emptyLabel.text  = DenEmoLoc.T("ui.mesh.noShapes");
+            _noMatchLabel.text = DenEmoLoc.T("ui.list.noMatch");
+            _structureDirty = true; // 行内ツールチップの言語を更新するため再構築する
+        }
 
         // ─── Throttle ────────────────────────────────────────────────────────
 
@@ -57,144 +148,41 @@ namespace DenEmo.UI
             _pendingApplies.Clear();
         }
 
-        // ─── DrawList ─────────────────────────────────────────────────────────
+        // ─── Structure & dynamic sync ─────────────────────────────────────────
 
-        public void DrawList(ShapeKeyModel model, ref Vector2 scroll, bool treatAsGroupUI, HashSet<string> collapsedGroups, bool symmetryMode, EditorWindow window, AnimationDrawContext animContext = null)
+        private void TickStructureAndSync()
         {
-            DenEmoTheme.Initialize();
-            ApplyPending();
+            if (_model == null || _rowsScroll == null) return;
 
-            GUILayout.BeginVertical(DenEmoTheme.CardOuterStyle);
+            BuildRowPlan(_plan);
+            int sig = ComputePlanSignature(_plan);
 
-            // リストヘッダーツールバー
-            GUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle);
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "SHAPE KEYS" : "シェイプキー", DenEmoTheme.SectionHeaderStyle);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button(DenEmoLoc.T("ui.snapshot.create"), DenEmoTheme.MiniButtonStyle, GUILayout.Height(18)))
-                OnSnapshotCreate?.Invoke();
-            GUILayout.Space(4);
-            if (GUILayout.Button(DenEmoLoc.T("ui.snapshot.restore"), DenEmoTheme.MiniButtonStyle, GUILayout.Height(18)))
-                OnSnapshotRestore?.Invoke();
-            GUILayout.Space(4);
-            GUILayout.EndHorizontal();
-
-            scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.MinHeight(450));
-
-            if (model.Items.Count == 0)
+            // ドラッグ中の再構築はスライダーのキャプチャを破壊するため保留する
+            if ((sig != _planSignature || _structureDirty) && !_anyDragging)
             {
-                GUILayout.Space(8);
-                GUILayout.Label(DenEmoLoc.T("ui.mesh.noShapes"), DenEmoTheme.SecondaryTextStyle);
-                GUILayout.Space(8);
+                RebuildRows();
+                _planSignature  = sig;
+                _structureDirty = false;
             }
 
-            bool   anyVisible   = false;
-            string lastMeshName = null;
-
-            foreach (var seg in model.GroupSegments)
-            {
-                int start = seg.Start;
-                int end   = seg.Start + seg.Length;
-
-                int enabledCount = 0;
-                int visibleCount = 0;
-                for (int i = start; i < end; i++)
-                {
-                    var it = model.Items[i];
-                    if (!it.IsVisible || it.IsLipSyncShape) continue;
-                    if (animContext?.TrackShapeNames != null && !animContext.TrackShapeNames.Contains(it.Name)) continue;
-                    visibleCount++;
-                    if (it.IsIncluded) enabledCount++;
-                }
-
-                if (visibleCount == 0) continue;
-                anyVisible = true;
-
-                // マルチメッシュ時のメッシュヘッダー
-                if (seg.MeshName != null && seg.MeshName != lastMeshName)
-                {
-                    DrawMeshHeader(seg.MeshName);
-                    lastMeshName = seg.MeshName;
-                }
-
-                // グループキーはメッシュ名プレフィックス付き（折りたたみ衝突回避）
-                string collapseKey  = seg.MeshName != null ? seg.MeshName + "|" + seg.Key : seg.Key;
-                bool   treatAsGroup = seg.Length > 3;
-
-                if (treatAsGroup)
-                {
-                    DrawGroupHeader(seg, enabledCount, visibleCount, model, start, end, collapsedGroups, collapseKey);
-                    if (collapsedGroups.Contains(collapseKey)) continue;
-                }
-
-                if (symmetryMode) DrawSymmetrySegment(model, start, end, treatAsGroup, window, animContext);
-                else              DrawNormalSegment(model, start, end, treatAsGroup, window, animContext);
-            }
-
-            if (!anyVisible && model.Items.Count > 0)
-            {
-                GUILayout.Space(8);
-                GUILayout.Label(
-                    DenEmoLoc.EnglishMode
-                        ? "No results match the current filter."
-                        : "フィルター条件に一致するシェイプキーがありません。",
-                    DenEmoTheme.CaptionStyle);
-                GUILayout.Space(8);
-            }
-
-            EditorGUILayout.EndScrollView();
-            GUILayout.EndVertical();
+            SyncDynamicState();
         }
 
-        // ─── Mesh Header ──────────────────────────────────────────────────────
-
-        private void DrawMeshHeader(string meshName)
+        private static int ComputePlanSignature(List<RowEntry> plan)
         {
-            var headerRect = GUILayoutUtility.GetRect(0, 24, GUILayout.ExpandWidth(true));
-            if (Event.current.type == EventType.Repaint)
-                EditorGUI.DrawRect(headerRect, DenEmoTheme.Surface1);
-            var labelRect = new Rect(headerRect.x + 8, headerRect.y + 4, headerRect.width - 16, 16);
-            GUI.Label(labelRect, meshName, DenEmoTheme.SectionHeaderStyle);
-        }
-
-        // ─── Group Header ─────────────────────────────────────────────────────
-
-        private void DrawGroupHeader(GroupSegment seg, int enabledCount, int visibleCount, ShapeKeyModel model, int start, int end, HashSet<string> collapsedGroups, string collapseKey)
-        {
-            bool collapsed   = collapsedGroups.Contains(collapseKey);
-            bool groupAllOn  = enabledCount == visibleCount;
-            bool groupAllOff = enabledCount == 0;
-
-            var headerRect = GUILayoutUtility.GetRect(0, 26, GUILayout.ExpandWidth(true));
-            if (Event.current.type == EventType.Repaint)
-                EditorGUI.DrawRect(headerRect, DenEmoTheme.Surface2);
-
-            var foldRect  = new Rect(headerRect.x + 4,   headerRect.y + 5, 24,                       16);
-            var labelRect = new Rect(headerRect.x + 32,  headerRect.y + 4, headerRect.width - 112,   18);
-            var countRect = new Rect(headerRect.xMax - 100, headerRect.y + 5, 76,                    16);
-            var checkRect = new Rect(headerRect.xMax - 20,  headerRect.y + 5, 16,                    16);
-
-            if (GUI.Button(foldRect, collapsed ? "▶" : "▼", DenEmoTheme.MiniButtonStyle))
+            unchecked
             {
-                if (collapsed) collapsedGroups.Remove(collapseKey);
-                else           collapsedGroups.Add(collapseKey);
-            }
-
-            bool newGroupVal = GUI.Toggle(checkRect, groupAllOn, GUIContent.none);
-            if (newGroupVal != groupAllOn)
-            {
-                for (int i = start; i < end; i++)
+                int h = 17;
+                foreach (var e in plan)
                 {
-                    var item = model.Items[i];
-                    if (!item.IsVrcShape && !item.IsLipSyncShape) item.IsIncluded = newGroupVal;
+                    h = h * 31 + (int)e.Kind;
+                    h = h * 31 + (e.Text != null ? e.Text.GetHashCode() : 0);
+                    h = h * 31 + (e.Item != null ? e.Item.GetHashCode() : 0);
+                    h = h * 31 + (e.Right != null ? e.Right.GetHashCode() : 0);
+                    h = h * 31 + (e.Indent ? 1 : 0);
                 }
-                OnIncludeFlagsChanged?.Invoke();
+                return h * 31 + plan.Count;
             }
-
-            GUI.Label(labelRect, seg.Key, DenEmoTheme.GroupLabelStyle);
-
-            string suffix = groupAllOn ? DenEmoLoc.T("ui.group.all") : groupAllOff ? DenEmoLoc.T("ui.group.none") : DenEmoLoc.T("ui.group.some");
-            GUI.Label(countRect, $"{enabledCount}/{visibleCount}  {suffix}", DenEmoTheme.CaptionStyle);
         }
-
     }
 }

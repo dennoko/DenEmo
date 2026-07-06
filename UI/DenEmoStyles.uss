@@ -1,0 +1,301 @@
+/* ============================================================
+   DenEmoStyles.uss
+   DenEmo 固有の UI クラス定義。
+   汎用テーマは DennokoTheme.uss に置き、ここにはプロジェクト固有の
+   レイアウト・バリアントのみを追加する（テーマ差し替えを容易にするため）。
+   カラーは DennokoTheme.uss の USS 変数を経由すること。
+   ============================================================ */
+
+/* 追加変数（テーマ変数から派生した DenEmo 固有色） */
+.dennoko-root {
+    --dennoko-status-warning-bg: rgba(255, 183, 77, 0.2);
+    --dennoko-fav-active: #ffd91a;
+}
+
+/* ─── ウィンドウ骨格の高さ保護 ───────────────────────────────
+   anim-scroll (ScrollView) はコンテンツの実寸を希望サイズとして報告するため、
+   コンテンツが長いと兄弟要素（ヘッダー等）が flex-shrink で押しつぶされる。
+   クローム要素は縮小禁止にし、スクロール内の直下要素も縮ませない。 */
+
+.dennoko-root .dennoko-header,
+.dennoko-root .dennoko-tabbar,
+.dennoko-root .dennoko-separator,
+.dennoko-root .dennoko-status,
+.dennoko-root .dennoko-card {
+    flex-shrink: 0;
+}
+
+.dennoko-root #anim-scroll #unity-content-container > *,
+.dennoko-root #pose-scroll #unity-content-container > * {
+    flex-shrink: 0;
+}
+
+/* ─── ヘッダー ───────────────────────────────────────────── */
+
+.dennoko-root .dennoko-lang-button {
+    width: 32px;
+    height: 20px;
+    font-size: 10px;
+    padding: 1px 4px;
+}
+
+/* ─── モードタブバー ─────────────────────────────────────── */
+
+.dennoko-root .dennoko-tabbar {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding: 2px 0 4px 0;
+}
+
+.dennoko-root .dennoko-tab {
+    width: 130px;
+    height: 22px;
+    font-size: 10px;
+    padding: 2px 6px;
+    margin: 1px 2px;
+    color: var(--dennoko-text-secondary);
+}
+
+.dennoko-root .dennoko-tab--active {
+    background-color: var(--dennoko-surface-2);
+    border-color: var(--dennoko-accent);
+    color: var(--dennoko-text-primary);
+}
+
+/* ─── ステータスバー（警告バリアント。success / error はテーマ側に定義済み） ─── */
+
+.dennoko-root .dennoko-status--warning {
+    background-color: var(--dennoko-status-warning-bg);
+    color: var(--dennoko-semantic-warning);
+}
+
+/* ─── 汎用レイアウト ─────────────────────────────────────── */
+
+.dennoko-root .dennoko-hrow {
+    flex-direction: row;
+    align-items: center;
+}
+
+.dennoko-root .dennoko-wrap {
+    white-space: normal;
+}
+
+.dennoko-root .dennoko-col-grow {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.dennoko-root .dennoko-col-fixed {
+    width: 90px;
+    flex-shrink: 0;
+}
+
+/* ─── アニメーションクリップ設定カード ───────────────────── */
+
+.dennoko-root .dennoko-clip-label {
+    min-width: 46px;
+}
+
+.dennoko-root .dennoko-clip-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin: 1px 2px;
+}
+
+.dennoko-root .dennoko-mini-button {
+    width: 48px;
+    height: 18px;
+    font-size: 10px;
+    padding: 0 4px;
+    margin: 1px 2px;
+}
+
+/* ─── 折りたたみセクションヘッダー（ボタン型） ───────────── */
+
+.dennoko-root .dennoko-fold-header {
+    background-color: transparent;
+    border-width: 0;
+    -unity-text-align: middle-left;
+    -unity-font-style: bold;
+    color: var(--dennoko-text-secondary);
+    padding: 2px 4px;
+    margin: 0;
+}
+
+.dennoko-root .dennoko-fold-header:hover {
+    background-color: var(--dennoko-hover-overlay);
+}
+
+/* ─── シェイプキー値補正カード ───────────────────────────── */
+
+.dennoko-root .dennoko-correction-rows {
+    min-height: 300px;
+    max-height: 600px;
+}
+
+.dennoko-root .dennoko-correction-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 1px;
+}
+
+.dennoko-root .dennoko-correction-row .unity-float-field {
+    width: 90px;
+    flex-shrink: 0;
+    margin: 0 1px;
+}
+
+.dennoko-root .dennoko-action-button {
+    height: 24px;
+    margin: 4px 6px 6px 6px;
+}
+
+/* ─── シェイプキーリスト ─────────────────────────────────── */
+
+.dennoko-root .dennoko-flex-spacer {
+    flex-grow: 1;
+}
+
+.dennoko-root .dennoko-list-card {
+    background-color: var(--dennoko-surface-1);
+    border-color: var(--dennoko-outline);
+    border-width: 1px;
+    border-radius: 8px;
+    margin: 0 8px 10px 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-list-toolbar {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--dennoko-surface-2);
+    padding: 4px 8px;
+}
+
+.dennoko-root .dennoko-snap-button {
+    height: 18px;
+    font-size: 10px;
+    padding: 0 6px;
+    margin: 1px 2px;
+}
+
+.dennoko-root .dennoko-list-message {
+    margin: 8px;
+}
+
+.dennoko-root .dennoko-list-scroll {
+    height: 450px;
+}
+
+.dennoko-root .dennoko-list-scroll #unity-content-container > * {
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-list-mesh-header {
+    padding: 6px 8px 3px 8px;
+}
+
+/* グループヘッダー */
+
+.dennoko-root .dennoko-list-group-header {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--dennoko-surface-2);
+    height: 26px;
+    padding: 0 6px 0 4px;
+    margin-bottom: 2px;
+}
+
+.dennoko-root .dennoko-group-fold {
+    width: 24px;
+    height: 16px;
+    font-size: 10px;
+    padding: 0;
+    margin: 0 6px 0 0;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-group-label {
+    -unity-font-style: bold;
+    font-size: 11px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.dennoko-root .dennoko-group-count {
+    font-size: 10px;
+    color: var(--dennoko-text-tertiary);
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/* シェイプキー行 */
+
+.dennoko-root .dennoko-shape-row {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 4px 5px 4px;
+}
+
+.dennoko-root .dennoko-row-indent {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-row-icon-button {
+    width: 20px;
+    height: 18px;
+    padding: 0;
+    margin: 0 1px;
+    font-size: 12px;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--dennoko-text-disabled);
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-row-icon-button:hover {
+    background-color: var(--dennoko-hover-overlay);
+    color: var(--dennoko-text-secondary);
+}
+
+.dennoko-root .dennoko-row-icon-button--on {
+    color: var(--dennoko-fav-active);
+}
+
+.dennoko-root .dennoko-row-icon-button--on:hover {
+    color: var(--dennoko-fav-active);
+}
+
+.dennoko-root .dennoko-row-include {
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-row-name {
+    width: 32%;
+    max-width: 200px;
+    flex-shrink: 0;
+    overflow: hidden;
+    font-size: 11px;
+}
+
+.dennoko-root .dennoko-row-name--dim {
+    color: var(--dennoko-text-tertiary);
+}
+
+.dennoko-root .dennoko-row-slider {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin: 0 4px;
+}
+
+.dennoko-root .dennoko-row-slider .unity-text-field {
+    width: 48px;
+    flex-shrink: 0;
+    margin-left: 4px;
+}

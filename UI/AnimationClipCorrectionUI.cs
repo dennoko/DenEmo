@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 using DenEmo.Models;
 using DenEmo.Core;
 
 namespace DenEmo.UI
 {
     /// <summary>
-    /// クリップ内の各シェイプキー値レンジを再マップする折りたたみセクション。
+    /// クリップ内の各シェイプキー値レンジを再マップする折りたたみセクション（UI Toolkit）。
     ///
     /// 各キーフレーム値 v に対して: new_v = v * (max - min) / 100 + min
     ///
@@ -21,107 +23,118 @@ namespace DenEmo.UI
         private bool _expanded = false;
         private readonly Dictionary<string, float> _minValues = new Dictionary<string, float>();
         private readonly Dictionary<string, float> _maxValues = new Dictionary<string, float>();
-        private Vector2 _scroll;
 
-        // ─── Public draw entry point ──────────────────────────────────────────
+        // Bind で配線される参照
+        private AnimationClipModel         _clipModel;
+        private AnimationClipEditor        _editor;
+        private AnimationPreviewController _preview;
+        private Func<bool>                 _hasTarget;
+        private Action<string, int>        _setStatus;
+        private EditorWindow               _window;
 
-        public void Draw(
+        // UI 要素
+        private VisualElement _card;
+        private VisualElement _content;
+        private Button        _header;
+        private Button        _apply;
+        private Label         _desc, _empty, _colShape, _colMin, _colMax;
+        private ScrollView    _rows;
+
+        // 行リストの再構築判定
+        private int           _rowsRevision = -1;
+        private AnimationClip _rowsClip;
+
+        // ─── Bind ─────────────────────────────────────────────────────────────
+
+        public void Bind(
+            VisualElement card,
             AnimationClipModel clipModel,
             AnimationClipEditor editor,
             AnimationPreviewController preview,
+            Func<bool> hasTarget,
             Action<string, int> setStatus,
             EditorWindow window)
         {
-            if (clipModel.Clip == null) return;
+            _card      = card;
+            _clipModel = clipModel;
+            _editor    = editor;
+            _preview   = preview;
+            _hasTarget = hasTarget;
+            _setStatus = setStatus;
+            _window    = window;
 
-            GUILayout.BeginVertical(DenEmoTheme.CardStyle);
+            _header   = card.Q<Button>("correction-header");
+            _content  = card.Q<VisualElement>("correction-content");
+            _desc     = card.Q<Label>("correction-desc");
+            _empty    = card.Q<Label>("correction-empty");
+            _colShape = card.Q<Label>("correction-col-shape");
+            _colMin   = card.Q<Label>("correction-col-min");
+            _colMax   = card.Q<Label>("correction-col-max");
+            _rows     = card.Q<ScrollView>("correction-rows");
+            _apply    = card.Q<Button>("correction-apply");
 
-            // ── Collapsible header ────────────────────────────────────────────
-            string title = DenEmoLoc.EnglishMode
-                ? "SHAPE KEY VALUE CORRECTION"
-                : "シェイプキー値補正";
-            var headerStyle = _expanded
-                ? DenEmoTheme.ToggleSectionOnStyle
-                : DenEmoTheme.ToggleSectionOffStyle;
-            string arrow = _expanded ? "▼  " : "▶  ";
-
-            var headerRect = GUILayoutUtility.GetRect(
-                new GUIContent(arrow + title), headerStyle,
-                GUILayout.ExpandWidth(true));
-            GUI.Label(headerRect, arrow + title, headerStyle);
-
-            if (Event.current.type == EventType.MouseDown
-                && headerRect.Contains(Event.current.mousePosition))
+            _header.clicked += () =>
             {
                 _expanded = !_expanded;
-                Event.current.Use();
-                window.Repaint();
-            }
+                Refresh();
+            };
+            _apply.clicked += ApplyCorrection;
 
-            // ── Content (only when expanded) ──────────────────────────────────
-            if (_expanded)
-            {
-                DenEmoTheme.DrawSeparator(4);
-                DrawContent(clipModel, editor, preview, setStatus, window);
-            }
+            // クリップの差し替え・キーフレーム編集・ターゲット変更を反映する
+            card.schedule.Execute(Refresh).Every(250);
 
-            GUILayout.EndVertical();
+            RefreshLabels();
+            Refresh();
         }
 
-        // ─── Content ──────────────────────────────────────────────────────────
-
-        private void DrawContent(
-            AnimationClipModel clipModel,
-            AnimationClipEditor editor,
-            AnimationPreviewController preview,
-            Action<string, int> setStatus,
-            EditorWindow window)
+        /// <summary>言語切替時に呼ぶ。</summary>
+        public void RefreshLabels()
         {
-            var tracks = clipModel.Tracks;
+            if (_header == null) return;
+            _header.text     = FoldHeaderText();
+            _desc.text       = DenEmoLoc.T("ui.correction.desc");
+            _empty.text      = DenEmoLoc.T("ui.correction.noTracks");
+            _colShape.text   = DenEmoLoc.T("ui.correction.col.shape");
+            _colMin.text     = DenEmoLoc.T("ui.correction.col.min");
+            _colMax.text     = DenEmoLoc.T("ui.correction.col.max");
+            _colMin.tooltip  = DenEmoLoc.T("ui.correction.col.min.tip");
+            _colMax.tooltip  = DenEmoLoc.T("ui.correction.col.max.tip");
+            _apply.text      = DenEmoLoc.T("ui.correction.apply");
+        }
 
-            if (tracks.Count == 0)
-            {
-                GUILayout.Label(
-                    DenEmoLoc.EnglishMode
-                        ? "No shape keys with keyframes found in this clip."
-                        : "このクリップにキーフレームのあるシェイプキーがありません。",
-                    DenEmoTheme.CaptionStyle);
-                return;
-            }
+        private string FoldHeaderText()
+            => (_expanded ? "▼  " : "▶  ") + DenEmoLoc.T("ui.correction.title");
 
-            // Section description
-            GUILayout.Label(
-                DenEmoLoc.EnglishMode
-                    ? "Rescale keyframe values of individual shape keys across the entire clip.\nUseful when an expression edit makes a shape key's full range look broken (e.g. blink conflicts in VRChat)."
-                    : "クリップ全体の各シェイプキーのキーフレーム値を再スケールします。\n表情改変によりシェイプキーの最大値が破綻する場合（VRChat のまばたき競合など）に使用してください。",
-                DenEmoTheme.CaptionStyle);
-            GUILayout.Space(4);
+        // ─── Refresh ──────────────────────────────────────────────────────────
 
-            // Column headers
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(
-                DenEmoLoc.EnglishMode ? "Shape Key" : "シェイプキー",
-                DenEmoTheme.CaptionStyle, GUILayout.ExpandWidth(true));
-            GUILayout.Label(
-                new GUIContent(
-                    DenEmoLoc.EnglishMode ? "Min (0–100)" : "最小値 (0–100)",
-                    DenEmoLoc.EnglishMode
-                        ? "Lower bound after correction (default 0).\nWhen above 0, the original value 0 is raised to this value while the original 100 maps to the Max setting.\nExample: Min=20 prevents the shape key from fully returning to neutral."
-                        : "補正後の下限値（デフォルト 0）。\n0 より大きい値にすると、元の値 0 がこの値になるようリスケールされます（元の値 100 は最大値の設定値に変わります）。\n例：Min=20 にすると、シェイプキーが完全にニュートラルに戻ることを防げます。"),
-                DenEmoTheme.CaptionStyle, GUILayout.Width(90));
-            GUILayout.Label(
-                new GUIContent(
-                    DenEmoLoc.EnglishMode ? "Max (0–100)" : "最大値 (0–100)",
-                    DenEmoLoc.EnglishMode
-                        ? "Upper bound after correction (default 100).\nWhen below 100, the original value 100 is lowered to this value while the original 0 maps to the Min setting.\nExample: Max=80 on a blink shape prevents the eye from fully closing in this animation."
-                        : "補正後の上限値（デフォルト 100）。\n100 未満の値にすると、元の値 100 がこの値になるようリスケールされます（元の値 0 は最小値の設定値に変わります）。\n例：まばたきシェイプキーの Max=80 にすると、このアニメーション内で目が完全に閉じないように制限できます。"),
-                DenEmoTheme.CaptionStyle, GUILayout.Width(90));
-            EditorGUILayout.EndHorizontal();
+        private void Refresh()
+        {
+            if (_card == null) return;
 
-            DenEmoTheme.DrawSeparator(2);
+            bool visible = _clipModel.Clip != null && (_hasTarget == null || _hasTarget());
+            _card.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!visible) return;
 
-            // Scrollable shape key list
-            _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.MinHeight(300), GUILayout.MaxHeight(600));
+            _header.text = FoldHeaderText();
+            _content.style.display = _expanded ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!_expanded) return;
+
+            if (_rowsRevision != _clipModel.Revision || !ReferenceEquals(_rowsClip, _clipModel.Clip))
+                RebuildRows();
+        }
+
+        private void RebuildRows()
+        {
+            _rowsRevision = _clipModel.Revision;
+            _rowsClip     = _clipModel.Clip;
+            _rows.Clear();
+
+            var tracks = _clipModel.Tracks;
+            bool hasTracks = tracks.Count > 0;
+            _empty.style.display = hasTracks ? DisplayStyle.None : DisplayStyle.Flex;
+            _rows.style.display  = hasTracks ? DisplayStyle.Flex : DisplayStyle.None;
+            _apply.style.display = hasTracks ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!hasTracks) return;
 
             foreach (var track in tracks)
             {
@@ -129,53 +142,51 @@ namespace DenEmo.UI
                 if (!_minValues.TryGetValue(name, out float min)) min = 0f;
                 if (!_maxValues.TryGetValue(name, out float max)) max = 100f;
 
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(name, DenEmoTheme.CaptionStyle, GUILayout.ExpandWidth(true));
+                var row = new VisualElement();
+                row.AddToClassList("dennoko-correction-row");
 
-                EditorGUI.BeginChangeCheck();
-                float newMin = EditorGUILayout.FloatField(min, GUILayout.Width(90));
-                float newMax = EditorGUILayout.FloatField(max, GUILayout.Width(90));
-                if (EditorGUI.EndChangeCheck())
-                {
-                    _minValues[name] = Mathf.Clamp(newMin, 0f, 100f);
-                    _maxValues[name] = Mathf.Clamp(newMax, 0f, 100f);
-                }
+                var label = new Label(name);
+                label.AddToClassList("dennoko-col-grow");
+                row.Add(label);
 
-                EditorGUILayout.EndHorizontal();
+                row.Add(MakeRangeField(name, min, _minValues));
+                row.Add(MakeRangeField(name, max, _maxValues));
+
+                _rows.Add(row);
             }
+        }
 
-            EditorGUILayout.EndScrollView();
-
-            GUILayout.Space(4);
-            DenEmoTheme.DrawSeparator(4);
-
-            // Apply button
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(6);
-            if (GUILayout.Button(
-                DenEmoLoc.EnglishMode ? "Apply Correction" : "補正を反映",
-                DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
+        private FloatField MakeRangeField(string shapeName, float initial, Dictionary<string, float> store)
+        {
+            var field = new FloatField { value = initial };
+            field.RegisterValueChangedCallback(evt =>
             {
-                bool changed = editor.ApplyValueCorrection(_minValues, _maxValues);
-                if (changed)
-                {
-                    if (preview.IsActive)
-                        preview.SampleAt(clipModel.CurrentTime);
-                    setStatus?.Invoke(
-                        DenEmoLoc.EnglishMode ? "Correction applied." : "補正を反映しました。", 1);
-                }
-                else
-                {
-                    setStatus?.Invoke(
-                        DenEmoLoc.EnglishMode
-                            ? "No corrections to apply (all values are at their defaults)."
-                            : "補正対象がありません（全て既定値です）。", 0);
-                }
-                window.Repaint();
+                float clamped = Mathf.Clamp(evt.newValue, 0f, 100f);
+                store[shapeName] = clamped;
+                if (!Mathf.Approximately(clamped, evt.newValue))
+                    field.SetValueWithoutNotify(clamped);
+            });
+            return field;
+        }
+
+        // ─── Apply ────────────────────────────────────────────────────────────
+
+        private void ApplyCorrection()
+        {
+            if (_clipModel.Clip == null) return;
+
+            bool changed = _editor.ApplyValueCorrection(_minValues, _maxValues);
+            if (changed)
+            {
+                if (_preview.IsActive)
+                    _preview.SampleAt(_clipModel.CurrentTime);
+                _setStatus?.Invoke(DenEmoLoc.T("status.correction.applied"), 1);
             }
-            GUILayout.Space(6);
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6);
+            else
+            {
+                _setStatus?.Invoke(DenEmoLoc.T("status.correction.none"), 0);
+            }
+            _window?.Repaint();
         }
     }
 }
