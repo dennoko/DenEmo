@@ -12,7 +12,7 @@ namespace DenEmo
     {
         // ─── Mode ─────────────────────────────────────────────────────────────
 
-        private enum EditorMode { Pose, Animation }
+        private enum EditorMode { Pose, Animation, FxSetup }
         private EditorMode _currentMode = EditorMode.Pose;
         internal static Color VertexPreviewColor         = new Color(0.24f, 0.72f, 1.0f, 0.95f);
         internal static Color VertexPreviewSelectedColor  = Color.yellow;
@@ -30,6 +30,7 @@ namespace DenEmo
         private ShapeKeyModel   _model      = new ShapeKeyModel();
         private ShapeKeyListUI  _listUI     = new ShapeKeyListUI();
         private AnimationModeUI _animModeUI = new AnimationModeUI();
+        private FxSetupModeUI   _fxSetupUI  = new FxSetupModeUI();
 
         private string saveFolder  = "Assets/DenEmo/GeneratedAnimations";
         private string searchText  = string.Empty;
@@ -161,6 +162,14 @@ namespace DenEmo
             _animModeUI.OnEnable(_model);
             _animModeUI.StatusSink = (msg, lvl) => SetStatus(msg, lvl);
 
+            _fxSetupUI.StatusSink = (msg, lvl) => SetStatus(msg, lvl);
+            if (_currentMode == EditorMode.FxSetup)
+            {
+                wantsMouseMove = true;
+                wantsMouseEnterLeaveWindow = true;
+                _fxSetupUI.OnEnter(_model);
+            }
+
             _listUI.OnIncludeFlagsChanged = () =>
             {
                 includeFlagsDirty = true;
@@ -178,6 +187,7 @@ namespace DenEmo
             SceneView.duringSceneGui -= OnSceneGUI;
             _listUI.StopThrottle();
             _animModeUI.OnDisable();
+            _fxSetupUI.OnDisable();
             vertexPickMode = false;
             ClearVertexGuideCache();
 
@@ -244,6 +254,8 @@ namespace DenEmo
         {
             if (_currentMode == EditorMode.Animation)
                 _animModeUI.OnUpdate(this);
+            else if (_currentMode == EditorMode.FxSetup)
+                _fxSetupUI.Tick(this);
 
             if (_vertexResultPending && EditorApplication.timeSinceStartup >= _vertexResultClearAt)
             {
@@ -258,6 +270,8 @@ namespace DenEmo
             _model.SyncValuesFromMesh();
             if (_currentMode == EditorMode.Animation)
                 _animModeUI.OnUndoRedo();
+            else if (_currentMode == EditorMode.FxSetup)
+                _fxSetupUI.OnUndoRedo(_model);
             Repaint();
         }
 
@@ -304,6 +318,10 @@ namespace DenEmo
                 DrawSearchFilterSection();
                 _listUI.DrawList(_model, ref scroll, true, collapsedGroups, symmetryMode, this);
                 DrawFooterSection();
+            }
+            else if (_currentMode == EditorMode.FxSetup)
+            {
+                _fxSetupUI.Draw(_model, saveFolder, this);
             }
             else
             {
@@ -375,14 +393,18 @@ namespace DenEmo
             EditorGUILayout.BeginHorizontal(DenEmoTheme.ToolbarStyle);
             GUILayout.FlexibleSpace();
 
-            var poseStyle = _currentMode == EditorMode.Pose     ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+            var poseStyle = _currentMode == EditorMode.Pose      ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
             var animStyle = _currentMode == EditorMode.Animation ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
+            var fxStyle   = _currentMode == EditorMode.FxSetup   ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
 
             if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.pose"), poseStyle, GUILayout.Width(130)))
                 SwitchMode(EditorMode.Pose);
             GUILayout.Space(2);
             if (GUILayout.Button(DenEmoLoc.T("ui.animMode.tab.anim"), animStyle, GUILayout.Width(130)))
                 SwitchMode(EditorMode.Animation);
+            GUILayout.Space(2);
+            if (GUILayout.Button(DenEmoLoc.T("ui.fx.tab"), fxStyle, GUILayout.Width(130)))
+                SwitchMode(EditorMode.FxSetup);
 
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
@@ -399,6 +421,12 @@ namespace DenEmo
                 if (snapshotValues != null && snapshotValues.Count > 0)
                     RestoreSnapshot();
             }
+            else if (_currentMode == EditorMode.FxSetup)
+            {
+                _fxSetupUI.OnExit();
+                wantsMouseMove = false;
+                wantsMouseEnterLeaveWindow = false;
+            }
 
             _currentMode = mode;
 
@@ -407,6 +435,12 @@ namespace DenEmo
                 CreateSnapshot(false);
                 if (_animModeUI.ClipModel.Clip != null && _model.TargetSkinnedMesh != null)
                     _animModeUI.StartPreview(_model);
+            }
+            else if (_currentMode == EditorMode.FxSetup)
+            {
+                wantsMouseMove = true;
+                wantsMouseEnterLeaveWindow = true;
+                _fxSetupUI.OnEnter(_model);
             }
 
             Repaint();

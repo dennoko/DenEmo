@@ -38,6 +38,8 @@ namespace DenEmo
                 }
                 if (_currentMode == EditorMode.Animation)
                     _animModeUI.OnTargetChanged(_model);
+                else if (_currentMode == EditorMode.FxSetup)
+                    _fxSetupUI.OnTargetChanged(_model);
                 Repaint();
             }
             if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
@@ -46,6 +48,9 @@ namespace DenEmo
                 _model.SetTarget(null);
                 ClampMeshFilterIndex();
                 RefreshListAndCache();
+                // ホバープレビューのウェイト復元と検出状態のクリア
+                if (_currentMode == EditorMode.FxSetup)
+                    _fxSetupUI.OnTargetChanged(_model);
                 Repaint();
             }
             EditorGUILayout.EndHorizontal();
@@ -506,6 +511,8 @@ namespace DenEmo
                 }
                 if (_currentMode == EditorMode.Animation)
                     _animModeUI.OnTargetChanged(_model);
+                else if (_currentMode == EditorMode.FxSetup)
+                    _fxSetupUI.OnTargetChanged(_model);
                 Repaint();
             }
             evt.Use();
