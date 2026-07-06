@@ -613,7 +613,7 @@ namespace DenEmo.UI
             _hover.Stop();
 
             var result = _applyDirect
-                ? FxMotionReplacer.ReplaceDirect(_controller, jobs, backup: true)
+                ? FxMotionReplacer.ReplaceDirect(_controller, jobs, backup: false)
                 : FxMotionReplacer.ReplaceWithDuplicate(_controller, jobs, _descriptor, _targetSmrPaths);
 
             _lastResult = result;
@@ -652,7 +652,11 @@ namespace DenEmo.UI
             if (!string.IsNullOrEmpty(_lastResult.NewControllerPath))
             {
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(DenEmoLoc.Tf("ui.fx.result.newController", _lastResult.NewControllerPath), DenEmoTheme.CaptionStyle);
+                var shortPath = EllipsizedPath(_lastResult.NewControllerPath);
+                var content = new GUIContent(
+                    DenEmoLoc.Tf("ui.fx.result.newController", shortPath),
+                    _lastResult.NewControllerPath);
+                GUILayout.Label(content, DenEmoTheme.CaptionStyle);
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button(DenEmoLoc.T("ui.fx.result.ping"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(40), GUILayout.Height(16)))
                 {
@@ -669,9 +673,21 @@ namespace DenEmo.UI
             }
 
             if (!string.IsNullOrEmpty(_lastResult.BackupPath))
-                GUILayout.Label(DenEmoLoc.Tf("ui.fx.result.backup", _lastResult.BackupPath), DenEmoTheme.CaptionStyle);
+            {
+                var shortPath = EllipsizedPath(_lastResult.BackupPath);
+                var content = new GUIContent(
+                    DenEmoLoc.Tf("ui.fx.result.backup", shortPath),
+                    _lastResult.BackupPath);
+                GUILayout.Label(content, DenEmoTheme.CaptionStyle);
+            }
 
             EditorGUILayout.EndVertical();
+        }
+
+        private static string EllipsizedPath(string path, int maxLen = 35)
+        {
+            if (string.IsNullOrEmpty(path) || path.Length <= maxLen) return path;
+            return "..." + path.Substring(path.Length - (maxLen - 3));
         }
 
         // ─── スタイル ─────────────────────────────────────────────────────────
