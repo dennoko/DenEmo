@@ -106,6 +106,14 @@ namespace DenEmo.UI
             {
                 float sx = TimeToPixel(m.CurrentTime, m.ClipLength, trackX, trackW);
                 EditorGUI.DrawRect(new Rect(sx - 1, rowRect.y, 2, rowRect.height), new Color(1f, 1f, 1f, 0.4f));
+
+                // キードラッグが他キーにブロックされたとき、ブロック元の位置を一瞬ハイライトする
+                if (_blockFlashFrame >= 0 && EditorApplication.timeSinceStartup < _blockFlashUntil)
+                {
+                    float bx = TimeToPixel(m.FrameToTime(_blockFlashFrame), m.ClipLength, trackX, trackW);
+                    if (bx >= trackX && bx <= trackX + trackW)
+                        EditorGUI.DrawRect(new Rect(bx - 1, rowRect.y, 2, rowRect.height), DenEmoTheme.SemanticWarning);
+                }
             }
 
             // ── キーフレームダイヤ ─────────────────────────────────────────────

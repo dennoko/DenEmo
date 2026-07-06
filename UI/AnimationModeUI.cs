@@ -60,14 +60,30 @@ namespace DenEmo.UI
         public InterpolationType CurrentInterp      { get; set; } = InterpolationType.Ease;
         public bool              TrackFilterEnabled { get; set; }
 
+        /// <summary>ステータスバーへの通知先（DenEmoWindow が配線する）。</summary>
+        public Action<string, int> StatusSink { get; set; }
+
         // 再利用する描画コンテキストとトラック名セット
         private AnimationDrawContext _drawContext;
         private readonly HashSet<string> _trackNames = new HashSet<string>();
         private int _trackNamesRevision = -1;
 
+        // ── スライダードラッグ中のキー記録スロットル（A-1 対策） ──────────────
+        // ドラッグイベント毎に Undo.RecordObject + SetEditorCurve を呼ぶとクリップ全体の
+        // シリアライズ/再構築が滞留しフリーズ級になるため、SMR ウェイトへの即時反映と
+        // キー記録のフラッシュを分離する。
+        private const double RECORD_FLUSH_INTERVAL_SEC = 0.05;
+        private readonly Dictionary<string, float> _pendingRecords = new Dictionary<string, float>();
+        private double _lastRecordFlush;
+        private bool   _dragUndoRecorded; // 同一ドラッグジェスチャ内で Undo スナップショットを 1 回に抑える
+
+        // REC オフ・キーなしで動かした（クリップに記録されない）シェイプ。シーク時に警告を出す。
+        private readonly HashSet<string> _unrecordedTweaks = new HashSet<string>();
+
         // Cached styles
         private GUIStyle _recBannerStyle;
         private GUIStyle _workflowGuideStyle;
+        private GUIStyle _conflictWarnStyle;
 
         // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -79,15 +95,34 @@ namespace DenEmo.UI
 
         public void OnDisable()
         {
+            FlushPendingRecords(force: true);
             Playback.Stop();
             IsRecording = false;
             Preview.Stop();
         }
 
-        /// <summary>EditorApplication.update から呼ぶ。再生を進める。</summary>
+        /// <summary>EditorApplication.update から呼ぶ。再生を進め、ドラッグ終了時の記録フラッシュを行う。</summary>
         public void OnUpdate(EditorWindow window)
         {
-            Playback.Tick(ClipModel, Preview, window);
+            bool sampled = Playback.Tick(ClipModel, Preview, window);
+
+            // 分離タイムラインウィンドウは常時 Repaint 購読をやめたため、再生中はここから再描画する
+            if (sampled && DenEmoTimelineWindow.Instance != null &&
+                !ReferenceEquals(window, DenEmoTimelineWindow.Instance))
+            {
+                DenEmoTimelineWindow.Instance.Repaint();
+            }
+
+            // ドラッグジェスチャ終了（hotControl 解放）を検知して未フラッシュのキー記録を確定する
+            if (GUIUtility.hotControl == 0)
+            {
+                if (_pendingRecords.Count > 0)
+                {
+                    FlushPendingRecords(force: true);
+                    window.Repaint();
+                }
+                _dragUndoRecorded = false;
+            }
         }
 
         /// <summary>Undo/Redo 後に呼ぶ。キャッシュを無効化してビューポートを同期する。</summary>
@@ -109,12 +144,59 @@ namespace DenEmo.UI
 
         public void StopPreview()
         {
+            FlushPendingRecords(force: true);
             Playback.Stop();
             Preview.Stop();
         }
 
+        // ─── Pending record throttle ──────────────────────────────────────────
+
+        /// <summary>
+        /// スロットル中のキー記録をクリップへ確定する。force=false の場合は前回フラッシュから
+        /// 一定時間経過しているときのみ実行する。Undo スナップショットはジェスチャ内で 1 回だけ取る。
+        /// </summary>
+        private void FlushPendingRecords(bool force)
+        {
+            if (_pendingRecords.Count == 0 || ClipModel.Clip == null) return;
+
+            double now = EditorApplication.timeSinceStartup;
+            if (!force && now - _lastRecordFlush < RECORD_FLUSH_INTERVAL_SEC) return;
+            _lastRecordFlush = now;
+
+            bool recordUndo = !_dragUndoRecorded;
+            foreach (var kv in _pendingRecords)
+            {
+                Editor.RecordKey(kv.Key, ClipModel.CurrentTime, kv.Value, CurrentInterp, recordUndo);
+                recordUndo = false;
+                _unrecordedTweaks.Remove(kv.Key);
+            }
+            _dragUndoRecorded = true;
+            _pendingRecords.Clear();
+
+            Preview.SampleAt(ClipModel.CurrentTime);
+        }
+
+        /// <summary>
+        /// シーク直前に呼ぶ。未フラッシュのキー記録を現在時刻で確定し、
+        /// クリップに記録されないまま破棄されるスライダー変更があれば警告する。
+        /// </summary>
+        public void NotifyBeforeSeek()
+        {
+            FlushPendingRecords(force: true);
+
+            if (_unrecordedTweaks.Count > 0)
+            {
+                StatusSink?.Invoke(DenEmoLoc.Tf("status.anim.tweaksDiscarded", _unrecordedTweaks.Count), 2);
+                _unrecordedTweaks.Clear();
+            }
+        }
+
+        /// <summary>◆+（全シェイプ挿入）などでまとめてキーが記録されたときに呼ぶ。</summary>
+        public void ClearUnrecordedTweaks() => _unrecordedTweaks.Clear();
+
         public void OnTargetChanged(ShapeKeyModel shapeModel)
         {
+            FlushPendingRecords(force: true);
             Preview.Stop();
             if (shapeModel?.TargetSkinnedMesh != null)
             {
@@ -162,6 +244,14 @@ namespace DenEmo.UI
                 GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step2"), _workflowGuideStyle);
                 GUILayout.Space(2);
                 GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step3"), _workflowGuideStyle);
+                GUILayout.Space(4);
+            }
+            else if (UnityEditor.AnimationMode.InAnimationMode())
+            {
+                // Unity 標準 Animation ウィンドウのプレビューと SMR 書き込みが競合する（B-2 対策）
+                GUILayout.Space(4);
+                EnsureConflictWarnStyle();
+                GUILayout.Label(DenEmoLoc.T("ui.animMode.animWindowConflict"), _conflictWarnStyle);
                 GUILayout.Space(4);
             }
 
@@ -213,23 +303,32 @@ namespace DenEmo.UI
                     OnValueChanged = (item, model, newValue) =>
                     {
                         item.Value = newValue;
-                        if (ClipModel.Clip != null &&
-                            (IsRecording || ClipModel.HasKeyframeAt(item.Name, ClipModel.CurrentTime)))
+                        bool writesToClip = ClipModel.Clip != null &&
+                            (IsRecording ||
+                             _pendingRecords.ContainsKey(item.Name) ||
+                             ClipModel.HasKeyframeAt(item.Name, ClipModel.CurrentTime));
+
+                        // 視覚フィードバックとしてウェイトは常に即時反映する
+                        if (model.TargetSkinnedMesh != null)
+                            model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, newValue);
+
+                        if (writesToClip)
                         {
-                            // 録画中、または既存キー上でのスライダー操作 → キーを直接更新
-                            Editor.RecordKey(item.Name, ClipModel.CurrentTime, newValue, CurrentInterp);
-                            Preview.SampleAt(ClipModel.CurrentTime);
+                            // 録画中、または既存キー上でのスライダー操作 → キー記録（スロットル付き）
+                            _pendingRecords[item.Name] = newValue;
+                            FlushPendingRecords(force: false);
                         }
-                        else
+                        else if (ClipModel.Clip != null)
                         {
-                            if (model.TargetSkinnedMesh != null)
-                                model.TargetSkinnedMesh.SetBlendShapeWeight(item.Index, newValue);
+                            // クリップに記録されない一時変更。シーク時に破棄される旨を警告するため記憶する
+                            _unrecordedTweaks.Add(item.Name);
                         }
                     },
 
                     OnKeyframeToggle = (item, model) =>
                     {
                         if (ClipModel.Clip == null) return;
+                        FlushPendingRecords(force: true);
                         if (ClipModel.HasKeyframeAt(item.Name, ClipModel.CurrentTime))
                         {
                             Editor.DeleteKey(item.Name, ClipModel.CurrentTime);
@@ -237,6 +336,7 @@ namespace DenEmo.UI
                         else
                         {
                             Editor.RecordKey(item.Name, ClipModel.CurrentTime, item.Value, CurrentInterp);
+                            _unrecordedTweaks.Remove(item.Name);
                             Preview.SampleAt(ClipModel.CurrentTime);
                         }
                     },
@@ -265,6 +365,7 @@ namespace DenEmo.UI
 
         public void SaveClip(string saveFolder, ShapeKeyModel shapeModel, Action<string, int> setStatus, bool saveAsNew = false)
         {
+            FlushPendingRecords(force: true);
             if (ClipModel.Clip == null)
             {
                 setStatus(DenEmoLoc.T("dlg.apply.noClip"), 3);
@@ -342,6 +443,18 @@ namespace DenEmo.UI
                 {
                     wordWrap = true,
                 };
+            }
+        }
+
+        private void EnsureConflictWarnStyle()
+        {
+            if (_conflictWarnStyle == null)
+            {
+                _conflictWarnStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
+                {
+                    wordWrap = true,
+                };
+                DenEmoTheme.FixAllTextColors(_conflictWarnStyle, DenEmoTheme.SemanticWarning);
             }
         }
     }

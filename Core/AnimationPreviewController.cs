@@ -22,6 +22,8 @@ namespace DenEmo.Core
         // ブレンドシェイプインデックス → 評価対象トラック のマップ
         private readonly List<(int blendShapeIndex, AnimationTrack track)> _sampleTargets
             = new List<(int, AnimationTrack)>();
+        // SyncValuesFromMesh の対象を評価対象シェイプのみに絞るための名前集合
+        private readonly HashSet<string> _sampleNames = new HashSet<string>();
         private int _mappedRevision = -1;
         private Mesh _mappedMesh;
 
@@ -46,6 +48,7 @@ namespace DenEmo.Core
             RestoreWeights();
             _isActive = false;
             _sampleTargets.Clear();
+            _sampleNames.Clear();
             _mappedRevision = -1;
         }
 
@@ -67,8 +70,10 @@ namespace DenEmo.Core
             foreach (var (index, track) in _sampleTargets)
                 smr.SetBlendShapeWeight(index, track.PreviewCurve.Evaluate(time));
 
-            _shapeModel.SyncValuesFromMesh();
-            SceneView.RepaintAll();
+            // 高頻度で呼ばれるため、同期はトラック対象シェイプのみ・再描画はアクティブな SceneView のみに絞る
+            _shapeModel.SyncValuesFromMesh(_sampleNames);
+            var sceneView = SceneView.lastActiveSceneView;
+            if (sceneView != null) sceneView.Repaint();
         }
 
         private void EnsureSampleTargets(SkinnedMeshRenderer smr)
@@ -82,10 +87,15 @@ namespace DenEmo.Core
             _mappedMesh     = mesh;
 
             _sampleTargets.Clear();
+            _sampleNames.Clear();
             foreach (var track in tracks)
             {
                 int index = mesh.GetBlendShapeIndex(track.ShapeName);
-                if (index >= 0) _sampleTargets.Add((index, track));
+                if (index >= 0)
+                {
+                    _sampleTargets.Add((index, track));
+                    _sampleNames.Add(track.ShapeName);
+                }
             }
         }
 

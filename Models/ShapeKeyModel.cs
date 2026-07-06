@@ -314,8 +314,15 @@ namespace DenEmo.Models
 
         public void SyncValuesFromMesh()
         {
+            SyncValuesFromMesh(null);
+        }
+
+        /// <summary>onlyNames が非 null の場合、そのシェイプ名のアイテムだけメッシュから値を同期する（プレビュー高頻度更新用）。</summary>
+        public void SyncValuesFromMesh(HashSet<string> onlyNames)
+        {
             foreach (var item in Items)
             {
+                if (onlyNames != null && !onlyNames.Contains(item.Name)) continue;
                 var smr = item.OwnerSmr;
                 if (smr == null || smr.sharedMesh == null) continue;
                 if (item.Index >= 0 && item.Index < smr.sharedMesh.blendShapeCount)

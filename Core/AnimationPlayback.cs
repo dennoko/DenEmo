@@ -15,6 +15,7 @@ namespace DenEmo.Core
 
         private float  _speed = 1f;
         private double _lastTickTime;
+        private double _lastSampleTime;
 
         public bool IsPlaying { get; private set; }
 
@@ -26,8 +27,9 @@ namespace DenEmo.Core
 
         public void Play()
         {
-            IsPlaying     = true;
-            _lastTickTime = EditorApplication.timeSinceStartup;
+            IsPlaying       = true;
+            _lastTickTime   = EditorApplication.timeSinceStartup;
+            _lastSampleTime = 0; // 再生開始直後のフレームは必ずサンプルする
         }
 
         public void Stop() => IsPlaying = false;
@@ -38,10 +40,15 @@ namespace DenEmo.Core
             else           Play();
         }
 
-        /// <summary>EditorApplication.update から呼ぶ。再生中なら時刻を進めてプレビューを更新する。</summary>
-        public void Tick(AnimationClipModel model, AnimationPreviewController preview, EditorWindow window)
+        /// <summary>
+        /// EditorApplication.update から呼ぶ。再生中なら時刻を進めてプレビューを更新する。
+        /// エディタ更新はクリップ FPS を大きく超える頻度で呼ばれるため、サンプリングと再描画は
+        /// クリップ FPS を上限にスロットルする（時刻は実時間で進め続ける）。
+        /// サンプルを実行したフレームで true を返す。
+        /// </summary>
+        public bool Tick(AnimationClipModel model, AnimationPreviewController preview, EditorWindow window)
         {
-            if (!IsPlaying || model?.Clip == null || !preview.IsActive) return;
+            if (!IsPlaying || model?.Clip == null || !preview.IsActive) return false;
 
             double now = EditorApplication.timeSinceStartup;
             float  dt  = (float)(now - _lastTickTime);
@@ -52,8 +59,14 @@ namespace DenEmo.Core
                 t = Mathf.Repeat(t, model.ClipLength); // ループ：超過分を次周へ持ち越す
 
             model.CurrentTime = t;
+
+            double sampleInterval = model.FPS > 0f ? 1.0 / model.FPS : 0.0;
+            if (now - _lastSampleTime < sampleInterval) return false;
+            _lastSampleTime = now;
+
             preview.SampleAt(t);
             window.Repaint();
+            return true;
         }
     }
 }
