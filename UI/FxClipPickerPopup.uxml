@@ -6,7 +6,7 @@
         <ui:Button name="picker-folder-button" text="…" class="dennoko-mini-button dennoko-icon-mini" />
     </ui:VisualElement>
     <ui:Label name="picker-folder-label" class="dennoko-text-tertiary dennoko-wrap" style="flex-shrink: 0;" />
-    <ui:TextField name="picker-search" class="dennoko-clip-field" style="flex-shrink: 0;" />
+    <ui:TextField name="picker-search" class="dennoko-clip-field" style="flex-shrink: 0; flex-grow: 0;" />
     <ui:Label name="picker-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none; flex-shrink: 0;" />
     <ui:ScrollView name="picker-list" style="flex-grow: 1; flex-basis: 0;" />
 </ui:UXML>
