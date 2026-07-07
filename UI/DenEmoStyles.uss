@@ -375,6 +375,7 @@
     border-radius: 4px;
     padding: 4px 8px;
     margin: 4px 0 2px 0;
+    min-height: 20px;
 }
 
 /* 差し替え一覧（コンテンツに応じて伸び、上限あり） */

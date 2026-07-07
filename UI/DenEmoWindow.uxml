@@ -204,10 +204,10 @@
             <ui:Label name="fx-list-empty-filtered" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
             <ui:ScrollView name="fx-entry-list" class="dennoko-fx-list" />
             <ui:VisualElement name="fx-hover-band" class="dennoko-info-band dennoko-hrow" style="display: none;">
-                <ui:Label name="fx-hover-playing" class="dennoko-wrap dennoko-col-grow" />
-                <ui:Button name="fx-hover-stop" class="dennoko-mini-button" />
+                <ui:Label name="fx-hover-playing" class="dennoko-wrap dennoko-col-grow" style="display: none;" />
+                <ui:Label name="fx-hover-hint" class="dennoko-text-tertiary dennoko-wrap dennoko-col-grow" />
+                <ui:Button name="fx-hover-stop" class="dennoko-mini-button" style="display: none;" />
             </ui:VisualElement>
-            <ui:Label name="fx-hover-hint" class="dennoko-text-tertiary dennoko-wrap" />
         </ui:VisualElement>
 
         <!-- 適用 -->

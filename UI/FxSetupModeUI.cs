@@ -440,8 +440,10 @@ namespace DenEmo.UI
 
             // プレビュー状態バー
             bool playing = _hover.IsActive && _hover.ActiveClip != null;
-            _hoverBand.style.display     = playing  ? DisplayStyle.Flex : DisplayStyle.None;
-            _hoverHintLabel.style.display = playing ? DisplayStyle.None : DisplayStyle.Flex;
+            _hoverBand.style.display         = DisplayStyle.Flex;
+            _hoverPlayingLabel.style.display = playing ? DisplayStyle.Flex : DisplayStyle.None;
+            _hoverHintLabel.style.display    = playing ? DisplayStyle.None : DisplayStyle.Flex;
+            _hoverStopButton.style.display   = playing ? DisplayStyle.Flex : DisplayStyle.None;
             if (playing)
                 _hoverPlayingLabel.text = DenEmoLoc.Tf("ui.fx.hover.playing", _hover.ActiveClip.name);
 
