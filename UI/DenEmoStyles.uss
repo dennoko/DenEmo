@@ -10,6 +10,8 @@
 .dennoko-root {
     --dennoko-status-warning-bg: rgba(255, 183, 77, 0.2);
     --dennoko-fav-active: #ffd91a;
+    --dennoko-rec-text: #ff7373;
+    --dennoko-info-band-bg: rgba(100, 181, 246, 0.12);
 }
 
 /* ─── ウィンドウ骨格の高さ保護 ───────────────────────────────
@@ -26,7 +28,8 @@
 }
 
 .dennoko-root #anim-scroll #unity-content-container > *,
-.dennoko-root #pose-scroll #unity-content-container > * {
+.dennoko-root #pose-scroll #unity-content-container > *,
+.dennoko-root #fx-scroll #unity-content-container > * {
     flex-shrink: 0;
 }
 
@@ -150,6 +153,183 @@
 .dennoko-root .dennoko-action-button {
     height: 24px;
     margin: 4px 6px 6px 6px;
+}
+
+/* ─── タイムライン別窓化通知・REC バナー ─────────────────── */
+
+.dennoko-root .dennoko-notice-button {
+    height: 20px;
+    font-size: 10px;
+    padding: 1px 8px;
+    margin: 2px 4px 2px 0;
+}
+
+.dennoko-root .dennoko-rec-banner {
+    color: var(--dennoko-rec-text);
+    font-size: 11px;
+}
+
+/* ─── セクションカード共通（対象メッシュ / 検索 / 保存） ─── */
+
+/* フィールド行の先頭ラベル */
+.dennoko-root .dennoko-field-label {
+    min-width: 90px;
+    flex-shrink: 0;
+}
+
+/* 検索キーワードのラベル */
+.dennoko-root .dennoko-search-label {
+    width: 80px;
+    flex-shrink: 0;
+}
+
+/* ✕ などのアイコン用ミニボタン */
+.dennoko-root .dennoko-icon-mini {
+    width: 20px;
+}
+
+/* 文字幅に合わせるミニボタン（更新・参照など） */
+.dennoko-root .dennoko-mini-button--auto {
+    width: auto;
+    padding: 0 8px;
+}
+
+/* フィルターチップ行（横並び・折り返し） */
+.dennoko-root .dennoko-filter-row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+/* フィルターチップ（ON 状態は dennoko-button-active + dennoko-chip--on を付与） */
+.dennoko-root .dennoko-chip {
+    height: 20px;
+    font-size: 10px;
+    padding: 1px 8px;
+    margin: 2px 4px 2px 0;
+    color: var(--dennoko-text-secondary);
+}
+
+.dennoko-root .dennoko-chip--on {
+    border-color: var(--dennoko-accent);
+}
+
+/* 複数メッシュ絞り込みのポップアップ */
+.dennoko-root .dennoko-mesh-filter-label {
+    margin: 0 4px 0 6px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-mesh-filter {
+    min-width: 90px;
+    margin: 2px 4px 2px 0;
+}
+
+/* 保存設定などのトグル */
+.dennoko-root .dennoko-save-toggle {
+    margin: 3px 8px;
+}
+
+/* ─── FX モード（アバターへ適用） ────────────────────────── */
+
+/* 情報バンド（プレビュー中 / 適用結果） */
+.dennoko-root .dennoko-info-band {
+    background-color: var(--dennoko-info-band-bg);
+    border-width: 1px;
+    border-color: var(--dennoko-outline);
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin: 4px 0 2px 0;
+}
+
+/* 差し替え一覧（コンテンツに応じて伸び、上限あり） */
+.dennoko-root .dennoko-fx-list {
+    max-height: 320px;
+    margin-top: 4px;
+}
+
+.dennoko-root .dennoko-fx-list #unity-content-container > * {
+    flex-shrink: 0;
+}
+
+/* 一覧の 1 行。割当て済みは左端に success のアクセントバー */
+.dennoko-root .dennoko-fx-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 2px 4px 2px 2px;
+    margin-bottom: 1px;
+    border-left-width: 2px;
+    border-left-color: transparent;
+}
+
+.dennoko-root .dennoko-fx-row:hover {
+    background-color: var(--dennoko-hover-overlay);
+}
+
+.dennoko-root .dennoko-fx-row--playing {
+    background-color: var(--dennoko-hover-overlay);
+}
+
+.dennoko-root .dennoko-fx-row--assigned {
+    border-left-color: var(--dennoko-semantic-success);
+}
+
+/* 展開トグルと位置合わせ用スペーサー */
+.dennoko-root .dennoko-fx-fold {
+    width: 20px;
+}
+
+.dennoko-root .dennoko-fx-fold-spacer {
+    width: 24px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-fx-name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    font-size: 11px;
+}
+
+.dennoko-root .dennoko-fx-arrow {
+    margin: 0 4px;
+    color: var(--dennoko-text-tertiary);
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-fx-slot {
+    width: 150px;
+    flex-shrink: 0;
+}
+
+/* パス不一致注記・参照箇所トグルのインデント */
+.dennoko-root .dennoko-fx-indent {
+    margin-left: 28px;
+}
+
+.dennoko-root .dennoko-fx-slot-toggle {
+    margin: 1px 0 1px 28px;
+}
+
+/* クリップピッカー */
+.dennoko-root .dennoko-fx-picker-title {
+    -unity-font-style: bold;
+    font-size: 11px;
+}
+
+.dennoko-root .dennoko-fx-picker-row {
+    padding: 3px 6px;
+    margin-bottom: 1px;
+    background-color: transparent;
+    border-width: 0;
+    -unity-text-align: middle-left;
+    color: var(--dennoko-text-secondary);
+}
+
+.dennoko-root .dennoko-fx-picker-row:hover {
+    background-color: var(--dennoko-hover-overlay);
+    color: var(--dennoko-text-primary);
 }
 
 /* ─── シェイプキーリスト ─────────────────────────────────── */
@@ -299,3 +479,9 @@
     flex-shrink: 0;
     margin-left: 4px;
 }
+
+/* ─── タイムライン ───────────────────────────────────────── */
+.dennoko-root #anim-timeline-imgui {
+    margin-bottom: 8px;
+}
+

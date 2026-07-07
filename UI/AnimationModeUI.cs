@@ -89,9 +89,6 @@ namespace DenEmo.UI
         // REC オフ・キーなしで動かした（クリップに記録されない）シェイプ。シーク時に警告を出す。
         private readonly HashSet<string> _unrecordedTweaks = new HashSet<string>();
 
-        // Cached styles
-        private GUIStyle _recBannerStyle;
-
         // ── UI Toolkit: クリップ設定カードの要素（BindClipSectionUI で配線） ──
         private ObjectField   _clipField;
         private Button        _clipNewButton;
@@ -309,20 +306,6 @@ namespace DenEmo.UI
             _conflictWarn.style.display = conflict ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // ─── Draw: Recording banner ───────────────────────────────────────────
-
-        /// <summary>
-        /// REC モード中はスライダー操作で自動的にキーが打たれることを示すバナーを表示する。
-        /// </summary>
-        public void DrawRecordingBanner()
-        {
-            if (!IsRecording || ClipModel.Clip == null) return;
-            EnsureRecBannerStyle();
-            GUILayout.BeginVertical(DenEmoTheme.CardStyle);
-            GUILayout.Label(DenEmoLoc.T("ui.animMode.rec.banner"), _recBannerStyle);
-            GUILayout.EndVertical();
-        }
-
         // ─── Draw: Timeline ───────────────────────────────────────────────────
 
         public void DrawTimeline(ShapeKeyModel shapeModel, EditorWindow window)
@@ -466,19 +449,6 @@ namespace DenEmo.UI
             if (shapeModel.TargetSkinnedMesh != null)
                 StartPreview(shapeModel);
             window.Repaint();
-        }
-
-        private void EnsureRecBannerStyle()
-        {
-            if (_recBannerStyle == null)
-            {
-                _recBannerStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
-                {
-                    wordWrap = true,
-                    fontSize = 11,
-                };
-                DenEmoTheme.FixAllTextColors(_recBannerStyle, new Color(1f, 0.45f, 0.45f));
-            }
         }
 
     }

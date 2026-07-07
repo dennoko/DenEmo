@@ -1,316 +1,589 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 using DenEmo.Models;
 using DenEmo.Core;
 using DenEmo.UI;
 
 namespace DenEmo
 {
+    /// <summary>
+    /// セクションカード（対象メッシュ / アニメーション参照 / 検索・絞り込み / 保存）の
+    /// UI Toolkit バインディング。要素は DenEmoWindow.uxml に定義し、ここで配線する。
+    /// 対象メッシュカードと検索カードはモード間で共有し、C# がホスト間を移動する。
+    /// </summary>
     public partial class DenEmoWindow
     {
-        // ─── Target mesh section ──────────────────────────────────────────────
+        // ─── Target mesh card ─────────────────────────────────────────────────
+        private VisualElement _targetCard;
+        private Label         _targetTitle;
+        private Label         _targetMainLabel;
+        private ObjectField   _targetMainField;
+        private Button        _targetMainClear;
+        private Label         _targetMissing;
+        private Label         _targetInactiveWarn;
+        private VisualElement _targetAdditionalRows;
+        private Label         _targetNoShapes;
+        private Button        _targetRefresh;
+        private int           _additionalRowsSignature;
 
-        private bool DrawTargetMeshSection()
+        // ─── Animation source card (Pose) ─────────────────────────────────────
+        private VisualElement _poseSourceCard;
+        private Label         _poseSourceTitle;
+        private Label         _poseSourceLabel;
+        private ObjectField   _poseSourceField;
+        private Button        _poseSourceApply;
+        private Button        _poseSourceAlign;
+
+        // ─── Search & filter card (Pose / Animation 共有) ─────────────────────
+        private VisualElement _searchCard;
+        private Label         _searchTitle;
+        private Label         _searchKeywordLabel;
+        private TextField     _searchField;
+        private Button        _searchClear;
+        private Button        _chipFav;
+        private Button        _chipEnabled;
+        private Button        _chipNonZero;
+        private Button        _chipSymmetry;
+        private Button        _chipVertex;
+        private Button        _chipVertexClear;
+        private Button        _chipKeyed;
+        private Label         _meshFilterLabel;
+        private DropdownField _meshFilterDropdown;
+        private Button        _previewOptionsButton;
+        private string        _meshFilterSignature;
+
+        // ─── Save cards ───────────────────────────────────────────────────────
+        private VisualElement _poseSaveCard;
+        private Label         _poseSaveTitle;
+        private Label         _poseSaveFolderLabel;
+        private TextField     _poseSaveFolderField;
+        private Button        _poseSaveBrowse;
+        private Toggle        _poseOverwriteToggle;
+        private VisualElement _poseOverwriteGroup;
+        private Label         _poseOverwriteLabel;
+        private ObjectField   _poseOverwriteField;
+        private Toggle        _poseBackupToggle;
+        private Button        _poseSaveButton;
+
+        private VisualElement _animSaveCard;
+        private Label         _animSaveTitle;
+        private Label         _animSaveStats;
+        private Label         _animSaveNoKeys;
+        private Toggle        _animSaveAsNewToggle;
+        private Button        _animSaveButton;
+
+        // ─── Binding ──────────────────────────────────────────────────────────
+
+        private void BindSectionCards(VisualElement root)
         {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "TARGET MESH" : "対象メッシュ");
+            // 対象メッシュ
+            _targetCard           = root.Q<VisualElement>("target-card");
+            _targetTitle          = root.Q<Label>("target-title");
+            _targetMainLabel      = root.Q<Label>("target-main-label");
+            _targetMainField      = root.Q<ObjectField>("target-main-field");
+            _targetMainClear      = root.Q<Button>("target-main-clear");
+            _targetMissing        = root.Q<Label>("target-missing");
+            _targetInactiveWarn   = root.Q<Label>("target-inactive-warn");
+            _targetAdditionalRows = root.Q<VisualElement>("target-additional-rows");
+            _targetNoShapes       = root.Q<Label>("target-noshapes");
+            _targetRefresh        = root.Q<Button>("target-refresh");
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUI.BeginChangeCheck();
-            var newSmr = EditorGUILayout.ObjectField(
-                new GUIContent(DenEmoLoc.T("ui.mesh.label"), DenEmoLoc.T("ui.mesh.tooltip")),
-                _model.TargetSkinnedMesh, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
-            if (EditorGUI.EndChangeCheck())
+            _targetMainField.objectType        = typeof(SkinnedMeshRenderer);
+            _targetMainField.allowSceneObjects = true;
+            _targetMainField.RegisterValueChangedCallback(evt =>
+                SetMainTargetFromUI(evt.newValue as SkinnedMeshRenderer));
+            _targetMainClear.clicked += ClearMainTargetFromUI;
+            _targetRefresh.clicked   += RefreshListAndCache;
+
+            // アニメーション参照（Pose）
+            _poseSourceCard  = root.Q<VisualElement>("pose-source-card");
+            _poseSourceTitle = root.Q<Label>("pose-source-title");
+            _poseSourceLabel = root.Q<Label>("pose-source-label");
+            _poseSourceField = root.Q<ObjectField>("pose-source-field");
+            _poseSourceApply = root.Q<Button>("pose-source-apply");
+            _poseSourceAlign = root.Q<Button>("pose-source-align");
+
+            _poseSourceField.objectType        = typeof(AnimationClip);
+            _poseSourceField.allowSceneObjects = false;
+            _poseSourceField.RegisterValueChangedCallback(evt =>
             {
-                _listUI.StopThrottle();
-                _model.SetTarget(newSmr);
-                vertexPickMode = false;
-                vertexFilterActive = false;
-                selectedVertexIndex = -1;
-                vertexMovedShapeIndices = null;
+                loadedClip = evt.newValue as AnimationClip;
+                UpdatePoseSourceCard();
+            });
+            _poseSourceApply.clicked += () =>
+            {
+                if (loadedClip == null) return;
+                SetStatus(DenEmoLoc.T("status.applying"), 0, 0);
+                string res = AnimationExporter.ApplyAnimationToMesh(loadedClip, _model);
+                if (res == "SUCCESS") { SaveBlendValuesPrefs(); SetStatus(DenEmoLoc.T("dlg.apply.done.msg"), 1); }
+                else SetStatus(res, 2);
+            };
+            _poseSourceAlign.clicked += () =>
+            {
+                if (loadedClip == null) return;
+                AlignToBaseClip();
+            };
+
+            // 検索・絞り込み
+            _searchCard           = root.Q<VisualElement>("search-card");
+            _searchTitle          = root.Q<Label>("search-title");
+            _searchKeywordLabel   = root.Q<Label>("search-keyword-label");
+            _searchField          = root.Q<TextField>("search-field");
+            _searchClear          = root.Q<Button>("search-clear");
+            _chipFav              = root.Q<Button>("chip-fav");
+            _chipEnabled          = root.Q<Button>("chip-enabled");
+            _chipNonZero          = root.Q<Button>("chip-nonzero");
+            _chipSymmetry         = root.Q<Button>("chip-symmetry");
+            _chipVertex           = root.Q<Button>("chip-vertex");
+            _chipVertexClear      = root.Q<Button>("chip-vertex-clear");
+            _chipKeyed            = root.Q<Button>("chip-keyed");
+            _meshFilterLabel      = root.Q<Label>("mesh-filter-label");
+            _meshFilterDropdown   = root.Q<DropdownField>("mesh-filter-dropdown");
+            _previewOptionsButton = root.Q<Button>("search-preview-options");
+
+            _searchField.SetValueWithoutNotify(searchText);
+            _searchField.RegisterValueChangedCallback(evt =>
+            {
+                searchText = evt.newValue;
+                _searchClear.style.display = string.IsNullOrEmpty(searchText)
+                    ? DisplayStyle.None : DisplayStyle.Flex;
+                // フィルター反映は OnEditorUpdate の TickListMaintenance が差分検知で行う
+            });
+            _searchClear.clicked += () =>
+            {
+                searchText = string.Empty;
+                DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
+                _searchField.SetValueWithoutNotify(string.Empty);
+                _searchClear.style.display = DisplayStyle.None;
+                Repaint();
+            };
+
+            _chipFav.clicked      += () => ToggleFilterChip(ref showOnlyFavorites, "DenEmo_ShowOnlyFavorites");
+            _chipEnabled.clicked  += () => ToggleFilterChip(ref showOnlyIncluded,  "DenEmo_ShowOnlyIncluded");
+            _chipNonZero.clicked  += () => ToggleFilterChip(ref showOnlyNonZero,   "DenEmo_ShowOnlyNonZero");
+            _chipSymmetry.clicked += () => ToggleFilterChip(ref symmetryMode,      "DenEmo_SymmetryMode");
+
+            _chipVertex.clicked += () =>
+            {
+                vertexPickMode = !vertexPickMode;
                 ClearVertexGuideCache();
-                ClampMeshFilterIndex();
+                SceneView.RepaintAll();
+                UpdateSearchCard();
+                Repaint();
+            };
+            _chipVertexClear.clicked += () =>
+            {
+                ClearVertexFilter();
+                UpdateSearchCard();
+                Repaint();
+            };
+            _chipKeyed.clicked += () =>
+            {
+                _animModeUI.TrackFilterEnabled = !_animModeUI.TrackFilterEnabled;
+                UpdateSearchCard();
+                Repaint();
+            };
+
+            _meshFilterDropdown.RegisterValueChangedCallback(_ =>
+            {
+                int newFilterIdx = _meshFilterDropdown.index <= 0 ? -1 : _meshFilterDropdown.index - 1;
+                if (newFilterIdx == _meshFilterIndex) return;
+                _meshFilterIndex = newFilterIdx;
+                DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter", _meshFilterIndex);
                 RefreshListAndCache();
-                if (_model.TargetSkinnedMesh != null)
+                Repaint();
+            });
+
+            _previewOptionsButton.clicked += () =>
+                UnityEditor.PopupWindow.Show(_previewOptionsButton.worldBound, new VertexPreviewOptionsPopup(this));
+
+            // 保存設定（Pose）
+            _poseSaveCard        = root.Q<VisualElement>("pose-save-card");
+            _poseSaveTitle       = root.Q<Label>("pose-save-title");
+            _poseSaveFolderLabel = root.Q<Label>("pose-save-folder-label");
+            _poseSaveFolderField = root.Q<TextField>("pose-save-folder");
+            _poseSaveBrowse      = root.Q<Button>("pose-save-browse");
+            _poseOverwriteToggle = root.Q<Toggle>("pose-overwrite-toggle");
+            _poseOverwriteGroup  = root.Q<VisualElement>("pose-overwrite-group");
+            _poseOverwriteLabel  = root.Q<Label>("pose-overwrite-label");
+            _poseOverwriteField  = root.Q<ObjectField>("pose-overwrite-field");
+            _poseBackupToggle    = root.Q<Toggle>("pose-backup-toggle");
+            _poseSaveButton      = root.Q<Button>("pose-save-button");
+
+            _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
+            _poseSaveFolderField.RegisterValueChangedCallback(evt => saveFolder = evt.newValue);
+            _poseSaveBrowse.clicked += () =>
+            {
+                var newPath = EditorUtility.OpenFolderPanel(DenEmoLoc.T("ui.footer.browse.title"), Application.dataPath, "");
+                if (!string.IsNullOrEmpty(newPath))
                 {
-                    CreateSnapshot(false);
-                    SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
+                    saveFolder = newPath.StartsWith(Application.dataPath)
+                        ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
+                    _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
                 }
-                if (_currentMode == EditorMode.Animation)
-                    _animModeUI.OnTargetChanged(_model);
-                else if (_currentMode == EditorMode.FxSetup)
-                    _fxSetupUI.OnTargetChanged(_model);
-                Repaint();
-            }
-            if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
+            };
+
+            _poseOverwriteToggle.SetValueWithoutNotify(overwriteSaveEnabled);
+            _poseOverwriteGroup.style.display = overwriteSaveEnabled ? DisplayStyle.Flex : DisplayStyle.None;
+            _poseOverwriteToggle.RegisterValueChangedCallback(evt =>
             {
-                _listUI.StopThrottle();
-                _model.SetTarget(null);
-                ClampMeshFilterIndex();
-                RefreshListAndCache();
-                // ホバープレビューのウェイト復元と検出状態のクリア
-                if (_currentMode == EditorMode.FxSetup)
-                    _fxSetupUI.OnTargetChanged(_model);
-                Repaint();
-            }
-            EditorGUILayout.EndHorizontal();
+                overwriteSaveEnabled = evt.newValue;
+                _poseOverwriteGroup.style.display = overwriteSaveEnabled ? DisplayStyle.Flex : DisplayStyle.None;
+            });
 
-            if (_model.TargetSkinnedMesh == null)
-            {
-                GUILayout.Space(4);
-                GUILayout.Label(DenEmoLoc.T("ui.mesh.missing"), DenEmoTheme.CaptionStyle);
-                DrawAdditionalTargets();
-                DenEmoTheme.EndSection();
-                return false;
-            }
+            _poseOverwriteField.objectType        = typeof(AnimationClip);
+            _poseOverwriteField.allowSceneObjects = false;
+            _poseOverwriteField.SetValueWithoutNotify(overwriteTargetClip);
+            _poseOverwriteField.RegisterValueChangedCallback(evt =>
+                overwriteTargetClip = evt.newValue as AnimationClip);
 
-            if (!_model.TargetSkinnedMesh.gameObject.activeInHierarchy || !_model.TargetSkinnedMesh.enabled)
-            {
-                GUILayout.Space(2);
-                var warnStyle = new GUIStyle(DenEmoTheme.CaptionStyle);
-                warnStyle.normal.textColor = DenEmoTheme.SemanticWarning;
-                GUILayout.Label("⚠ " + DenEmoLoc.T("ui.mesh.inactive.warn"), warnStyle);
-            }
+            _poseBackupToggle.SetValueWithoutNotify(autoBackup);
+            _poseBackupToggle.RegisterValueChangedCallback(evt => autoBackup = evt.newValue);
 
-            DrawAdditionalTargets();
+            _poseSaveButton.clicked += SavePoseAnimation;
 
-            bool hasShapes = false;
-            foreach (var smr in GetAllTargetMeshes())
-                if (smr != null && smr.sharedMesh != null && smr.sharedMesh.blendShapeCount > 0)
-                { hasShapes = true; break; }
+            // アニメーション保存（Animation）
+            _animSaveCard        = root.Q<VisualElement>("anim-save-card");
+            _animSaveTitle       = root.Q<Label>("anim-save-title");
+            _animSaveStats       = root.Q<Label>("anim-save-stats");
+            _animSaveNoKeys      = root.Q<Label>("anim-save-nokeys");
+            _animSaveAsNewToggle = root.Q<Toggle>("anim-save-asnew");
+            _animSaveButton      = root.Q<Button>("anim-save-button");
 
-            if (!hasShapes)
-            {
-                GUILayout.Space(4);
-                GUILayout.Label(DenEmoLoc.T("ui.mesh.noShapes"), DenEmoTheme.CaptionStyle);
-                DenEmoTheme.EndSection();
-                return false;
-            }
+            _animSaveAsNewToggle.SetValueWithoutNotify(_animSaveAsNew);
+            _animSaveAsNewToggle.RegisterValueChangedCallback(evt => _animSaveAsNew = evt.newValue);
+            _animSaveButton.clicked += () =>
+                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl), _animSaveAsNew);
 
-            DenEmoTheme.EndSection();
-            return true;
+            RebuildAdditionalTargetRows();
+            RefreshSectionLabels();
+            UpdateSectionCards();
         }
 
-        private void DrawAdditionalTargets()
+        /// <summary>言語設定に依存するセクションカードのラベルを更新する。</summary>
+        private void RefreshSectionLabels()
         {
-            GUILayout.Space(2);
+            if (_targetCard == null) return;
 
-            bool changed = false;
+            _targetTitle.text        = DenEmoLoc.T("ui.section.targetMesh");
+            _targetMainLabel.text    = DenEmoLoc.T("ui.mesh.label");
+            _targetMainLabel.tooltip = DenEmoLoc.T("ui.mesh.tooltip");
+            _targetMainField.tooltip = DenEmoLoc.T("ui.mesh.tooltip");
+            _targetMissing.text      = DenEmoLoc.T("ui.mesh.missing");
+            _targetInactiveWarn.text = "⚠ " + DenEmoLoc.T("ui.mesh.inactive.warn");
+            _targetNoShapes.text     = DenEmoLoc.T("ui.mesh.noShapes");
+            _targetRefresh.text      = DenEmoLoc.T("ui.footer.refresh");
 
+            _poseSourceTitle.text     = DenEmoLoc.T("ui.section.animSource");
+            _poseSourceLabel.text     = DenEmoLoc.T("ui.animSource.clip.label");
+            _poseSourceField.tooltip  = DenEmoLoc.T("ui.animSource.clip.tip");
+            _poseSourceApply.text     = DenEmoLoc.T("ui.animSource.loadAnim.button");
+            _poseSourceApply.tooltip  = DenEmoLoc.T("ui.applyAnim.tip");
+            _poseSourceAlign.text     = DenEmoLoc.T("ui.animSource.alignKeys.button");
+            _poseSourceAlign.tooltip  = DenEmoLoc.T("ui.align.apply.tip");
+
+            _searchTitle.text           = DenEmoLoc.T("ui.section.searchFilter");
+            _searchKeywordLabel.text    = DenEmoLoc.T("ui.filter.keyword");
+            _chipFav.text               = DenEmoLoc.T("ui.filter.fav");
+            _chipEnabled.text           = DenEmoLoc.T("ui.filter.enabled");
+            _chipNonZero.text           = DenEmoLoc.T("ui.filter.nonzero");
+            _chipSymmetry.text          = DenEmoLoc.T("ui.filter.symmetry");
+            _chipSymmetry.tooltip       = DenEmoLoc.T("ui.symmetry.tip");
+            _chipKeyed.text             = DenEmoLoc.T("ui.filter.keyedOnly");
+            _chipKeyed.tooltip          = DenEmoLoc.T("ui.filter.keyedOnly.tip");
+            _previewOptionsButton.text  = DenEmoLoc.T("ui.filter.previewOptions");
+            // 頂点フィルターチップの文言は状態依存のため UpdateSearchCard で設定する
+
+            _poseSaveTitle.text           = DenEmoLoc.T("ui.section.saveSettings");
+            _poseSaveFolderLabel.text     = DenEmoLoc.T("ui.footer.saveTo");
+            _poseSaveBrowse.text          = DenEmoLoc.T("ui.footer.browse");
+            _poseOverwriteToggle.text     = DenEmoLoc.T("ui.footer.overwriteEnable");
+            _poseOverwriteToggle.tooltip  = DenEmoLoc.T("ui.footer.overwriteEnable.tip");
+            _poseOverwriteLabel.text      = DenEmoLoc.T("ui.footer.overwriteTarget");
+            _poseBackupToggle.text        = DenEmoLoc.T("ui.footer.autoBackup");
+            _poseBackupToggle.tooltip     = DenEmoLoc.T("ui.footer.autoBackup.tip");
+            _poseSaveButton.text          = DenEmoLoc.T("ui.footer.saveAnim");
+
+            _animSaveTitle.text          = DenEmoLoc.T("ui.section.saveAnim");
+            _animSaveNoKeys.text         = DenEmoLoc.T("ui.animMode.noKeys.warn");
+            _animSaveAsNewToggle.text    = DenEmoLoc.T("ui.animMode.saveAsNew");
+            _animSaveAsNewToggle.tooltip = DenEmoLoc.T("ui.animMode.saveAsNew.tip");
+            _animSaveButton.text         = DenEmoLoc.T("ui.animMode.save.button");
+
+            UpdateSectionCards();
+        }
+
+        // ─── State reflection (250ms ポーリング + 操作直後に呼ぶ) ─────────────
+
+        /// <summary>IMGUI・SceneView 側の操作で変わる状態をセクションカードへ反映する。</summary>
+        private void UpdateSectionCards()
+        {
+            if (_targetCard == null) return;
+            UpdateTargetCard();
+            UpdateSearchCard();
+            UpdatePoseSourceCard();
+            UpdateAnimSaveCard();
+        }
+
+        private void UpdateTargetCard()
+        {
+            var mainSmr = _model.TargetSkinnedMesh;
+            if (!ReferenceEquals(_targetMainField.value, mainSmr))
+                _targetMainField.SetValueWithoutNotify(mainSmr);
+
+            // 破棄されたサブメッシュを除去し、行構成が変わっていれば再構築する
             if (_additionalTargets.RemoveAll(item => item == null) > 0)
-                changed = true;
-
-            for (int i = 0; i < _additionalTargets.Count; i++)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUI.BeginChangeCheck();
-                var addSmr = EditorGUILayout.ObjectField(
-                    new GUIContent("  +"),
-                    _additionalTargets[i], typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
-                if (EditorGUI.EndChangeCheck())
-                {
-                    if (addSmr == null)
-                    {
-                        _additionalTargets.RemoveAt(i);
-                        changed = true;
-                        EditorGUILayout.EndHorizontal();
-                        break;
-                    }
-                    else
-                    {
-                        _additionalTargets[i] = addSmr;
-                        changed = true;
-                    }
-                }
-                if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
-                {
-                    _additionalTargets.RemoveAt(i);
-                    changed = true;
-                    EditorGUILayout.EndHorizontal();
-                    break;
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-
-            if (_model.TargetSkinnedMesh != null)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUI.BeginChangeCheck();
-                var newSmr = EditorGUILayout.ObjectField(
-                    new GUIContent("  +"),
-                    null, typeof(SkinnedMeshRenderer), true) as SkinnedMeshRenderer;
-                if (EditorGUI.EndChangeCheck() && newSmr != null)
-                {
-                    _additionalTargets.Add(newSmr);
-                    changed = true;
-                }
-                using (new EditorGUI.DisabledGroupScope(true))
-                    GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20));
-                EditorGUILayout.EndHorizontal();
-            }
-
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.refresh"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(60)))
-                RefreshListAndCache();
-            EditorGUILayout.EndHorizontal();
-
-            if (changed)
             {
                 ClampMeshFilterIndex();
                 RefreshListAndCache();
-                Repaint();
             }
+            if (ComputeAdditionalRowsSignature() != _additionalRowsSignature)
+                RebuildAdditionalTargetRows();
+
+            bool hasMain   = mainSmr != null;
+            bool inactive  = hasMain && (!mainSmr.gameObject.activeInHierarchy || !mainSmr.enabled);
+            bool hasShapes = HasUsableTarget();
+            _targetMissing.style.display      = hasMain ? DisplayStyle.None : DisplayStyle.Flex;
+            _targetInactiveWarn.style.display = inactive ? DisplayStyle.Flex : DisplayStyle.None;
+            _targetNoShapes.style.display     = (hasMain && !hasShapes) ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // ─── Animation source section ─────────────────────────────────────────
-
-        private void DrawAnimationSourceSection()
+        private void UpdateSearchCard()
         {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "ANIMATION SOURCE" : "アニメーション参照");
+            if (_searchField.value != searchText)
+                _searchField.SetValueWithoutNotify(searchText);
+            _searchClear.style.display = string.IsNullOrEmpty(searchText)
+                ? DisplayStyle.None : DisplayStyle.Flex;
 
-            loadedClip = EditorGUILayout.ObjectField(
-                new GUIContent(DenEmoLoc.T("ui.animSource.clip.label"), DenEmoLoc.T("ui.animSource.clip.tip")),
-                loadedClip, typeof(AnimationClip), false) as AnimationClip;
+            SetChipState(_chipFav,      showOnlyFavorites);
+            SetChipState(_chipEnabled,  showOnlyIncluded);
+            SetChipState(_chipNonZero,  showOnlyNonZero);
+            SetChipState(_chipSymmetry, symmetryMode);
 
-            GUILayout.Space(4);
-
-            using (new EditorGUI.DisabledGroupScope(loadedClip == null))
-            {
-                if (GUILayout.Button(
-                    new GUIContent(DenEmoLoc.T("ui.animSource.loadAnim.button"), DenEmoLoc.T("ui.applyAnim.tip")),
-                    DenEmoTheme.ActionButtonStyle))
-                {
-                    SetStatus(DenEmoLoc.T("status.applying"), 0, 0);
-                    string res = AnimationExporter.ApplyAnimationToMesh(loadedClip, _model);
-                    if (res == "SUCCESS") { SaveBlendValuesPrefs(); SetStatus(DenEmoLoc.T("dlg.apply.done.msg"), 1); }
-                    else SetStatus(res, 2);
-                }
-
-                GUILayout.Space(2);
-
-                if (GUILayout.Button(
-                    new GUIContent(DenEmoLoc.T("ui.animSource.alignKeys.button"), DenEmoLoc.T("ui.align.apply.tip")),
-                    DenEmoTheme.ActionButtonStyle))
-                    AlignToBaseClip();
-            }
-
-            DenEmoTheme.EndSection();
-        }
-
-        // ─── Search & filter section ──────────────────────────────────────────
-
-        private void DrawSearchFilterSection()
-        {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SEARCH & FILTER" : "検索・絞り込み");
-
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(DenEmoLoc.EnglishMode ? "🔍 Keyword" : "🔍 キーワード", GUILayout.Width(80));
-            GUI.SetNextControlName("SearchField");
-            searchText = EditorGUILayout.TextField(searchText, DenEmoTheme.SearchTextFieldStyle, GUILayout.ExpandWidth(true));
-            if (!string.IsNullOrEmpty(searchText))
-            {
-                if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
-                {
-                    searchText = string.Empty;
-                    DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
-                    GUI.FocusControl(null);
-                    Repaint();
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-
-            GUILayout.Space(6);
-
-            EditorGUILayout.BeginHorizontal();
-
-            showOnlyFavorites = DrawFilterChip(showOnlyFavorites, DenEmoLoc.EnglishMode ? "★ Fav"      : "★ お気に入り", "DenEmo_ShowOnlyFavorites");
-            GUILayout.Space(4);
-            showOnlyIncluded  = DrawFilterChip(showOnlyIncluded,  DenEmoLoc.EnglishMode ? "✓ Enabled"  : "✓ 有効のみ",   "DenEmo_ShowOnlyIncluded");
-            GUILayout.Space(4);
-            showOnlyNonZero   = DrawFilterChip(showOnlyNonZero,   DenEmoLoc.EnglishMode ? "≠0 Non-zero": "≠0 非ゼロ",    "DenEmo_ShowOnlyNonZero");
-            GUILayout.Space(4);
-            symmetryMode      = DrawFilterChip(symmetryMode,      DenEmoLoc.EnglishMode ? "↔ Symmetry" : "↔ 左右同期",  "DenEmo_SymmetryMode");
-            GUILayout.Space(4);
-
+            // 頂点フィルター（SceneView でのピック結果もここで追従する）
             if (vertexPickMode)
             {
-                if (GUILayout.Button(DenEmoLoc.T("ui.filter.vertex.cancel"), DenEmoTheme.ChipOnStyle, GUILayout.ExpandWidth(false)))
-                {
-                    vertexPickMode = false;
-                    ClearVertexGuideCache();
-                    SceneView.RepaintAll();
-                    Repaint();
-                }
+                _chipVertex.text = DenEmoLoc.T("ui.filter.vertex.cancel");
+                SetChipState(_chipVertex, true);
+                _chipVertexClear.style.display = DisplayStyle.None;
             }
             else
             {
-                string vertexFilterLabel = vertexFilterActive
+                _chipVertex.text = vertexFilterActive
                     ? DenEmoLoc.Tf("ui.filter.vertex.active", selectedVertexIndex)
                     : DenEmoLoc.T("ui.filter.vertex");
-                var vertexStyle = vertexFilterActive ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
-                if (GUILayout.Button(vertexFilterLabel, vertexStyle, GUILayout.ExpandWidth(false)))
-                {
-                    vertexPickMode = true;
-                    ClearVertexGuideCache();
-                    SceneView.RepaintAll();
-                    Repaint();
-                }
-                if (vertexFilterActive)
-                {
-                    GUILayout.Space(2);
-                    if (GUILayout.Button("✕", DenEmoTheme.MiniButtonStyle, GUILayout.Width(20)))
-                        ClearVertexFilter();
-                }
+                SetChipState(_chipVertex, vertexFilterActive);
+                _chipVertexClear.style.display = vertexFilterActive ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
-            if (_currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null)
-            {
-                GUILayout.Space(4);
-                bool trackFilter = _animModeUI.TrackFilterEnabled;
-                var  trackStyle  = trackFilter ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
-                var  trackLabel  = DenEmoLoc.EnglishMode ? "◆ Keyed Only" : "◆ キー有りのみ";
-                var  trackTip    = DenEmoLoc.EnglishMode
-                    ? "Show only shape keys that have tracks/keyframes in the current clip"
-                    : "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示";
-                if (GUILayout.Button(new GUIContent(trackLabel, trackTip), trackStyle, GUILayout.ExpandWidth(false)))
-                {
-                    _animModeUI.TrackFilterEnabled = !trackFilter;
-                    Repaint();
-                }
-            }
+            // キー有りのみ（Animation モードでクリップ設定時のみ）
+            bool showKeyed = _currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip != null;
+            _chipKeyed.style.display = showKeyed ? DisplayStyle.Flex : DisplayStyle.None;
+            if (showKeyed) SetChipState(_chipKeyed, _animModeUI.TrackFilterEnabled);
 
+            // メッシュ絞り込み（複数対象時のみ）
             var allTargets = GetAllTargetMeshes();
-            if (allTargets.Count > 1)
+            bool showMeshFilter = allTargets.Count > 1;
+            _meshFilterLabel.style.display    = showMeshFilter ? DisplayStyle.Flex : DisplayStyle.None;
+            _meshFilterDropdown.style.display = showMeshFilter ? DisplayStyle.Flex : DisplayStyle.None;
+            if (showMeshFilter)
             {
-                GUILayout.Space(6);
-                GUILayout.Label("Mesh:", DenEmoTheme.CaptionStyle, GUILayout.Width(38));
-
-                var meshOpts      = BuildMeshFilterOptions(allTargets);
-                int displayIdx    = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
-                int newDisplayIdx = EditorGUILayout.Popup(displayIdx, meshOpts, GUILayout.MinWidth(70), GUILayout.ExpandWidth(false));
-                DenEmoTheme.DrawPopupArrowOverlay();
-                int newFilterIdx  = newDisplayIdx <= 0 ? -1 : newDisplayIdx - 1;
-
-                if (newFilterIdx != _meshFilterIndex)
+                var opts = new List<string>(BuildMeshFilterOptions(allTargets));
+                string sig = string.Join("\n", opts);
+                if (sig != _meshFilterSignature)
                 {
-                    _meshFilterIndex = newFilterIdx;
-                    DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter", _meshFilterIndex);
-                    RefreshListAndCache();
-                    Repaint();
+                    _meshFilterSignature = sig;
+                    _meshFilterDropdown.choices = opts;
                 }
+                int displayIdx = (_meshFilterIndex < 0 || _meshFilterIndex >= allTargets.Count) ? 0 : _meshFilterIndex + 1;
+                if (_meshFilterDropdown.index != displayIdx)
+                    _meshFilterDropdown.SetValueWithoutNotify(opts[displayIdx]);
+            }
+        }
+
+        private void UpdatePoseSourceCard()
+        {
+            if (!ReferenceEquals(_poseSourceField.value, loadedClip))
+                _poseSourceField.SetValueWithoutNotify(loadedClip);
+            bool hasClip = loadedClip != null;
+            _poseSourceApply.SetEnabled(hasClip);
+            _poseSourceAlign.SetEnabled(hasClip);
+        }
+
+        private void UpdateAnimSaveCard()
+        {
+            var clip = _animModeUI.ClipModel.Clip;
+            if (clip == null)
+            {
+                _animSaveStats.style.display  = DisplayStyle.None;
+                _animSaveNoKeys.style.display = DisplayStyle.None;
+                return;
+            }
+            var tracks = _animModeUI.ClipModel.Tracks;
+            if (tracks.Count == 0)
+            {
+                _animSaveStats.style.display  = DisplayStyle.None;
+                _animSaveNoKeys.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                int keyTotal = 0;
+                foreach (var track in tracks)
+                    keyTotal += track.KeyTimes.Length;
+                _animSaveStats.text           = DenEmoLoc.Tf("ui.animMode.keyStats", tracks.Count, keyTotal);
+                _animSaveStats.style.display  = DisplayStyle.Flex;
+                _animSaveNoKeys.style.display = DisplayStyle.None;
+            }
+        }
+
+        // ─── Target mesh helpers ──────────────────────────────────────────────
+
+        /// <summary>メイン対象メッシュの変更（ObjectField / ドラッグ&ドロップ共通）。</summary>
+        private void SetMainTargetFromUI(SkinnedMeshRenderer newSmr)
+        {
+            _listUI.StopThrottle();
+            _model.SetTarget(newSmr);
+            vertexPickMode = false;
+            vertexFilterActive = false;
+            selectedVertexIndex = -1;
+            vertexMovedShapeIndices = null;
+            ClearVertexGuideCache();
+            ClampMeshFilterIndex();
+            RefreshListAndCache();
+            if (_model.TargetSkinnedMesh != null)
+            {
+                CreateSnapshot(false);
+                SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
+            }
+            if (_currentMode == EditorMode.Animation)
+                _animModeUI.OnTargetChanged(_model);
+            else if (_currentMode == EditorMode.FxSetup)
+                _fxSetupUI.OnTargetChanged(_model);
+            UpdateSectionCards();
+            UpdateAnimSectionsVisibility();
+            UpdatePoseSectionsVisibility();
+            Repaint();
+        }
+
+        private void ClearMainTargetFromUI()
+        {
+            _listUI.StopThrottle();
+            _model.SetTarget(null);
+            ClampMeshFilterIndex();
+            RefreshListAndCache();
+            // ホバープレビューのウェイト復元と検出状態のクリア
+            if (_currentMode == EditorMode.FxSetup)
+                _fxSetupUI.OnTargetChanged(_model);
+            UpdateSectionCards();
+            UpdateAnimSectionsVisibility();
+            UpdatePoseSectionsVisibility();
+            Repaint();
+        }
+
+        /// <summary>サブメッシュ行 + 追加用の空行を再構築する。</summary>
+        private void RebuildAdditionalTargetRows()
+        {
+            _targetAdditionalRows.Clear();
+
+            for (int i = 0; i < _additionalTargets.Count; i++)
+            {
+                int index = i;
+                var field = MakeAdditionalRow(_additionalTargets[index], out var removeButton);
+                field.RegisterValueChangedCallback(evt =>
+                {
+                    var smr = evt.newValue as SkinnedMeshRenderer;
+                    if (smr == null) _additionalTargets.RemoveAt(index);
+                    else _additionalTargets[index] = smr;
+                    OnAdditionalTargetsChanged();
+                });
+                removeButton.clicked += () =>
+                {
+                    _additionalTargets.RemoveAt(index);
+                    OnAdditionalTargetsChanged();
+                };
             }
 
-            GUILayout.FlexibleSpace();
+            // 追加用の空行（メイン対象があるときのみ）
+            if (_model.TargetSkinnedMesh != null)
+            {
+                var field = MakeAdditionalRow(null, out var removeButton);
+                removeButton.SetEnabled(false);
+                field.RegisterValueChangedCallback(evt =>
+                {
+                    var smr = evt.newValue as SkinnedMeshRenderer;
+                    if (smr == null) return;
+                    _additionalTargets.Add(smr);
+                    OnAdditionalTargetsChanged();
+                });
+            }
 
-            var optBtnLabel = new GUIContent(DenEmoLoc.EnglishMode ? "⚙ Preview" : "⚙ 表示設定");
-            var optBtnRect  = GUILayoutUtility.GetRect(optBtnLabel, DenEmoTheme.MiniButtonStyle, GUILayout.Width(66));
-            if (GUI.Button(optBtnRect, optBtnLabel, DenEmoTheme.MiniButtonStyle))
-                PopupWindow.Show(optBtnRect, new VertexPreviewOptionsPopup(this));
+            _additionalRowsSignature = ComputeAdditionalRowsSignature();
+        }
 
-            EditorGUILayout.EndHorizontal();
+        private ObjectField MakeAdditionalRow(SkinnedMeshRenderer value, out Button removeButton)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("dennoko-hrow");
 
-            DenEmoTheme.EndSection();
+            var label = new Label("+");
+            label.AddToClassList("dennoko-text-tertiary");
+            label.AddToClassList("dennoko-field-label");
+
+            var field = new ObjectField
+            {
+                objectType        = typeof(SkinnedMeshRenderer),
+                allowSceneObjects = true,
+            };
+            field.AddToClassList("dennoko-clip-field");
+            field.SetValueWithoutNotify(value);
+
+            removeButton = new Button { text = "✕" };
+            removeButton.AddToClassList("dennoko-mini-button");
+            removeButton.AddToClassList("dennoko-icon-mini");
+
+            row.Add(label);
+            row.Add(field);
+            row.Add(removeButton);
+            _targetAdditionalRows.Add(row);
+            return field;
+        }
+
+        private void OnAdditionalTargetsChanged()
+        {
+            ClampMeshFilterIndex();
+            RefreshListAndCache();
+            RebuildAdditionalTargetRows();
+            UpdateSectionCards();
+            Repaint();
+        }
+
+        private int ComputeAdditionalRowsSignature()
+        {
+            // メイン対象の有無（追加用空行の有無）+ サブメッシュの構成
+            int sig = _model.TargetSkinnedMesh != null ? 17 : 3;
+            foreach (var smr in _additionalTargets)
+                sig = sig * 31 + (smr != null ? smr.GetInstanceID() : 0);
+            return sig;
+        }
+
+        // ─── Filter helpers ───────────────────────────────────────────────────
+
+        private void ToggleFilterChip(ref bool state, string prefsKey)
+        {
+            state = !state;
+            DenEmoProjectPrefs.SetBool(prefsKey, state);
+            UpdateSearchCard();
+            // フィルター反映は OnEditorUpdate の TickListMaintenance が差分検知で行う
+            Repaint();
+        }
+
+        private static void SetChipState(Button chip, bool on)
+        {
+            chip.EnableInClassList("dennoko-button-active", on);
+            chip.EnableInClassList("dennoko-chip--on", on);
         }
 
         private string[] BuildMeshFilterOptions(List<SkinnedMeshRenderer> targets)
@@ -322,147 +595,32 @@ namespace DenEmo
             return opts;
         }
 
-        private bool DrawFilterChip(bool current, string label, string prefsKey)
+        // ─── Save (Pose) ──────────────────────────────────────────────────────
+
+        private void SavePoseAnimation()
         {
-            var style = current ? DenEmoTheme.ChipOnStyle : DenEmoTheme.ChipOffStyle;
-            if (GUILayout.Button(label, style, GUILayout.ExpandWidth(false)))
+            if (!HasIncludedShapeKeys())
             {
-                current = !current;
-                DenEmoProjectPrefs.SetBool(prefsKey, current);
-                Repaint();
+                EditorUtility.DisplayDialog(
+                    DenEmoLoc.T("dlg.save.noIncluded.title"),
+                    DenEmoLoc.T("dlg.save.noIncluded.msg"),
+                    DenEmoLoc.T("dlg.ok"));
             }
-            return current;
-        }
-
-        // ─── Footer / save sections ───────────────────────────────────────────
-
-        private void DrawFooterSection()
-        {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE SETTINGS" : "保存設定");
-
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(DenEmoLoc.T("ui.footer.saveTo"), DenEmoTheme.CaptionStyle, GUILayout.Width(90));
-            saveFolder = EditorGUILayout.TextField(saveFolder, DenEmoTheme.SearchTextFieldStyle, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.browse"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(46)))
+            else if (overwriteSaveEnabled && overwriteTargetClip != null)
             {
-                var newPath = EditorUtility.OpenFolderPanel("フォルダを選択", Application.dataPath, "");
-                if (!string.IsNullOrEmpty(newPath))
-                    saveFolder = newPath.StartsWith(Application.dataPath)
-                        ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
+                string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
+                SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
+                var err = AnimationExporter.SaveAnimationClipToPath(_model, clipPath, out string path, autoBackup);
+                if (err != null) SetStatus(err, 3);
+                else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
             }
-            EditorGUILayout.EndHorizontal();
-
-            GUILayout.Space(2);
-
-            overwriteSaveEnabled = EditorGUILayout.ToggleLeft(
-                new GUIContent(DenEmoLoc.T("ui.footer.overwriteEnable"), DenEmoLoc.T("ui.footer.overwriteEnable.tip")),
-                overwriteSaveEnabled, DenEmoTheme.CaptionStyle);
-
-            if (overwriteSaveEnabled)
+            else
             {
-                GUILayout.Space(2);
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(DenEmoLoc.T("ui.footer.overwriteTarget"), DenEmoTheme.CaptionStyle, GUILayout.Width(52));
-                overwriteTargetClip = EditorGUILayout.ObjectField(GUIContent.none, overwriteTargetClip, typeof(AnimationClip), false) as AnimationClip;
-                EditorGUILayout.EndHorizontal();
-
-                GUILayout.Space(2);
-                autoBackup = EditorGUILayout.ToggleLeft(
-                    new GUIContent(
-                        DenEmoLoc.EnglishMode ? "Auto backup on overwrite" : "上書き時に自動バックアップ",
-                        DenEmoLoc.EnglishMode ? "Copies the existing .anim file to _backups/ before overwriting." : "上書き保存前に既存ファイルを _backups/ フォルダに複製します。"),
-                    autoBackup, DenEmoTheme.CaptionStyle);
+                SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
+                var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path, autoBackup);
+                if (err != null) SetStatus(err, 3);
+                else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
             }
-
-            DenEmoTheme.DrawSeparator(0);
-            GUILayout.Space(6);
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(6);
-
-            if (GUILayout.Button(DenEmoLoc.T("ui.footer.saveAnim"), DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
-            {
-                if (!HasIncludedShapeKeys())
-                {
-                    EditorUtility.DisplayDialog(
-                        DenEmoLoc.T("dlg.save.noIncluded.title"),
-                        DenEmoLoc.T("dlg.save.noIncluded.msg"),
-                        DenEmoLoc.T("dlg.ok"));
-                }
-                else if (overwriteSaveEnabled && overwriteTargetClip != null)
-                {
-                    string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
-                    SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
-                    var err = AnimationExporter.SaveAnimationClipToPath(_model, clipPath, out string path, autoBackup);
-                    if (err != null) SetStatus(err, 3);
-                    else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
-                }
-                else
-                {
-                    SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
-                    var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path, autoBackup);
-                    if (err != null) SetStatus(err, 3);
-                    else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
-                }
-            }
-
-            GUILayout.Space(6);
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6);
-            DenEmoTheme.EndSection();
-        }
-
-        private void DrawAnimationSaveSection()
-        {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "SAVE ANIMATION" : "アニメーション保存");
-
-            // Show keyframe statistics when a clip is loaded
-            if (_animModeUI.ClipModel.Clip != null)
-            {
-                var tracks = _animModeUI.ClipModel.Tracks;
-                if (tracks.Count == 0)
-                {
-                    if (_animNoKeyWarnStyle == null)
-                    {
-                        _animNoKeyWarnStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
-                        {
-                            wordWrap = true,
-                        };
-                        DenEmoTheme.FixAllTextColors(_animNoKeyWarnStyle, DenEmoTheme.SemanticWarning);
-                    }
-                    GUILayout.Label(DenEmoLoc.T("ui.animMode.noKeys.warn"), _animNoKeyWarnStyle);
-                }
-                else
-                {
-                    int keyTotal = 0;
-                    foreach (var track in tracks)
-                        keyTotal += track.KeyTimes.Length;
-                    GUILayout.Label(DenEmoLoc.Tf("ui.animMode.keyStats", tracks.Count, keyTotal), DenEmoTheme.CaptionStyle);
-                }
-                GUILayout.Space(4);
-            }
-
-            GUILayout.Space(2);
-            _animSaveAsNew = EditorGUILayout.ToggleLeft(
-                new GUIContent(
-                    DenEmoLoc.EnglishMode ? "Save as new clip" : "新規クリップとして保存",
-                    DenEmoLoc.EnglishMode
-                        ? "Opens a file dialog to save as a new animation clip. The original clip's folder is used as the default path."
-                        : "元クリップのフォルダをデフォルトパスとしてファイルダイアログを開き、新規クリップとして保存します。"),
-                _animSaveAsNew, DenEmoTheme.CaptionStyle);
-
-            GUILayout.Space(4);
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(6);
-            if (GUILayout.Button(
-                DenEmoLoc.EnglishMode ? "Save Animation" : "アニメーションを保存",
-                DenEmoTheme.ActionButtonStyle, GUILayout.ExpandWidth(true)))
-            {
-                _animModeUI.SaveClip(saveFolder, _model, (msg, lvl) => SetStatus(msg, lvl), _animSaveAsNew);
-            }
-            GUILayout.Space(6);
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6);
-            DenEmoTheme.EndSection();
         }
 
         private bool HasIncludedShapeKeys()
@@ -474,48 +632,38 @@ namespace DenEmo
 
         // ─── Drag and drop ────────────────────────────────────────────────────
 
-        private void HandleDragAndDrop()
+        /// <summary>UI Toolkit 領域全体への SkinnedMeshRenderer ドロップを受け付ける。</summary>
+        private void RegisterRootDragAndDrop(VisualElement root)
         {
-            Event evt = Event.current;
-            if (evt.type != EventType.DragUpdated && evt.type != EventType.DragPerform) return;
+            root.RegisterCallback<DragUpdatedEvent>(_ =>
+            {
+                if (FindDraggedSkinnedMesh() != null)
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+            });
+            root.RegisterCallback<DragPerformEvent>(_ =>
+            {
+                var smr = FindDraggedSkinnedMesh();
+                if (smr == null) return;
+                DragAndDrop.AcceptDrag();
+                SetMainTargetFromUI(smr);
+            });
+        }
 
-            Rect dropArea = new Rect(0, 0, position.width, position.height);
-            if (!dropArea.Contains(evt.mousePosition)) return;
-
-            SkinnedMeshRenderer foundSmr = null;
+        private static SkinnedMeshRenderer FindDraggedSkinnedMesh()
+        {
             foreach (var obj in DragAndDrop.objectReferences)
             {
-                if (obj is GameObject go) foundSmr = go.GetComponent<SkinnedMeshRenderer>();
-                else if (obj is SkinnedMeshRenderer smr) foundSmr = smr;
-                if (foundSmr != null) break;
-            }
-            if (foundSmr == null) return;
-
-            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-            if (evt.type == EventType.DragPerform)
-            {
-                DragAndDrop.AcceptDrag();
-                _listUI.StopThrottle();
-                _model.SetTarget(foundSmr);
-                vertexPickMode = false;
-                vertexFilterActive = false;
-                selectedVertexIndex = -1;
-                vertexMovedShapeIndices = null;
-                ClearVertexGuideCache();
-                ClampMeshFilterIndex();
-                RefreshListAndCache();
-                if (_model.TargetSkinnedMesh != null)
+                if (obj is GameObject go)
                 {
-                    CreateSnapshot(false);
-                    SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
+                    var smr = go.GetComponent<SkinnedMeshRenderer>();
+                    if (smr != null) return smr;
                 }
-                if (_currentMode == EditorMode.Animation)
-                    _animModeUI.OnTargetChanged(_model);
-                else if (_currentMode == EditorMode.FxSetup)
-                    _fxSetupUI.OnTargetChanged(_model);
-                Repaint();
+                else if (obj is SkinnedMeshRenderer smr2)
+                {
+                    return smr2;
+                }
             }
-            evt.Use();
+            return null;
         }
     }
 }

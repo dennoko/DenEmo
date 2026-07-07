@@ -17,6 +17,8 @@ namespace DenEmo.UI
         internal const string MainWindowUxmlGuid = "e7410dd244164667b31e714b0148c3e6";
         internal const string ShapeKeyListUxmlGuid = "4b2f9d31c8ae4d0f9c6a5e11b7d2a940";
         internal const string ShapeKeyRowUxmlGuid = "a95cf17e30b24bd3a7c81f4e6209d5c8";
+        internal const string TimelineWindowUxmlGuid = "6c8d2ab54e7f4c31a2d9b0e87f5c1364";
+        internal const string FxClipPickerUxmlGuid = "c4e8f2a71d9b4b6e8f3a5c0d7b21e94a";
 
         internal static StyleSheet LoadTheme() => Load<StyleSheet>(ThemeUssGuid);
 

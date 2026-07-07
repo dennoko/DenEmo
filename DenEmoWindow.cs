@@ -65,8 +65,6 @@ namespace DenEmo
         // -1 = All targets, 0+ = GetAllTargetMeshes()[index]
         private int _meshFilterIndex = -1;
 
-        private Vector2 _mainScroll;
-
         private AnimationClip loadedClip          = null;
         private AnimationClip overwriteTargetClip = null;
 
@@ -81,10 +79,7 @@ namespace DenEmo
         private double lastIncludeFlagsChangeTime = 0;
         private List<float> snapshotValues        = null;
 
-        private GUIStyle _animNoKeyWarnStyle;
-
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
-        private IMGUIContainer _contentGui;
         private Label  _statusLabel;
         private Button _langButton;
         private Button _tabPose;
@@ -93,17 +88,27 @@ namespace DenEmo
 
         // Pose モード用コンテンツ（pose-scroll 配下）
         private ScrollView     _poseScroll;
-        private IMGUIContainer _poseTopGui;
-        private IMGUIContainer _poseBottomGui;
+        private VisualElement  _poseTargetHost;
+        private VisualElement  _poseSearchHost;
         private VisualElement  _poseListHost;
 
         // Animation モード用コンテンツ（anim-scroll 配下）
         private ScrollView     _animScroll;
-        private IMGUIContainer _animTopGui;
-        private IMGUIContainer _animMidGui;
-        private IMGUIContainer _animSaveGui;
+        private VisualElement  _animTargetHost;
+        private VisualElement  _animSearchHost;
+        private IMGUIContainer _animTimelineGui;
         private VisualElement  _animListHost;
         private VisualElement  _animClipCard;
+        private VisualElement  _animTimelineNotice;
+        private Label          _animTimelineNoticeLabel;
+        private Button         _animTimelineFocus;
+        private Button         _animTimelineClose;
+        private VisualElement  _animRecBanner;
+        private Label          _animRecBannerLabel;
+
+        // FX モード用コンテンツ（fx-scroll 配下。カード内容は FxSetupModeUI がバインド）
+        private ScrollView     _fxScroll;
+        private VisualElement  _fxTargetHost;
 
         // ─── Lifecycle ───────────────────────────────────────────────────────
 
@@ -277,6 +282,9 @@ namespace DenEmo
             // ステータスバーが UI Toolkit 化され OnGUI を通らなくなったため、自動クリアはここで駆動する
             TickStatusAutoClear();
 
+            // 検索・フィルター変更の反映と Include フラグの遅延保存（セクション UI Toolkit 化により OnGUI を通らない）
+            TickListMaintenance();
+
             if (_currentMode == EditorMode.Animation)
                 _animModeUI.OnUpdate(this);
             else if (_currentMode == EditorMode.FxSetup)
@@ -316,27 +324,43 @@ namespace DenEmo
             _tabPose     = root.Q<Button>("tab-pose");
             _tabAnim     = root.Q<Button>("tab-anim");
             _tabFx       = root.Q<Button>("tab-fx");
-            _contentGui  = root.Q<IMGUIContainer>("content-imgui");
             _statusLabel = root.Q<Label>("status-bar");
 
-            _poseScroll    = root.Q<ScrollView>("pose-scroll");
-            _poseTopGui    = root.Q<IMGUIContainer>("pose-top-imgui");
-            _poseBottomGui = root.Q<IMGUIContainer>("pose-bottom-imgui");
-            _poseListHost  = root.Q<VisualElement>("pose-list-host");
+            _poseScroll     = root.Q<ScrollView>("pose-scroll");
+            _poseTargetHost = root.Q<VisualElement>("pose-target-host");
+            _poseSearchHost = root.Q<VisualElement>("pose-search-host");
+            _poseListHost   = root.Q<VisualElement>("pose-list-host");
 
-            _animScroll    = root.Q<ScrollView>("anim-scroll");
-            _animTopGui    = root.Q<IMGUIContainer>("anim-top-imgui");
-            _animMidGui    = root.Q<IMGUIContainer>("anim-mid-imgui");
-            _animSaveGui   = root.Q<IMGUIContainer>("anim-save-imgui");
-            _animListHost  = root.Q<VisualElement>("anim-list-host");
-            _animClipCard  = root.Q<VisualElement>("anim-clip-card");
+            _animScroll     = root.Q<ScrollView>("anim-scroll");
+            _animTargetHost = root.Q<VisualElement>("anim-target-host");
+            _animSearchHost = root.Q<VisualElement>("anim-search-host");
+            _animTimelineGui = root.Q<IMGUIContainer>("anim-timeline-imgui");
+            _animListHost   = root.Q<VisualElement>("anim-list-host");
+            _animClipCard   = root.Q<VisualElement>("anim-clip-card");
 
-            _contentGui.onGUIHandler  = OnContentGUI;
-            _poseTopGui.onGUIHandler  = OnPoseTopGUI;
-            _poseBottomGui.onGUIHandler = OnPoseBottomGUI;
-            _animTopGui.onGUIHandler  = OnAnimTopGUI;
-            _animMidGui.onGUIHandler  = OnAnimMidGUI;
-            _animSaveGui.onGUIHandler = OnAnimSaveGUI;
+            _animTimelineNotice      = root.Q<VisualElement>("anim-timeline-notice");
+            _animTimelineNoticeLabel = root.Q<Label>("anim-timeline-notice-label");
+            _animTimelineFocus       = root.Q<Button>("anim-timeline-focus");
+            _animTimelineClose       = root.Q<Button>("anim-timeline-close");
+            _animRecBanner           = root.Q<VisualElement>("anim-rec-banner");
+            _animRecBannerLabel      = root.Q<Label>("anim-rec-banner-label");
+
+            _fxScroll     = root.Q<ScrollView>("fx-scroll");
+            _fxTargetHost = root.Q<VisualElement>("fx-target-host");
+
+            _animTimelineGui.onGUIHandler = OnAnimTimelineGUI;
+
+            // セクションカード（対象メッシュ / 参照 / 検索 / 保存）の配線
+            BindSectionCards(root);
+            _fxSetupUI.BindUI(root, _model, () => saveFolder, this);
+            RegisterRootDragAndDrop(root);
+
+            _animTimelineFocus.clicked += () => DenEmoTimelineWindow.ShowWindow();
+            _animTimelineClose.clicked += () =>
+            {
+                if (HasOpenInstances<DenEmoTimelineWindow>())
+                    GetWindow<DenEmoTimelineWindow>().Close();
+            };
 
             // シェイプキーリスト（UI Toolkit）。モード切替時にホスト間を移動する
             var listRoot = _listUI.Bind(_model, collapsedGroups, () => symmetryMode);
@@ -348,9 +372,8 @@ namespace DenEmo
                 _animModeUI.ClipModel, _animModeUI.Editor, _animModeUI.Preview,
                 HasUsableTarget, (msg, lvl) => SetStatus(msg, lvl), this);
 
-            // 対象メッシュの有無は IMGUI 側の操作で変わるため、ポーリングで表示に反映する
-            _animScroll.schedule.Execute(UpdateAnimSectionsVisibility).Every(250);
-            _poseScroll.schedule.Execute(UpdatePoseSectionsVisibility).Every(250);
+            // 対象メッシュの有無・IMGUI / SceneView 側で変わる状態はポーリングで表示に反映する
+            root.schedule.Execute(OnUiPoll).Every(250);
 
             _langButton.clicked += () =>
             {
@@ -378,6 +401,12 @@ namespace DenEmo
             _tabFx.text      = DenEmoLoc.T("ui.fx.tab");
             _animModeUI.RefreshClipSectionLabels();
             _listUI.RefreshLabels();
+            RefreshSectionLabels();
+            _fxSetupUI.RefreshLabels();
+            _animTimelineNoticeLabel.text = DenEmoLoc.T("ui.timeline.separate.notice");
+            _animTimelineFocus.text       = DenEmoLoc.T("ui.timeline.separate.focus");
+            _animTimelineClose.text       = DenEmoLoc.T("ui.timeline.separate.close");
+            _animRecBannerLabel.text      = DenEmoLoc.T("ui.animMode.rec.banner");
             UpdateStatusBar();
         }
 
@@ -392,26 +421,43 @@ namespace DenEmo
         /// <summary>モードに応じて Pose / Animation / FX 用コンテンツの表示を切り替える。</summary>
         private void UpdateModeContentVisibility()
         {
-            if (_contentGui == null || _animScroll == null || _poseScroll == null) return;
+            if (_fxScroll == null || _animScroll == null || _poseScroll == null) return;
             bool pose = _currentMode == EditorMode.Pose;
             bool anim = _currentMode == EditorMode.Animation;
+            bool fx   = _currentMode == EditorMode.FxSetup;
             _poseScroll.style.display = pose ? DisplayStyle.Flex : DisplayStyle.None;
             _animScroll.style.display = anim ? DisplayStyle.Flex : DisplayStyle.None;
-            _contentGui.style.display = (!pose && !anim) ? DisplayStyle.Flex : DisplayStyle.None;
+            _fxScroll.style.display   = fx   ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // シェイプキーリストを現在モードのホストへ移動する
+            // モード間で共有する要素を現在モードのホストへ移動する
             var listRoot = _listUI.Root;
             if (listRoot != null)
             {
                 var host = anim ? _animListHost : _poseListHost;
                 if (listRoot.parent != host) host.Add(listRoot);
             }
+            var targetHost = pose ? _poseTargetHost : anim ? _animTargetHost : _fxTargetHost;
+            if (_targetCard.parent != targetHost) targetHost.Add(_targetCard);
+            var searchHost = anim ? _animSearchHost : _poseSearchHost;
+            if (_searchCard.parent != searchHost) searchHost.Add(_searchCard);
+            if (fx) _searchCard.style.display = DisplayStyle.None;
 
             UpdateAnimSectionsVisibility();
             UpdatePoseSectionsVisibility();
+            UpdateSectionCards();
+            _fxSetupUI.PollUI(fx && HasUsableTarget());
         }
 
-        /// <summary>ブレンドシェイプを持つ対象メッシュが指定されているか（DrawTargetMeshSection と同条件）。</summary>
+        /// <summary>IMGUI / SceneView 側の操作で変わる状態を UI Toolkit 表示へ反映する（250ms ごと）。</summary>
+        private void OnUiPoll()
+        {
+            UpdateAnimSectionsVisibility();
+            UpdatePoseSectionsVisibility();
+            UpdateSectionCards();
+            _fxSetupUI.PollUI(_currentMode == EditorMode.FxSetup && HasUsableTarget());
+        }
+
+        /// <summary>ブレンドシェイプを持つ対象メッシュが指定されているか（対象メッシュカードと同条件）。</summary>
         private bool HasUsableTarget()
         {
             if (_model.TargetSkinnedMesh == null) return false;
@@ -428,21 +474,36 @@ namespace DenEmo
             bool hasTarget = HasUsableTarget();
             var display = hasTarget ? DisplayStyle.Flex : DisplayStyle.None;
             _animClipCard.style.display = display;
-            _animMidGui.style.display   = display;
             _animListHost.style.display = display;
-            _animSaveGui.style.display  = display;
+            _animSaveCard.style.display = display;
+            // 検索カードは共有のため、現在モードの側だけが表示を制御する
+            if (_currentMode == EditorMode.Animation)
+                _searchCard.style.display = display;
             // 補正カードの表示は CorrectionUI.Refresh がクリップの有無も見て決める
+
+            // タイムライン: 別窓化中は通知カード、それ以外は IMGUI 描画（クリップ未設定時は高さ 0）
+            bool detached = DenEmoTimelineWindow.Instance != null;
+            _animTimelineNotice.style.display = (hasTarget && detached)  ? DisplayStyle.Flex : DisplayStyle.None;
+            _animTimelineGui.style.display    = (hasTarget && !detached) ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // REC 中バナー（録画状態はタイムライン内の IMGUI 操作で変わるためポーリングで反映）
+            bool showRecBanner = hasTarget && _animModeUI.IsRecording && _animModeUI.ClipModel.Clip != null;
+            _animRecBanner.style.display = showRecBanner ? DisplayStyle.Flex : DisplayStyle.None;
 
             UpdateListAnimContext();
         }
 
-        /// <summary>対象メッシュの有無で Pose モード内のリスト・保存セクション表示を切り替える。</summary>
+        /// <summary>対象メッシュの有無で Pose モード内のセクション表示を切り替える。</summary>
         private void UpdatePoseSectionsVisibility()
         {
             if (_poseListHost == null) return;
-            bool show = HasUsableTarget();
-            _poseListHost.style.display  = show ? DisplayStyle.Flex : DisplayStyle.None;
-            _poseBottomGui.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+            var display = HasUsableTarget() ? DisplayStyle.Flex : DisplayStyle.None;
+            _poseSourceCard.style.display = display;
+            _poseListHost.style.display   = display;
+            _poseSaveCard.style.display   = display;
+            // 検索カードは共有のため、現在モードの側だけが表示を制御する
+            if (_currentMode == EditorMode.Pose)
+                _searchCard.style.display = display;
         }
 
         /// <summary>
@@ -474,156 +535,22 @@ namespace DenEmo
             _statusLabel.EnableInClassList("dennoko-status--error",   statusLevel == 3);
         }
 
-        private void OnContentGUI()
+        // Animation モード: タイムライン（anim-timeline-imgui。IMGUI カプセル化）
+        private void OnAnimTimelineGUI()
         {
             DenEmoTheme.Initialize();
             DenEmoTheme.PushEditorTheme();
             try
-            {
-                DrawWindowContents();
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
-
-        // FxSetup モードのコンテンツ（content-imgui）
-        private void DrawWindowContents()
-        {
-            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), DenEmoTheme.Surface0);
-
-            _mainScroll = EditorGUILayout.BeginScrollView(_mainScroll);
-
-            bool hasTarget = DrawTargetMeshSection();
-            if (hasTarget && _currentMode == EditorMode.FxSetup)
-                _fxSetupUI.Draw(_model, saveFolder, this);
-
-            EditorGUILayout.EndScrollView();
-
-            HandleDragAndDrop();
-            TickListMaintenance();
-        }
-
-        // Pose モード: 対象メッシュ〜検索フィルター（pose-top-imgui）
-        private void OnPoseTopGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                bool hasTarget = DrawTargetMeshSection();
-                if (hasTarget)
-                {
-                    DrawAnimationSourceSection();
-                    DrawSearchFilterSection();
-                }
-                HandleDragAndDrop();
-                TickListMaintenance();
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
-
-        // Pose モード: 保存設定（pose-bottom-imgui）
-        private void OnPoseBottomGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                DrawFooterSection();
-                HandleDragAndDrop();
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
-
-        // Animation モード: 対象メッシュセクション（anim-top-imgui）
-        private void OnAnimTopGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                DrawTargetMeshSection();
-                HandleDragAndDrop();
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
-
-        // Animation モード: タイムライン〜検索フィルター（anim-mid-imgui）
-        private void OnAnimMidGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                DrawAnimMidContents();
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
-
-        private void DrawAnimMidContents()
-        {
-            if (HasOpenInstances<DenEmoTimelineWindow>())
-            {
-                EditorGUILayout.BeginVertical(DenEmoTheme.CardStyle);
-                GUILayout.Label(DenEmoLoc.EnglishMode ? "Timeline is open in a separate window." : "タイムラインは別ウィンドウで開かれています。", DenEmoTheme.CaptionStyle);
-
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(DenEmoLoc.EnglishMode ? "Focus Timeline Window" : "ウィンドウをフォーカス", DenEmoTheme.SecondaryButtonStyle))
-                {
-                    DenEmoTimelineWindow.ShowWindow();
-                }
-                if (GUILayout.Button(DenEmoLoc.EnglishMode ? "Close Timeline Window" : "ウィンドウを閉じて結合", DenEmoTheme.SecondaryButtonStyle))
-                {
-                    GetWindow<DenEmoTimelineWindow>().Close();
-                }
-                EditorGUILayout.EndHorizontal();
-
-                EditorGUILayout.EndVertical();
-            }
-            else
             {
                 _animModeUI.DrawTimeline(_model, this);
             }
-
-            _animModeUI.DrawRecordingBanner();
-
-            DrawSearchFilterSection();
-
-            HandleDragAndDrop();
-            TickListMaintenance();
-        }
-
-        // Animation モード: アニメーション保存（anim-save-imgui）
-        private void OnAnimSaveGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                DrawAnimationSaveSection();
-                HandleDragAndDrop();
-            }
             finally
             {
                 DenEmoTheme.PopEditorTheme();
             }
         }
 
-        // 検索・フィルター変更の反映と Include フラグの遅延保存（各モードの IMGUI 末尾で呼ぶ）
+        // 検索・フィルター変更の反映と Include フラグの遅延保存（OnEditorUpdate から呼ぶ）
         private void TickListMaintenance()
         {
             if (includeFlagsDirty && EditorApplication.timeSinceStartup - lastIncludeFlagsChangeTime > 0.5)
