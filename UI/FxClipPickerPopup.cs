@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 using DenEmo.Core;
 using DenEmo.Models;
 
@@ -9,6 +10,7 @@ namespace DenEmo.UI
     /// <summary>
     /// 差し替え先アニメーションのピッカー。保存フォルダ配下のシェイプキーアニメーションを列挙し、
     /// 行のマウスオーバーでシーンにループプレビュー、クリックで割当てて閉じる。
+    /// UI は FxClipPickerPopup.uxml + 動的行生成（UI Toolkit）。
     /// </summary>
     internal class FxClipPickerPopup : PopupWindowContent
     {
@@ -17,8 +19,11 @@ namespace DenEmo.UI
         private readonly EditorWindow      _parentWindow;
 
         private List<AnimationClip> _clips = new List<AnimationClip>();
-        private string  _search = string.Empty;
-        private Vector2 _scroll;
+        private string _search = string.Empty;
+
+        private ScrollView _list;
+        private Label      _folderLabel;
+        private Label      _emptyLabel;
 
         internal FxClipPickerPopup(FxSetupModeUI owner, FxExpressionEntry entry, EditorWindow parentWindow)
         {
@@ -31,15 +36,62 @@ namespace DenEmo.UI
 
         public override void OnOpen()
         {
-            editorWindow.wantsMouseMove = true;
+            var root = editorWindow.rootVisualElement;
+            DenEmoUiAssets.SetupRoot(root);
+            root.style.paddingLeft   = 6;
+            root.style.paddingRight  = 6;
+            root.style.paddingTop    = 6;
+            root.style.paddingBottom = 6;
+
+            var tree = DenEmoUiAssets.LoadVisualTree(DenEmoUiAssets.FxClipPickerUxmlGuid);
+            if (tree == null) return;
+            tree.CloneTree(root);
+
+            root.Q<Label>("picker-title").text = DenEmoLoc.T("ui.fx.picker.title");
+
+            var folderButton = root.Q<Button>("picker-folder-button");
+            folderButton.tooltip = DenEmoLoc.T("ui.fx.picker.folder.tip");
+            folderButton.clicked += OnFolderButton;
+
+            _folderLabel = root.Q<Label>("picker-folder-label");
+            _folderLabel.text = _owner.PickerFolder;
+
+            var searchField = root.Q<TextField>("picker-search");
+            searchField.RegisterValueChangedCallback(evt =>
+            {
+                _search = evt.newValue ?? string.Empty;
+                RebuildRows();
+            });
+
+            _emptyLabel = root.Q<Label>("picker-empty");
+            _emptyLabel.text = DenEmoLoc.T("ui.fx.picker.empty");
+            _list = root.Q<ScrollView>("picker-list");
+
             ReloadClips();
+            RebuildRows();
         }
+
+        // 描画は OnOpen() で構築した UI Toolkit 要素が行うため IMGUI は空
+        public override void OnGUI(Rect rect) { }
 
         public override void OnClose()
         {
             _owner.SetPickerOpen(false);
             _owner.Hover.SetHover(null);
             _parentWindow?.Repaint();
+        }
+
+        private void OnFolderButton()
+        {
+            string abs = EditorUtility.OpenFolderPanel(DenEmoLoc.T("ui.fx.picker.folder.tip"),
+                _owner.PickerFolder, "");
+            if (string.IsNullOrEmpty(abs)) return;
+            string projectRoot = Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
+            if (!abs.StartsWith(projectRoot)) return;
+            _owner.PickerFolder = abs.Substring(projectRoot.Length).Replace('\\', '/');
+            _folderLabel.text = _owner.PickerFolder;
+            ReloadClips();
+            RebuildRows();
         }
 
         private void ReloadClips()
@@ -49,116 +101,49 @@ namespace DenEmo.UI
             _clips.Remove(_entry.Clip);
         }
 
-        public override void OnGUI(Rect rect)
+        private void RebuildRows()
         {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
+            _list.Clear();
+
+            // 「なし（割当て解除）」
+            _list.Add(MakeRow(DenEmoLoc.T("ui.fx.picker.none"), null));
+
+            var tokens = ShapeKeyModel.BuildSearchTokens(_search);
+            int shown = 0;
+            foreach (var clip in _clips)
             {
-                EditorGUI.DrawRect(rect, DenEmoTheme.Surface1);
-
-                var e = Event.current;
-                if (e.type == EventType.MouseMove) editorWindow.Repaint();
-
-                AnimationClip hoveredClip = null;
-
-                GUILayout.Space(6);
-
-                // ヘッダ: タイトル + フォルダ変更
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Space(6);
-                GUILayout.Label(DenEmoLoc.T("ui.fx.picker.title"), DenEmoTheme.GroupLabelStyle);
-                GUILayout.FlexibleSpace();
-                if (GUILayout.Button(new GUIContent("…", DenEmoLoc.T("ui.fx.picker.folder.tip")),
-                        DenEmoTheme.MiniButtonStyle, GUILayout.Width(26), GUILayout.Height(18)))
+                if (clip == null) continue;
+                if (tokens.Length > 0)
                 {
-                    string abs = EditorUtility.OpenFolderPanel(DenEmoLoc.T("ui.fx.picker.folder.tip"),
-                        _owner.PickerFolder, "");
-                    if (!string.IsNullOrEmpty(abs))
-                    {
-                        string projectRoot = Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
-                        if (abs.StartsWith(projectRoot))
-                        {
-                            _owner.PickerFolder = abs.Substring(projectRoot.Length).Replace('\\', '/');
-                            ReloadClips();
-                        }
-                    }
+                    bool match = true;
+                    var nameLower = clip.name.ToLowerInvariant();
+                    foreach (var t in tokens)
+                        if (nameLower.IndexOf(t.ToLowerInvariant(), System.StringComparison.Ordinal) < 0) { match = false; break; }
+                    if (!match) continue;
                 }
-                GUILayout.Space(6);
-                EditorGUILayout.EndHorizontal();
-
-                GUILayout.Label(_owner.PickerFolder, DenEmoTheme.CaptionStyle);
-                GUILayout.Space(2);
-
-                // 検索
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Space(6);
-                _search = EditorGUILayout.TextField(_search, DenEmoTheme.SearchTextFieldStyle);
-                GUILayout.Space(6);
-                EditorGUILayout.EndHorizontal();
-                GUILayout.Space(2);
-
-                _scroll = EditorGUILayout.BeginScrollView(_scroll);
-
-                // 「なし（割当て解除）」
-                if (DrawRow(DenEmoLoc.T("ui.fx.picker.none"), null, ref hoveredClip))
-                {
-                    _owner.TryAssign(_entry, null, _parentWindow);
-                    editorWindow.Close();
-                }
-
-                var tokens = ShapeKeyModel.BuildSearchTokens(_search);
-                int shown = 0;
-                foreach (var clip in _clips)
-                {
-                    if (clip == null) continue;
-                    if (tokens.Length > 0)
-                    {
-                        bool match = true;
-                        var nameLower = clip.name.ToLowerInvariant();
-                        foreach (var t in tokens)
-                            if (nameLower.IndexOf(t.ToLowerInvariant(), System.StringComparison.Ordinal) < 0) { match = false; break; }
-                        if (!match) continue;
-                    }
-                    shown++;
-
-                    if (DrawRow(clip.name, clip, ref hoveredClip))
-                    {
-                        _owner.TryAssign(_entry, clip, _parentWindow);
-                        editorWindow.Close();
-                    }
-                }
-
-                if (shown == 0)
-                    GUILayout.Label(DenEmoLoc.T("ui.fx.picker.empty"), DenEmoTheme.CaptionStyle);
-
-                EditorGUILayout.EndScrollView();
-
-                // ポップアップ表示中はこちらがホバーの権限を持つ
-                if (e.type == EventType.Repaint)
-                    _owner.Hover.SetHover(hoveredClip);
-                if (e.type == EventType.MouseLeaveWindow)
-                    _owner.Hover.SetHover(null);
+                shown++;
+                _list.Add(MakeRow(clip.name, clip));
             }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
+
+            _emptyLabel.style.display = shown == 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        /// <summary>1 行描画。クリックされたら true。ホバー中のクリップを hoveredClip へ返す。</summary>
-        private bool DrawRow(string label, AnimationClip clip, ref AnimationClip hoveredClip)
+        /// <summary>1 行生成。クリックで割当てて閉じ、ホバーでシーンプレビュー。</summary>
+        private VisualElement MakeRow(string label, AnimationClip clip)
         {
-            bool hovered = _owner.Hover.ActiveClip != null && clip == _owner.Hover.ActiveClip;
-            EditorGUILayout.BeginHorizontal(hovered ? DenEmoTheme.RowHoverStyle : DenEmoTheme.RowStyle);
-            bool clicked = GUILayout.Button(label, DenEmoTheme.SecondaryTextStyle, GUILayout.ExpandWidth(true));
-            EditorGUILayout.EndHorizontal();
+            var row = new Button(() =>
+            {
+                _owner.TryAssign(_entry, clip, _parentWindow);
+                editorWindow.Close();
+            }) { text = label };
+            row.AddToClassList("dennoko-fx-picker-row");
 
-            if (clip != null && Event.current.type == EventType.Repaint &&
-                GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
-                hoveredClip = clip;
-
-            return clicked;
+            if (clip != null)
+            {
+                row.RegisterCallback<PointerEnterEvent>(_ => _owner.Hover.SetHover(clip));
+                row.RegisterCallback<PointerLeaveEvent>(_ => _owner.Hover.SetHover(null));
+            }
+            return row;
         }
     }
 }

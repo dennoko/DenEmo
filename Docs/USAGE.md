@@ -74,7 +74,7 @@ Shows only shape keys whose save checkbox is currently checked.
 
 > Example: Before saving, switch to this view to confirm exactly which shape keys will be written to the file.
 
-**≠0 Non-zero**
+**Non-zero**
 Shows only shape keys with a slider value other than zero.
 
 > Example: After loading a reference animation, use this filter to see which shape keys the expression actually moves.
@@ -84,7 +84,7 @@ Pairs shape keys ending in `...L` and `...R` into a single combined row. The sha
 
 > Example: `cheek_puff.L` and `cheek_puff.R` appear as one row. Turn Symmetry off if you need to set one side to a different value.
 
-**◉ Vertex Filter**
+**● Vertex Filter**
 Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✕ to clear.
 
 > Example: A vertex on the upper lip is deforming in an unexpected way. Click it in the SceneView to find which shape keys affect that specific point.
@@ -115,7 +115,7 @@ Drag to adjust the blendshape weight. Supports Unity Undo/Redo (Ctrl+Z).
 
 ### Groups
 
-Shape keys are automatically grouped by name prefix (e.g., all `mouth_*` keys form one group). The group header shows a collapse arrow (▶ / ▼), a checked/visible count, and a checkbox that checks or unchecks the entire group at once.
+Shape keys are automatically grouped by name prefix (e.g., all `mouth_*` keys form one group). The group header shows a collapse arrow, a checked/visible count, and a checkbox that checks or unchecks the entire group at once.
 
 > Example: Your avatar has 40 mouth-related shape keys. Collapse the `mouth` group when you are only working on the eyebrows.
 
@@ -163,7 +163,7 @@ When no clip is loaded, the section shows a three-step workflow guide:
 
 1. Drag an existing `.anim` file into the Clip field, or press **New** to create a blank clip.
 2. Check / set **FPS** and **duration** in the Timeline section.
-3. Move the playhead → enable **REC** → drag sliders to record keyframes.
+3. Move the playhead -> enable **REC** -> drag sliders to record keyframes.
 
 > Example: Start a "wink" animation by pressing New, saving the file, then recording keyframes using the timeline.
 
@@ -173,7 +173,7 @@ When no clip is loaded, the section shows a three-step workflow guide:
 
 This section is **collapsed by default**. Click the header to expand it.
 
-It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range  Ea common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
+It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range - a common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
 
 The section lists every shape key that has keyframes in the current clip. For each one you can set a **Min** and **Max** bound:
 
@@ -231,7 +231,7 @@ Changes the interpolation method for all existing keyframes at once.
 | `\|<` | Jump to the first frame |
 | `\|◆` | Jump to the previous keyframe |
 | `<` | Step one frame backward |
-| `▶` / `■` | Start or stop playback (loops continuously) |
+| Play / Stop | Start or stop playback (loops continuously) |
 | `>` | Step one frame forward |
 | `◆\|` | Jump to the next keyframe |
 | `>\|` | Jump to the last frame |
@@ -249,8 +249,8 @@ Copies the first frame's keyframe values to the end of the clip so the animation
 
 > Example: A looping idle expression needs to connect seamlessly at the end. Enable Loop Support so the last frame transitions smoothly back to the first.
 
-**🔴 REC**
-Toggles recording mode. When active (red background), dragging any shape key slider automatically stamps a keyframe at the current playhead position. When off, sliders still move the mesh in the preview but do not create keyframes.
+**REC**
+Toggles recording mode. When active, dragging any shape key slider automatically stamps a keyframe at the current playhead position. When off, sliders still move the mesh in the preview but do not create keyframes.
 
 > Example: Move the playhead to frame 10, enable REC, drag the `mouth_smile` slider to 80. A keyframe is recorded. Move to frame 25, drag it back to 0. The animation now smoothly transitions from smile to neutral between frames 10 and 25.
 
@@ -273,11 +273,11 @@ One track row appears for each shape key that has at least one keyframe. Each ro
   | Menu item | Action |
   |-----------|--------|
   | Delete | Removes that keyframe |
-  | Copy frame | Copies the value and interpolation of **all tracks** at that frame to the DenEmo internal clipboard |
-  | Paste at current time | Pastes clipboard contents at the **current playhead position** (greyed out when empty) |
+  | Copy frame | Copies the value and interpolation of all tracks at that frame to the DenEmo internal clipboard |
+  | Paste at current time | Pastes clipboard contents at the current playhead position (greyed out when empty) |
   | Step / Linear / Ease | Changes the interpolation of that single keyframe |
 
-- **Right-click on empty track area** — right-clicking anywhere on the track that is not a diamond shows a "Paste at current time" menu, so you can paste without targeting a specific keyframe handle
+- **Right-click on empty track area** - right-clicking anywhere on the track that is not a diamond shows a "Paste at current time" menu, so you can paste without targeting a specific keyframe handle
 
 The label column width can be resized by dragging the vertical divider between the label and the track area.
 
@@ -300,20 +300,20 @@ Active when a clip is loaded and no text field is focused.
 | `Ctrl+C` | Copy all keyframes at the current frame (values + interpolation) to clipboard |
 | `Ctrl+V` | Paste clipboard keyframes at the current frame (overwrites existing keys, Undo supported) |
 
-**Copy & Paste** — there are two equivalent ways to copy and paste keyframe values:
+**Copy & Paste** - there are two equivalent ways to copy and paste keyframe values:
 
 | | Copy | Paste |
 |--|------|-------|
-| **Keyboard** | `Ctrl+C` — copies all keys at the current frame | `Ctrl+V` — pastes at the current frame |
-| **Right-click menu** | Right-click a ◆ diamond → **Copy frame** (copies all tracks at that frame) | Right-click a ◆ diamond or empty track area → **Paste at current time** |
+| **Keyboard** | `Ctrl+C` - copies all keys at the current frame | `Ctrl+V` - pastes at the current frame |
+| **Right-click menu** | Right-click a diamond -> **Copy frame** (copies all tracks at that frame) | Right-click a diamond or empty track area -> **Paste at current time** |
 
 Both methods share the same internal clipboard. You can copy via right-click and paste with `Ctrl+V`, or vice versa.
 
 The clipboard is DenEmo-internal and is not written to the OS clipboard. Its contents are lost on Unity restart or domain reload.
 
-> Example: To duplicate the pose at frame 5 onto frame 30 — move to frame 5, press `Ctrl+C`, move to frame 30, press `Ctrl+V`. Press `Ctrl+Z` once to undo the paste.
+> Example: To duplicate the pose at frame 5 onto frame 30 - move to frame 5, press `Ctrl+C`, move to frame 30, press `Ctrl+V`. Press `Ctrl+Z` once to undo the paste.
 
-> Example: Right-click the ◆ diamond at frame 10, choose **Copy frame**, scrub to frame 25, then right-click the empty track area and choose **Paste at current time**.
+> Example: Right-click the diamond at frame 10, choose **Copy frame**, scrub to frame 25, then right-click the empty track area and choose **Paste at current time**.
 
 ---
 
@@ -340,9 +340,9 @@ Appears at the far right of each row. ◆ (filled) means a keyframe exists at th
 
 ### RECORDING BANNER
 
-When **🔴 REC** is active, a red banner appears below the timeline:
+When **REC** is active, a red banner appears below the timeline:
 
-> ● RECORDING — Dragging a slider records a keyframe at the current time
+> RECORDING - Dragging a slider records a keyframe at the current time
 
 This banner makes the recording state unmissable so you always know whether slider movements will stamp keyframes.
 
@@ -362,7 +362,7 @@ Writes the current clip's keyframes to the `.anim` file. If the clip was loaded 
 
 ## Apply to Avatar (FX Layer Expression Replacement)
 
-The **APPLY TO AVATAR (FX Setup)** mode allows you to bulk-replace expression animations (`.anim`) used within a VRChat avatar's FX layer (Animator Controller) with custom expressions you have created.
+The **APPLY TO AVATAR** mode allows you to bulk-replace expression animations (`.anim`) used within a VRChat avatar's FX layer (Animator Controller) with custom expressions you have created.
 
 ### Avatar / FX Layer Detection
 
@@ -384,10 +384,10 @@ Lists the animation clips within the FX controller that animate the shape keys o
 - **Search & Filters**:
   - **🔍 Keyword**: Filter by the original animation name (supports space-separated multi-word AND search).
   - **Assigned Only**: Shows only the entries that have a replacement animation assigned.
-- **Show All Clips**:
+- **Show all blendshape animations**:
   If no animations matching the target mesh are found, click this to bypass the path restriction and display all animation clips in the controller.
-- **Path Mismatch (Warning)**:
-  If the hierarchy path of the mesh in the animation binding does not match the current path of the target mesh on the avatar, a "⚠ Path Mismatch" warning is displayed.
+- **Mesh path mismatch (Warning)**:
+  If the hierarchy path of the mesh in the animation binding does not match the current path of the target mesh on the avatar, a "⚠ Mesh path mismatch" warning is displayed.
 
 #### Preview on Hover
 Hovering your mouse over any animation name in the list plays a real-time preview of that expression on the avatar in the Scene view. If a replacement is assigned, the new animation is previewed instead. The active preview animation is displayed in the info band at the bottom, and you can stop it at any time.
@@ -419,7 +419,7 @@ Click the **"Replace [N] Expressions"** button to open a confirmation dialog sho
 
 **Q. Why use "Align Animation Keys" instead of unchecking shape keys manually?**
 
-A. Avatars often contain shape keys for gimmicks, physics toggles, or other non-expression systems. If these end up in your animation, they can interfere with other animations or avatar features. Aligning to a reference clip excludes all of them in one step, with no manual counting needed.
+A. Avatars often contain shape keys for gimmicks, physics toggles, or other non-expression systems. If these end up in your animation, they can interfere with other avatar features. Aligning to a reference clip excludes all of them in one step.
 
 **Q. Does DenEmo support Undo?**
 

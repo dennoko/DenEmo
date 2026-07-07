@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -36,7 +36,7 @@ ShapeKeyModel                 ← All blendshapes on active SMR(s); search/filte
 
 **Preview isolation** — `AnimationPreviewController` does NOT use Unity's `AnimationMode.StartAnimationMode()` (which resets bone transforms). It evaluates only `blendShape.*` curves manually via `AnimationCurve.Evaluate()` and writes weights directly to the SMR. The curve cache (`_curveCache`) must be invalidated by calling `SetCacheDirty()` after any clip mutation, followed by `SampleAt()` to refresh the viewport.
 
-**UI Toolkit only** — All UI is UI Toolkit (UXML/USS); there is no IMGUI drawing left except the SceneView vertex-picking overlay in `DenEmoWindow.VertexFilter.cs` (Handles/GUI, which USS can't reach — uses a local `GUIStyle` with the theme's body color hardcoded). `DenEmoTheme` has been deleted.
+**UI Toolkit only** — All UI is UI Toolkit (UXML/USS); no IMGUI drawing remains except the SceneView vertex-picking overlay in `DenEmoWindow.VertexFilter.cs` (Handles/GUI, which USS can't reach — uses a local `GUIStyle` with the theme's body color hardcoded). `DenEmoTheme` has been deleted.
 
 **Localization** — All user-visible strings go through `DenEmoLoc.T(key)` / `DenEmoLoc.Tf(key, args)`. Add keys to both `JA` and `EN` dictionaries in `Utils/DenEmoLocalization.cs`.
 
@@ -44,11 +44,11 @@ ShapeKeyModel                 ← All blendshapes on active SMR(s); search/filte
 
 ## Design system
 
-Colors and styles live in USS: theme tokens in `UI/DennokoTheme.uss` (the `dennokoworks_color_schema` skill's floating dark theme), project-specific classes/variables in `UI/DenEmoStyles.uss`. Full spec: `dennokoworks_color_schema/forUnity/`. Key conventions:
+Colors and styles live in USS: theme tokens in `UI/DennokoTheme.uss`, project-specific classes/variables in `UI/DenEmoStyles.uss`. Full spec: `dennokoworks_color_schema/forUnity/`. Key conventions:
 
 - Every root gets `dennoko-root` (theme entry point); C# fallback bg is `new Color32(0x12,0x12,0x12,0xFF)`.
 - Colors go through USS variables (`var(--dennoko-*)`) only — never hardcode except in the theme's variable definitions.
-- `--dennoko-surface-0/1/2` = background elevation layers (darkest → lightest); `.dennoko-card` / `.dennoko-card-outer` = bordered containers; `.dennoko-mini-button` = small inline button; `.dennoko-chip` (+ `dennoko-button-active`) = toggle chip.
+- `--dennoko-surface-0/1/2` = elevation layers; `.dennoko-card` / `.dennoko-card-outer` = bordered containers; `.dennoko-mini-button` = small inline button; `.dennoko-chip` (+ `dennoko-button-active`) = toggle chip.
 - Semantic: `--dennoko-semantic-info/warning/success/error` (and `.dennoko-text-*` helpers).
-- Custom canvas drawing (`TimelineUITKView` Painter2D) reads theme colors via `CustomStyleProperty<Color>` on a `CustomStyleResolvedEvent`, not hardcoded values.
-- UXML/USS are loaded by GUID via `UI/DenEmoUiAssets.cs`; `.meta` files carry those GUIDs.
+- Custom canvas drawing (`TimelineUITKView` Painter2D) reads theme colors via `CustomStyleProperty<Color>` on `CustomStyleResolvedEvent`.
+- UXML/USS loaded by GUID via `UI/DenEmoUiAssets.cs`.

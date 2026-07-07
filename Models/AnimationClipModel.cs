@@ -98,6 +98,7 @@ namespace DenEmo.Models
         private readonly List<AnimationTrack>               _tracks      = new List<AnimationTrack>();
         private readonly Dictionary<string, AnimationTrack> _trackByName = new Dictionary<string, AnimationTrack>();
         private float[] _allKeyTimes = Array.Empty<float>();
+        private bool    _allKeyTimesDirty;
 
         public int Revision => _revision;
 
@@ -112,13 +113,39 @@ namespace DenEmo.Models
         public void UpdateTrackCurve(string shapeName, AnimationCurve curve)
         {
             if (_cachedRevision != _revision ||
-                curve == null || curve.keys.Length == 0 ||
+                curve == null || curve.length == 0 ||
                 !_trackByName.TryGetValue(shapeName, out var track))
             {
                 MarkDirty();
                 return;
             }
 
+            ApplyTrackCurve(track, curve);
+            _allKeyTimesDirty = true;
+        }
+
+        /// <summary>
+        /// 複数トラックのカーブ変更をまとめてキャッシュへ反映する（キー移動の全トラック同時移動用）。
+        /// AllKeyTimes の再構築は末尾で 1 回だけ遅延させる。いずれかのトラックが未知・空カーブなら
+        /// false を返す（呼び出し側は MarkDirty() にフォールバックすること）。
+        /// </summary>
+        public bool UpdateTrackCurvesBatch(IEnumerable<(string shapeName, AnimationCurve curve)> entries)
+        {
+            if (_cachedRevision != _revision) return false;
+
+            foreach (var (shapeName, curve) in entries)
+            {
+                if (curve == null || curve.length == 0 ||
+                    !_trackByName.TryGetValue(shapeName, out var track))
+                    return false;
+                ApplyTrackCurve(track, curve);
+            }
+            _allKeyTimesDirty = true;
+            return true;
+        }
+
+        private void ApplyTrackCurve(AnimationTrack track, AnimationCurve curve)
+        {
             track.Curve        = curve;
             track.PreviewCurve = _smoothLoop ? BuildLoopCurve(curve) : curve;
 
@@ -126,8 +153,6 @@ namespace DenEmo.Models
             var times = new float[keys.Length];
             for (int i = 0; i < keys.Length; i++) times[i] = keys[i].time;
             track.KeyTimes = times;
-
-            RebuildAllKeyTimes();
         }
 
         private void RebuildAllKeyTimes()
@@ -138,6 +163,7 @@ namespace DenEmo.Models
                     timeSet.Add(t);
             _allKeyTimes = new float[timeSet.Count];
             timeSet.CopyTo(_allKeyTimes);
+            _allKeyTimesDirty = false;
         }
 
         /// <summary>現在の SMR パスに属する全ブレンドシェイプトラック（キャッシュ済み）。</summary>
@@ -146,10 +172,15 @@ namespace DenEmo.Models
             get { EnsureCache(); return _tracks; }
         }
 
-        /// <summary>全トラックのキー時刻の和集合（昇順・重複なし）。</summary>
+        /// <summary>全トラックのキー時刻の和集合（昇順・重複なし）。実際に読まれた時に一度だけ再構築される。</summary>
         public float[] AllKeyTimes
         {
-            get { EnsureCache(); return _allKeyTimes; }
+            get
+            {
+                EnsureCache();
+                if (_allKeyTimesDirty) RebuildAllKeyTimes();
+                return _allKeyTimes;
+            }
         }
 
         public bool TryGetTrack(string shapeName, out AnimationTrack track)
@@ -165,6 +196,7 @@ namespace DenEmo.Models
 
             _tracks.Clear();
             _trackByName.Clear();
+            _allKeyTimesDirty = false;
 
             if (Clip == null)
             {
@@ -180,7 +212,7 @@ namespace DenEmo.Models
                 if (binding.path != _smrPath) continue;
 
                 var curve = AnimationUtility.GetEditorCurve(Clip, binding);
-                if (curve == null || curve.keys.Length == 0) continue;
+                if (curve == null || curve.length == 0) continue;
 
                 var keys = curve.keys;
                 var times = new float[keys.Length];
@@ -291,7 +323,9 @@ namespace DenEmo.Models
         public InterpolationType GetKeyInterpolation(string shapeName, float time)
         {
             if (!TryGetTrack(shapeName, out var track)) return InterpolationType.Ease;
-            int idx = FindKeyIndex(track.Curve, time, FrameTolerance);
+            // KeyTimes（キャッシュ済み float[]）のインデックスは curve のキーインデックスと一致するため、
+            // curve.keys のフルコピーを避けてタングェントモードを引ける（150ms ポーリングで呼ばれる）。
+            int idx = FindTimeIndex(track.KeyTimes, time, FrameTolerance);
             if (idx < 0) return InterpolationType.Ease;
 
             var lm = AnimationUtility.GetKeyLeftTangentMode(track.Curve, idx);

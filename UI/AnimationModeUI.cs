@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 using DenEmo.Models;
 using DenEmo.Core;
 
@@ -29,6 +31,12 @@ namespace DenEmo.UI
         public bool TrackFilterEnabled;
         /// <summary>トラックのみ表示フィルターを切り替える。</summary>
         public Action OnToggleTrackFilter;
+        /// <summary>
+        /// UI Toolkit スライダーのドラッグ開始(true)/終了(false)を通知する。
+        /// UITK スライダーは GUIUtility.hotControl を使わないため、キー記録フラッシュの
+        /// ジェスチャ検知をこの通知で補完する。
+        /// </summary>
+        public Action<bool> OnSliderDragStateChanged;
     }
 
     // ─── AnimationModeUI ─────────────────────────────────────────────────────
@@ -46,7 +54,6 @@ namespace DenEmo.UI
         public AnimationClipEditor        Editor       { get; }
         public AnimationPreviewController Preview      { get; } = new AnimationPreviewController();
         public AnimationPlayback          Playback     { get; } = new AnimationPlayback();
-        public AnimationTimelineUI        TimelineUI   { get; } = new AnimationTimelineUI();
         public AnimationClipCorrectionUI  CorrectionUI { get; } = new AnimationClipCorrectionUI();
 
         public AnimationModeUI()
@@ -76,14 +83,19 @@ namespace DenEmo.UI
         private readonly Dictionary<string, float> _pendingRecords = new Dictionary<string, float>();
         private double _lastRecordFlush;
         private bool   _dragUndoRecorded; // 同一ドラッグジェスチャ内で Undo スナップショットを 1 回に抑える
+        private bool   _externalSliderDrag; // UI Toolkit スライダーのドラッグ中フラグ（hotControl の代替）
 
         // REC オフ・キーなしで動かした（クリップに記録されない）シェイプ。シーク時に警告を出す。
         private readonly HashSet<string> _unrecordedTweaks = new HashSet<string>();
 
-        // Cached styles
-        private GUIStyle _recBannerStyle;
-        private GUIStyle _workflowGuideStyle;
-        private GUIStyle _conflictWarnStyle;
+        // ── UI Toolkit: クリップ設定カードの要素（BindClipSectionUI で配線） ──
+        private ObjectField   _clipField;
+        private Button        _clipNewButton;
+        private Label         _clipSectionTitle;
+        private Label         _clipFieldLabel;
+        private VisualElement _clipGuide;
+        private Label         _guide1, _guide2, _guide3;
+        private Label         _conflictWarn;
 
         // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -114,7 +126,7 @@ namespace DenEmo.UI
             }
 
             // ドラッグジェスチャ終了（hotControl 解放）を検知して未フラッシュのキー記録を確定する
-            if (GUIUtility.hotControl == 0)
+            if (GUIUtility.hotControl == 0 && !_externalSliderDrag)
             {
                 if (_pendingRecords.Count > 0)
                 {
@@ -164,12 +176,15 @@ namespace DenEmo.UI
             _lastRecordFlush = now;
 
             bool recordUndo = !_dragUndoRecorded;
+            // 保留中の全シェイプを 1 回の SetEditorCurves コミットにまとめる（LR 同期や複数スライダー操作で
+            // シェイプごとの逐次コミットによるクリップ内部再構築を避ける）。
+            var entries = new List<(string, float)>(_pendingRecords.Count);
             foreach (var kv in _pendingRecords)
             {
-                Editor.RecordKey(kv.Key, ClipModel.CurrentTime, kv.Value, CurrentInterp, recordUndo);
-                recordUndo = false;
+                entries.Add((kv.Key, kv.Value));
                 _unrecordedTweaks.Remove(kv.Key);
             }
+            Editor.RecordKeysThrottled(entries, ClipModel.CurrentTime, CurrentInterp, recordUndo);
             _dragUndoRecorded = true;
             _pendingRecords.Clear();
 
@@ -194,6 +209,22 @@ namespace DenEmo.UI
         /// <summary>◆+（全シェイプ挿入）などでまとめてキーが記録されたときに呼ぶ。</summary>
         public void ClearUnrecordedTweaks() => _unrecordedTweaks.Clear();
 
+        /// <summary>
+        /// UI Toolkit スライダーのドラッグ状態変化を受け取る。終了時は未フラッシュの
+        /// キー記録を確定し、次のジェスチャで新しい Undo スナップショットを取れるようにする。
+        /// </summary>
+        private void NotifySliderDrag(bool dragging)
+        {
+            if (_externalSliderDrag == dragging) return;
+            _externalSliderDrag = dragging;
+            if (!dragging)
+            {
+                if (_pendingRecords.Count > 0)
+                    FlushPendingRecords(force: true);
+                _dragUndoRecorded = false;
+            }
+        }
+
         public void OnTargetChanged(ShapeKeyModel shapeModel)
         {
             FlushPendingRecords(force: true);
@@ -206,85 +237,81 @@ namespace DenEmo.UI
             }
         }
 
-        // ─── Draw: Clip settings ──────────────────────────────────────────────
-
-        public void DrawAnimationClipSection(ShapeKeyModel shapeModel, string saveFolder, EditorWindow window)
-        {
-            DenEmoTheme.BeginSection(DenEmoLoc.EnglishMode ? "ANIMATION CLIP" : "アニメーションクリップ");
-
-            // ── Clip field + New button ──────────────────────────────────────
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(
-                DenEmoLoc.T("ui.animMode.clip.label"),
-                DenEmoTheme.CaptionStyle, GUILayout.Width(46));
-
-            EditorGUI.BeginChangeCheck();
-            var newClip = EditorGUILayout.ObjectField(ClipModel.Clip, typeof(AnimationClip), false) as AnimationClip;
-            if (EditorGUI.EndChangeCheck())
-            {
-                StopPreview();
-                ClipModel.SmoothLoopEnabled = false;
-                ClipModel.SetClip(newClip);
-                if (newClip != null && shapeModel.TargetSkinnedMesh != null)
-                    StartPreview(shapeModel);
-                window.Repaint();
-            }
-
-            if (GUILayout.Button(DenEmoLoc.T("ui.animMode.clip.new"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(48)))
-                CreateNewClip(shapeModel, saveFolder, window);
-
-            EditorGUILayout.EndHorizontal();
-
-            if (ClipModel.Clip == null)
-            {
-                GUILayout.Space(4);
-                EnsureWorkflowGuideStyle();
-                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step1"), _workflowGuideStyle);
-                GUILayout.Space(2);
-                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step2"), _workflowGuideStyle);
-                GUILayout.Space(2);
-                GUILayout.Label(DenEmoLoc.T("ui.animMode.guide.step3"), _workflowGuideStyle);
-                GUILayout.Space(4);
-            }
-            else if (UnityEditor.AnimationMode.InAnimationMode())
-            {
-                // Unity 標準 Animation ウィンドウのプレビューと SMR 書き込みが競合する（B-2 対策）
-                GUILayout.Space(4);
-                EnsureConflictWarnStyle();
-                GUILayout.Label(DenEmoLoc.T("ui.animMode.animWindowConflict"), _conflictWarnStyle);
-                GUILayout.Space(4);
-            }
-
-            DenEmoTheme.EndSection();
-        }
-
-        // ─── Draw: Clip correction ────────────────────────────────────────────
-
-        public void DrawClipCorrectionSection(Action<string, int> setStatus, EditorWindow window)
-        {
-            CorrectionUI.Draw(ClipModel, Editor, Preview, setStatus, window);
-        }
-
-        // ─── Draw: Recording banner ───────────────────────────────────────────
+        // ─── UI Toolkit: Clip settings ────────────────────────────────────────
 
         /// <summary>
-        /// REC モード中はスライダー操作で自動的にキーが打たれることを示すバナーを表示する。
+        /// クリップ設定カード（DenEmoWindow.uxml の anim-clip-card）を配線する。
+        /// CreateGUI から一度だけ呼ぶ。
         /// </summary>
-        public void DrawRecordingBanner()
+        public void BindClipSectionUI(
+            VisualElement card, ShapeKeyModel shapeModel, Func<string> getSaveFolder, EditorWindow window)
         {
-            if (!IsRecording || ClipModel.Clip == null) return;
-            EnsureRecBannerStyle();
-            GUILayout.BeginVertical(DenEmoTheme.CardStyle);
-            GUILayout.Label(DenEmoLoc.T("ui.animMode.rec.banner"), _recBannerStyle);
-            GUILayout.EndVertical();
+            _clipSectionTitle = card.Q<Label>("anim-clip-title");
+            _clipFieldLabel   = card.Q<Label>("anim-clip-label");
+            _clipField        = card.Q<ObjectField>("anim-clip-field");
+            _clipNewButton    = card.Q<Button>("anim-clip-new");
+            _clipGuide        = card.Q<VisualElement>("anim-clip-guide");
+            _guide1           = card.Q<Label>("anim-guide-1");
+            _guide2           = card.Q<Label>("anim-guide-2");
+            _guide3           = card.Q<Label>("anim-guide-3");
+            _conflictWarn     = card.Q<Label>("anim-conflict-warn");
+
+            _clipField.objectType = typeof(AnimationClip);
+            _clipField.allowSceneObjects = false;
+            _clipField.RegisterValueChangedCallback(evt =>
+                ApplyClipSelection(evt.newValue as AnimationClip, shapeModel, window));
+
+            _clipNewButton.clicked += () => CreateNewClip(shapeModel, getSaveFolder(), window);
+
+            // クリップの外部からの差し替えや Animation ウィンドウのプレビュー状態を反映する
+            card.schedule.Execute(RefreshClipSectionState).Every(250);
+
+            RefreshClipSectionLabels();
+            RefreshClipSectionState();
         }
 
-        // ─── Draw: Timeline ───────────────────────────────────────────────────
-
-        public void DrawTimeline(ShapeKeyModel shapeModel, EditorWindow window)
+        /// <summary>
+        /// クリップの差し替え（クリップ設定カードと実験タイムラインタブで共有）。
+        /// プレビューの停止 → 差し替え → 再開までを一括で行う。
+        /// </summary>
+        public void ApplyClipSelection(AnimationClip newClip, ShapeKeyModel shapeModel, EditorWindow window)
         {
-            if (ClipModel.Clip == null) return;
-            TimelineUI.Draw(this, shapeModel, window);
+            if (ReferenceEquals(newClip, ClipModel.Clip)) return;
+            StopPreview();
+            ClipModel.SmoothLoopEnabled = false;
+            ClipModel.SetClip(newClip);
+            if (newClip != null && shapeModel.TargetSkinnedMesh != null)
+                StartPreview(shapeModel);
+            window.Repaint();
+        }
+
+        /// <summary>言語切替時に呼ぶ。クリップ設定カードと補正カードのラベルを更新する。</summary>
+        public void RefreshClipSectionLabels()
+        {
+            if (_clipField == null) return;
+            _clipSectionTitle.text = DenEmoLoc.T("ui.animMode.clip.section");
+            _clipFieldLabel.text   = DenEmoLoc.T("ui.animMode.clip.label");
+            _clipNewButton.text    = DenEmoLoc.T("ui.animMode.clip.new");
+            _guide1.text           = DenEmoLoc.T("ui.animMode.guide.step1");
+            _guide2.text           = DenEmoLoc.T("ui.animMode.guide.step2");
+            _guide3.text           = DenEmoLoc.T("ui.animMode.guide.step3");
+            _conflictWarn.text     = DenEmoLoc.T("ui.animMode.animWindowConflict");
+            CorrectionUI.RefreshLabels();
+        }
+
+        private void RefreshClipSectionState()
+        {
+            if (_clipField == null) return;
+
+            if (!ReferenceEquals(_clipField.value, ClipModel.Clip))
+                _clipField.SetValueWithoutNotify(ClipModel.Clip);
+
+            bool noClip = ClipModel.Clip == null;
+            _clipGuide.style.display = noClip ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // Unity 標準 Animation ウィンドウのプレビューと SMR 書き込みが競合する（B-2 対策）
+            bool conflict = !noClip && UnityEditor.AnimationMode.InAnimationMode();
+            _conflictWarn.style.display = conflict ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         // ─── Animation draw context ───────────────────────────────────────────
@@ -296,6 +323,8 @@ namespace DenEmo.UI
                 _drawContext = new AnimationDrawContext
                 {
                     OnToggleTrackFilter = () => TrackFilterEnabled = !TrackFilterEnabled,
+
+                    OnSliderDragStateChanged = NotifySliderDrag,
 
                     HasKeyframeAtCurrentTime = shapeName =>
                         ClipModel.HasKeyframeAt(shapeName, ClipModel.CurrentTime),
@@ -422,40 +451,5 @@ namespace DenEmo.UI
             window.Repaint();
         }
 
-        private void EnsureRecBannerStyle()
-        {
-            if (_recBannerStyle == null)
-            {
-                _recBannerStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
-                {
-                    wordWrap = true,
-                    fontSize = 11,
-                };
-                DenEmoTheme.FixAllTextColors(_recBannerStyle, new Color(1f, 0.45f, 0.45f));
-            }
-        }
-
-        private void EnsureWorkflowGuideStyle()
-        {
-            if (_workflowGuideStyle == null)
-            {
-                _workflowGuideStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
-                {
-                    wordWrap = true,
-                };
-            }
-        }
-
-        private void EnsureConflictWarnStyle()
-        {
-            if (_conflictWarnStyle == null)
-            {
-                _conflictWarnStyle = new GUIStyle(DenEmoTheme.CaptionStyle)
-                {
-                    wordWrap = true,
-                };
-                DenEmoTheme.FixAllTextColors(_conflictWarnStyle, DenEmoTheme.SemanticWarning);
-            }
-        }
     }
 }

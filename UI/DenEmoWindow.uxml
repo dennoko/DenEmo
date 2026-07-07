@@ -1,0 +1,238 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <!-- ヘッダー: タイトル + 言語切替 -->
+    <ui:VisualElement name="header" class="dennoko-header">
+        <ui:Label name="title-label" text="DenEmo" class="dennoko-title" />
+        <ui:Button name="lang-button" text="EN" class="dennoko-lang-button" />
+    </ui:VisualElement>
+    <ui:VisualElement class="dennoko-separator" />
+
+    <!-- モードタブバー -->
+    <ui:VisualElement name="tab-bar" class="dennoko-tabbar">
+        <ui:Button name="tab-pose" text="Pose" class="dennoko-tab" />
+        <ui:Button name="tab-anim" text="Animation" class="dennoko-tab" />
+        <ui:Button name="tab-fx" text="FX" class="dennoko-tab" />
+    </ui:VisualElement>
+
+    <!-- Pose モード -->
+    <ui:ScrollView name="pose-scroll" style="flex-grow: 1; flex-basis: 0; display: none;">
+        <!-- 対象メッシュカード（モード間で共有。C# がホスト間を移動する） -->
+        <ui:VisualElement name="pose-target-host">
+            <ui:VisualElement name="target-card" class="dennoko-card">
+                <ui:Label name="target-title" text="TARGET MESH" class="dennoko-section-title dennoko-card-header" />
+                <ui:VisualElement class="dennoko-hrow">
+                    <ui:Label name="target-main-label" text="Mesh" class="dennoko-text-tertiary dennoko-field-label" />
+                    <uie:ObjectField name="target-main-field" class="dennoko-clip-field" />
+                    <ui:Button name="target-main-clear" text="✕" class="dennoko-mini-button dennoko-icon-mini" />
+                </ui:VisualElement>
+                <ui:Label name="target-missing" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+                <ui:Label name="target-inactive-warn" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+                <!-- サブメッシュ行 + 追加用の空行（C# で動的生成） -->
+                <ui:VisualElement name="target-additional-rows" />
+                <ui:Label name="target-noshapes" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+                <ui:VisualElement class="dennoko-hrow" style="justify-content: flex-end;">
+                    <ui:Button name="target-refresh" text="Refresh" class="dennoko-mini-button dennoko-mini-button--auto" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- アニメーション参照（Pose 専用） -->
+        <ui:VisualElement name="pose-source-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="pose-source-title" text="ANIMATION SOURCE" class="dennoko-section-title dennoko-card-header" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="pose-source-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <uie:ObjectField name="pose-source-field" class="dennoko-clip-field" />
+            </ui:VisualElement>
+            <ui:Button name="pose-source-apply" class="dennoko-button-primary dennoko-action-button" />
+            <ui:Button name="pose-source-align" class="dennoko-button-secondary dennoko-action-button" />
+        </ui:VisualElement>
+
+        <!-- 検索・絞り込みカード（Pose / Animation で共有。C# がホスト間を移動する） -->
+        <ui:VisualElement name="pose-search-host">
+            <ui:VisualElement name="search-card" class="dennoko-card" style="display: none;">
+                <ui:Label name="search-title" text="SEARCH &amp; FILTER" class="dennoko-section-title dennoko-card-header" />
+                <ui:VisualElement class="dennoko-hrow">
+                    <ui:Label name="search-keyword-label" class="dennoko-text-tertiary dennoko-search-label" />
+                    <ui:TextField name="search-field" class="dennoko-clip-field" />
+                    <ui:Button name="search-clear" text="✕" class="dennoko-mini-button dennoko-icon-mini" style="display: none;" />
+                </ui:VisualElement>
+                <ui:VisualElement name="search-filter-row" class="dennoko-filter-row">
+                    <ui:Button name="chip-fav" class="dennoko-chip" />
+                    <ui:Button name="chip-enabled" class="dennoko-chip" />
+                    <ui:Button name="chip-nonzero" class="dennoko-chip" />
+                    <ui:Button name="chip-symmetry" class="dennoko-chip" />
+                    <ui:Button name="chip-vertex" class="dennoko-chip" />
+                    <ui:Button name="chip-vertex-clear" text="✕" class="dennoko-mini-button dennoko-icon-mini" style="display: none;" />
+                    <ui:Button name="chip-keyed" class="dennoko-chip" style="display: none;" />
+                    <ui:Label name="mesh-filter-label" text="Mesh:" class="dennoko-text-tertiary dennoko-mesh-filter-label" style="display: none;" />
+                    <ui:DropdownField name="mesh-filter-dropdown" class="dennoko-mesh-filter" style="display: none;" />
+                    <ui:VisualElement class="dennoko-flex-spacer" />
+                    <ui:Button name="search-preview-options" class="dennoko-chip" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="pose-list-host" />
+
+        <!-- 保存設定（Pose 専用） -->
+        <ui:VisualElement name="pose-save-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="pose-save-title" text="SAVE SETTINGS" class="dennoko-section-title dennoko-card-header" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="pose-save-folder-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <ui:TextField name="pose-save-folder" class="dennoko-clip-field" />
+                <ui:Button name="pose-save-browse" class="dennoko-mini-button" />
+            </ui:VisualElement>
+            <ui:Toggle name="pose-overwrite-toggle" class="dennoko-save-toggle" />
+            <ui:VisualElement name="pose-overwrite-group" style="display: none;">
+                <ui:VisualElement class="dennoko-hrow">
+                    <ui:Label name="pose-overwrite-label" class="dennoko-text-tertiary dennoko-field-label" />
+                    <uie:ObjectField name="pose-overwrite-field" class="dennoko-clip-field" />
+                </ui:VisualElement>
+                <ui:Toggle name="pose-backup-toggle" class="dennoko-save-toggle" />
+            </ui:VisualElement>
+            <ui:VisualElement class="dennoko-separator" />
+            <ui:Button name="pose-save-button" class="dennoko-button-primary dennoko-action-button" />
+        </ui:VisualElement>
+    </ui:ScrollView>
+
+    <!-- Animation モード -->
+    <ui:ScrollView name="anim-scroll" style="flex-grow: 1; flex-basis: 0; display: none;">
+        <ui:VisualElement name="anim-target-host" />
+
+        <!-- アニメーションクリップ設定 -->
+        <ui:VisualElement name="anim-clip-card" class="dennoko-card">
+            <ui:Label name="anim-clip-title" text="ANIMATION CLIP" class="dennoko-section-title dennoko-card-header" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="anim-clip-label" text="Clip" class="dennoko-text-tertiary dennoko-clip-label" />
+                <uie:ObjectField name="anim-clip-field" class="dennoko-clip-field" />
+                <ui:Button name="anim-clip-new" text="New" class="dennoko-mini-button" />
+            </ui:VisualElement>
+            <ui:VisualElement name="anim-clip-guide">
+                <ui:Label name="anim-guide-1" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:Label name="anim-guide-2" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:Label name="anim-guide-3" class="dennoko-text-tertiary dennoko-wrap" />
+            </ui:VisualElement>
+            <ui:Label name="anim-conflict-warn" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+        </ui:VisualElement>
+
+        <!-- シェイプキー値補正（折りたたみ） -->
+        <ui:VisualElement name="anim-correction-card" class="dennoko-card" style="display: none;">
+            <ui:Button name="correction-header" text="▶  SHAPE KEY VALUE CORRECTION" class="dennoko-fold-header" />
+            <ui:VisualElement name="correction-content" style="display: none;">
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Label name="correction-desc" class="dennoko-text-tertiary dennoko-wrap" />
+                <ui:VisualElement name="correction-columns" class="dennoko-hrow">
+                    <ui:Label name="correction-col-shape" class="dennoko-text-tertiary dennoko-col-grow" />
+                    <ui:Label name="correction-col-min" class="dennoko-text-tertiary dennoko-col-fixed" />
+                    <ui:Label name="correction-col-max" class="dennoko-text-tertiary dennoko-col-fixed" />
+                </ui:VisualElement>
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Label name="correction-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+                <ui:ScrollView name="correction-rows" class="dennoko-correction-rows" />
+                <ui:VisualElement class="dennoko-separator" />
+                <ui:Button name="correction-apply" text="Apply Correction" class="dennoko-button-primary dennoko-action-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- タイムライン別窓化中の通知カード -->
+        <ui:VisualElement name="anim-timeline-notice" class="dennoko-card" style="display: none;">
+            <ui:Label name="anim-timeline-notice-label" class="dennoko-text-tertiary dennoko-wrap" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Button name="anim-timeline-focus" text="Focus" class="dennoko-button-secondary dennoko-notice-button" />
+                <ui:Button name="anim-timeline-close" text="Close" class="dennoko-button-secondary dennoko-notice-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- タイムライン（UI Toolkit。C# が TimelineUITKView を構築） -->
+        <ui:VisualElement name="anim-timeline-host" />
+
+        <!-- REC 中バナー -->
+        <ui:VisualElement name="anim-rec-banner" class="dennoko-card" style="display: none;">
+            <ui:Label name="anim-rec-banner-label" class="dennoko-rec-banner dennoko-wrap" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="anim-search-host" />
+        <ui:VisualElement name="anim-list-host" />
+
+        <!-- アニメーション保存（Animation 専用） -->
+        <ui:VisualElement name="anim-save-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="anim-save-title" text="SAVE ANIMATION" class="dennoko-section-title dennoko-card-header" />
+            <ui:Label name="anim-save-stats" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+            <ui:Label name="anim-save-nokeys" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+            <ui:Toggle name="anim-save-asnew" class="dennoko-save-toggle" />
+            <ui:Button name="anim-save-button" class="dennoko-button-primary dennoko-action-button" />
+        </ui:VisualElement>
+    </ui:ScrollView>
+
+    <!-- FX モード: 対象メッシュ（共有カード） + アバター検出 / 差し替え一覧 / 適用 -->
+    <ui:ScrollView name="fx-scroll" style="flex-grow: 1; flex-basis: 0; display: none;">
+        <ui:VisualElement name="fx-target-host" />
+
+        <!-- アバター / FX レイヤー検出 -->
+        <ui:VisualElement name="fx-avatar-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="fx-avatar-title" text="AVATAR / FX" class="dennoko-section-title dennoko-card-header" />
+            
+            <ui:VisualElement name="fx-avatar-field-row" class="dennoko-hrow">
+                <ui:Label name="fx-avatar-field-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <uie:ObjectField name="fx-avatar-field" class="dennoko-clip-field" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="fx-controller-field-row" class="dennoko-hrow">
+                <ui:Label name="fx-controller-field-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <uie:ObjectField name="fx-controller-field" class="dennoko-clip-field" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="fx-status-row" class="dennoko-hrow" style="align-items: center; margin-top: 4px;">
+                <ui:Label name="fx-status-label" class="dennoko-wrap dennoko-col-grow" style="margin-left: 90px; font-size: 11px;" />
+                <ui:Button name="fx-rescan" class="dennoko-mini-button dennoko-mini-button--auto" />
+            </ui:VisualElement>
+
+            <ui:Label name="fx-avatar-notfound" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+            <ui:Label name="fx-readfailed" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+            <ui:Label name="fx-override-unsupported" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+            <ui:Label name="fx-missing" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+        </ui:VisualElement>
+
+        <!-- 表情の差し替え一覧 -->
+        <ui:VisualElement name="fx-list-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="fx-list-title" text="REPLACE EXPRESSIONS" class="dennoko-section-title dennoko-card-header" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:TextField name="fx-search" class="dennoko-clip-field" />
+                <ui:Button name="fx-chip-assigned" class="dennoko-chip" />
+            </ui:VisualElement>
+            <ui:Label name="fx-list-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+            <ui:Button name="fx-show-all" class="dennoko-button-secondary dennoko-action-button" style="display: none;" />
+            <ui:Label name="fx-list-empty-filtered" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+            <ui:ScrollView name="fx-entry-list" class="dennoko-fx-list" />
+            <ui:VisualElement name="fx-hover-band" class="dennoko-info-band dennoko-hrow" style="display: none;">
+                <ui:Label name="fx-hover-playing" class="dennoko-wrap dennoko-col-grow" style="display: none;" />
+                <ui:Label name="fx-hover-hint" class="dennoko-text-tertiary dennoko-wrap dennoko-col-grow" />
+                <ui:Button name="fx-hover-stop" class="dennoko-mini-button" style="display: none;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 適用 -->
+        <ui:VisualElement name="fx-apply-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="fx-apply-title" text="APPLY" class="dennoko-section-title dennoko-card-header" />
+            <ui:Label name="fx-apply-count" class="dennoko-text-tertiary" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Button name="fx-mode-duplicate" class="dennoko-chip" />
+                <ui:Button name="fx-mode-direct" class="dennoko-chip" />
+            </ui:VisualElement>
+            <ui:Label name="fx-mode-desc" class="dennoko-text-tertiary dennoko-wrap" />
+            <ui:Label name="fx-manual-note" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
+            <ui:Button name="fx-apply-button" class="dennoko-button-primary dennoko-action-button" />
+            <ui:VisualElement name="fx-result-band" class="dennoko-info-band" style="display: none;">
+                <ui:Label name="fx-result-success" class="dennoko-text-success dennoko-wrap" />
+                <ui:VisualElement name="fx-result-controller-row" class="dennoko-hrow" style="display: none;">
+                    <ui:Label name="fx-result-controller" class="dennoko-text-tertiary dennoko-col-grow" />
+                    <ui:Button name="fx-result-ping" class="dennoko-mini-button" />
+                </ui:VisualElement>
+                <ui:Label name="fx-result-note" class="dennoko-wrap" style="display: none;" />
+                <ui:Label name="fx-result-backup" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:ScrollView>
+
+    <!-- ステータスバー -->
+    <ui:Label name="status-bar" text="" class="dennoko-status" />
+</ui:UXML>

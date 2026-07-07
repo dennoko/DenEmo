@@ -24,6 +24,9 @@ namespace DenEmo.Core
             = new List<(int, AnimationTrack)>();
         // SyncValuesFromMesh の対象を評価対象シェイプのみに絞るための名前集合
         private readonly HashSet<string> _sampleNames = new HashSet<string>();
+        // 上記名前に対応する ShapeKeyItem 参照（全 Items 走査を避けるための直接リスト）
+        private readonly List<ShapeKeyItem> _sampleItems = new List<ShapeKeyItem>();
+        private int _sampleItemsGeneration = -1;
         private int _mappedRevision = -1;
         private Mesh _mappedMesh;
 
@@ -49,6 +52,8 @@ namespace DenEmo.Core
             _isActive = false;
             _sampleTargets.Clear();
             _sampleNames.Clear();
+            _sampleItems.Clear();
+            _sampleItemsGeneration = -1;
             _mappedRevision = -1;
         }
 
@@ -70,8 +75,14 @@ namespace DenEmo.Core
             foreach (var (index, track) in _sampleTargets)
                 smr.SetBlendShapeWeight(index, track.PreviewCurve.Evaluate(time));
 
-            // 高頻度で呼ばれるため、同期はトラック対象シェイプのみ・再描画はアクティブな SceneView のみに絞る
-            _shapeModel.SyncValuesFromMesh(_sampleNames);
+            // 高頻度で呼ばれるため、同期はトラック対象アイテムのみを直接ループ（全 Items 走査を回避）。
+            // Items が作り直された（世代変化）ときだけ参照リストを再収集する。
+            if (_sampleItemsGeneration != _shapeModel.ItemsGeneration)
+            {
+                _shapeModel.CollectItemsByName(_sampleNames, _sampleItems);
+                _sampleItemsGeneration = _shapeModel.ItemsGeneration;
+            }
+            _shapeModel.SyncValues(_sampleItems);
             var sceneView = SceneView.lastActiveSceneView;
             if (sceneView != null) sceneView.Repaint();
         }
@@ -97,6 +108,8 @@ namespace DenEmo.Core
                     _sampleNames.Add(track.ShapeName);
                 }
             }
+            // 対象名が変わったので、次回 SampleAt でアイテム参照リストを作り直させる。
+            _sampleItemsGeneration = -1;
         }
 
         // ─── Weight save / restore ────────────────────────────────────────────
