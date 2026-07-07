@@ -1,7 +1,10 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
-    <!-- ヘッダー: タイトル + 言語切替 -->
+    <!-- ヘッダー: タイトル + バージョン + 言語切替 -->
     <ui:VisualElement name="header" class="dennoko-header">
-        <ui:Label name="title-label" text="DenEmo" class="dennoko-title" />
+        <ui:VisualElement class="dennoko-header-titlegroup">
+            <ui:Label name="title-label" text="DenEmo" class="dennoko-title" />
+            <ui:Label name="version-label" text="" class="dennoko-version-label" />
+        </ui:VisualElement>
         <ui:Button name="lang-button" text="EN" class="dennoko-lang-button" />
     </ui:VisualElement>
     <ui:VisualElement class="dennoko-separator" />

@@ -81,6 +81,9 @@ namespace DenEmo
 
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
         private Label  _statusLabel;
+        private Label  _versionLabel;
+        private Dennoko.DennokoVersionChecker.Result _versionResult =
+            new Dennoko.DennokoVersionChecker.Result { State = Dennoko.DennokoVersionChecker.State.Checking, LocalVersion = DenEmoVersion.Current };
         private Button _langButton;
         private Button _tabPose;
         private Button _tabAnim;
@@ -331,6 +334,7 @@ namespace DenEmo
             _tabAnim     = root.Q<Button>("tab-anim");
             _tabFx       = root.Q<Button>("tab-fx");
             _statusLabel = root.Q<Label>("status-bar");
+            _versionLabel = root.Q<Label>("version-label");
 
             _poseScroll     = root.Q<ScrollView>("pose-scroll");
             _poseTargetHost = root.Q<VisualElement>("pose-target-host");
@@ -399,6 +403,75 @@ namespace DenEmo
             UpdateModeTabVisuals();
             UpdateModeContentVisibility();
             UpdateStatusBar();
+
+            StartVersionCheck();
+        }
+
+        // ─── バージョン表記 / アップデートチェック ───────────────────────────
+        const string VerCheckDoneKey   = "DenEmo_VerCheck_Done";
+        const string VerCheckStateKey  = "DenEmo_VerCheck_State";
+        const string VerCheckLatestKey = "DenEmo_VerCheck_Latest";
+
+        /// <summary>起動時にリモートの version.json を取得して更新有無を判定する。
+        /// 同一 Unity セッション中はキャッシュ結果を再利用しネットワークアクセスを抑制する。</summary>
+        private void StartVersionCheck()
+        {
+            if (SessionState.GetBool(VerCheckDoneKey, false))
+            {
+                _versionResult = new Dennoko.DennokoVersionChecker.Result
+                {
+                    State = (Dennoko.DennokoVersionChecker.State)SessionState.GetInt(VerCheckStateKey, 0),
+                    LocalVersion = DenEmoVersion.Current,
+                    LatestVersion = SessionState.GetString(VerCheckLatestKey, string.Empty),
+                };
+                ApplyVersionLabel();
+                return;
+            }
+
+            ApplyVersionLabel(); // Checking 状態を先に反映
+            Dennoko.DennokoVersionChecker.CheckAsync(
+                DenEmoVersion.RepoOwner, DenEmoVersion.RepoName, DenEmoVersion.RepoBranch,
+                DenEmoVersion.VersionFilePath, DenEmoVersion.Current, OnVersionChecked);
+        }
+
+        private void OnVersionChecked(Dennoko.DennokoVersionChecker.Result result)
+        {
+            _versionResult = result;
+            SessionState.SetBool(VerCheckDoneKey, true);
+            SessionState.SetInt(VerCheckStateKey, (int)result.State);
+            SessionState.SetString(VerCheckLatestKey, result.LatestVersion ?? string.Empty);
+            ApplyVersionLabel();
+        }
+
+        /// <summary>最後に受け取ったチェック結果を現在の言語でバージョンラベルへ反映する。</summary>
+        private void ApplyVersionLabel()
+        {
+            if (_versionLabel == null) return;
+
+            var r = _versionResult;
+            string baseText = "v" + r.LocalVersion;
+            string text;
+            bool update = false, error = false;
+            switch (r.State)
+            {
+                case Dennoko.DennokoVersionChecker.State.UpdateAvailable:
+                    text = baseText + "  " + DenEmoLoc.Tf("ui.version.update", r.LatestVersion);
+                    update = true;
+                    break;
+                case Dennoko.DennokoVersionChecker.State.Error:
+                    text = baseText + "  " + DenEmoLoc.T("ui.version.error");
+                    error = true;
+                    break;
+                case Dennoko.DennokoVersionChecker.State.Checking:
+                    text = baseText + "  " + DenEmoLoc.T("ui.version.checking");
+                    break;
+                default: // UpToDate
+                    text = baseText;
+                    break;
+            }
+            _versionLabel.text = text;
+            _versionLabel.EnableInClassList("dennoko-version-label--update", update);
+            _versionLabel.EnableInClassList("dennoko-version-label--error", error);
         }
 
         /// <summary>言語設定に依存するウィンドウ外枠のラベルを更新する。</summary>
@@ -406,6 +479,7 @@ namespace DenEmo
         {
             if (_langButton == null) return;
             _langButton.text = DenEmoLoc.EnglishMode ? "JA" : "EN";
+            ApplyVersionLabel();
             _tabPose.text    = DenEmoLoc.T("ui.animMode.tab.pose");
             _tabAnim.text    = DenEmoLoc.T("ui.animMode.tab.anim");
             _tabFx.text      = DenEmoLoc.T("ui.fx.tab");
