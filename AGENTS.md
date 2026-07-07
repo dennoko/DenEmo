@@ -8,7 +8,7 @@ DenEmo is a Unity Editor extension (IMGUI) for editing and animating blendshapes
 
 ## Development Environment
 
-No build or test commands exist — this is a Unity Editor extension loaded automatically from `Assets/Editor/`. Changes to `.cs` files are hot-reloaded by Unity on save. Open the DenEmo window from the Unity menu `dennokoworks/DenEmo`.
+No build or test commands exist — this is a Unity Editor extension loaded automatically from `Assets/dennokoworks/DenEmo/Editor/`. Changes to `.cs` files are hot-reloaded by Unity on save. Open the DenEmo window from the Unity menu `dennokoworks/DenEmo`.
 
 ## Architecture
 
