@@ -23,7 +23,7 @@ namespace Dennoko
     public static class DennokoVersionChecker
     {
         /// <summary>true にすると取得URL・HTTPステータス・レスポンス・比較結果を Console に出力する。</summary>
-        public static bool VerboseLog = false;
+        public static bool VerboseLog = true;
 
         public enum State { Checking, UpToDate, UpdateAvailable, Error }
 
