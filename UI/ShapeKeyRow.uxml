@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="True">
+    <!-- シェイプキー 1 行分のテンプレート。ShapeKeyListUI が CloneTree してバインドする -->
+    <ui:VisualElement name="shape-row" class="dennoko-shape-row">
+        <ui:VisualElement name="row-indent" class="dennoko-row-indent" style="display: none;" />
+        <ui:Button name="row-fav" text="☆" class="dennoko-row-icon-button" />
+        <ui:Toggle name="row-include" class="dennoko-row-include" />
+        <ui:Label name="row-name" class="dennoko-row-name" />
+        <ui:Button name="row-zero" text="0" class="dennoko-row-icon-button" />
+        <ui:Slider name="row-slider" low-value="0" high-value="100" class="dennoko-row-slider" />
+        <ui:Button name="row-key" text="◇" class="dennoko-row-icon-button" style="display: none;" />
+    </ui:VisualElement>
+</ui:UXML>

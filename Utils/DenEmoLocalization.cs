@@ -98,6 +98,27 @@ public static class DenEmoLoc
         ["ui.footer.overwriteEnable.tip"] = "指定したアニメーションファイルに直接上書き保存します。無効時はダイアログで保存先を選択します。",
         ["ui.footer.overwriteTarget"] = "上書き先",
 
+        // UI Toolkit sections (titles / filter chips / save options)
+        ["ui.section.targetMesh"]    = "対象メッシュ",
+        ["ui.section.animSource"]    = "アニメーション参照",
+        ["ui.section.searchFilter"]  = "検索・絞り込み",
+        ["ui.section.saveSettings"]  = "保存設定",
+        ["ui.section.saveAnim"]      = "アニメーション保存",
+        ["ui.filter.keyword"]        = "🔍 キーワード",
+        ["ui.filter.fav"]            = "★ お気に入り",
+        ["ui.filter.enabled"]        = "✓ 有効のみ",
+        ["ui.filter.nonzero"]        = "≠0 非ゼロ",
+        ["ui.filter.symmetry"]       = "↔ 左右同期",
+        ["ui.filter.keyedOnly"]      = "◆ キー有りのみ",
+        ["ui.filter.keyedOnly.tip"]  = "現在のクリップでトラック（キーフレーム）があるシェイプキーのみ表示",
+        ["ui.filter.previewOptions"] = "⚙ 表示設定",
+        ["ui.footer.browse.title"]   = "フォルダを選択",
+        ["ui.footer.autoBackup"]     = "上書き時に自動バックアップ",
+        ["ui.footer.autoBackup.tip"] = "上書き保存前に既存ファイルを _backups/ フォルダに複製します。",
+        ["ui.animMode.saveAsNew"]     = "新規クリップとして保存",
+        ["ui.animMode.saveAsNew.tip"] = "元クリップのフォルダをデフォルトパスとしてファイルダイアログを開き、新規クリップとして保存します。",
+        ["ui.animMode.save.button"]   = "アニメーションを保存",
+
         // Dialogs & messages
         ["dlg.error"] = "エラー",
         ["dlg.info"] = "情報",
@@ -144,6 +165,7 @@ public static class DenEmoLoc
 
         // Timeline
         ["ui.timeline.title"]          = "タイムライン",
+        ["ui.timeline.noClip"]         = "アニメーションクリップが読み込まれていません。",
         ["ui.timeline.attach"]         = "↘ 結合",
         ["ui.timeline.attach.tip"]     = "メインウィンドウに戻す",
         ["ui.timeline.detach"]         = "↗ 別窓化",
@@ -178,6 +200,12 @@ public static class DenEmoLoc
         ["ui.timeline.menu.copyFrame"] = "フレームをコピー",
         ["ui.timeline.menu.paste"]     = "現在時刻にペースト",
         ["ui.timeline.help.tip"]       = "タイムライン操作\n・ズーム：Ctrl+マウスホイール（別窓化時はホイール単独でも可）\n・Space：再生 / 停止\n・← / →：1フレーム移動\n・, / .：前後のキーフレームへ移動\n・Delete：現在フレームの全キー削除\n・Ctrl+C / Ctrl+V：フレームのコピー / ペースト\n・キー右クリック：削除・コピー・補間の変更",
+        // Timeline separate window (UI Toolkit)
+        ["ui.timeline.separate.notice"] = "タイムラインは別ウィンドウで開かれています。",
+        ["ui.timeline.separate.focus"]  = "ウィンドウをフォーカス",
+        ["ui.timeline.separate.close"]  = "ウィンドウを閉じて結合",
+        ["ui.timeline.window.notOpen"]  = "DenEmo ウィンドウが開かれていません。",
+        ["ui.timeline.window.open"]     = "DenEmo を開く",
         ["dlg.timeline.deleteFrame.title"] = "フレームキーの削除",
         ["dlg.timeline.deleteFrame.msg"]   = "{0}秒のすべてのキーフレームを削除しますか？",
         ["dlg.timeline.deleteTrack.title"] = "トラックの削除",
@@ -194,10 +222,36 @@ public static class DenEmoLoc
         ["ui.animMode.animWindowConflict"] = "⚠ Unity の Animation ウィンドウのプレビューが有効です。同じクリップを同時に編集すると、値の競合や動作が重くなる原因になります。Animation ウィンドウのプレビューを終了することをおすすめします。",
         ["status.anim.tweaksDiscarded"]    = "未記録のスライダー変更 {0} 件を破棄しました（◆ ボタンか REC で記録できます）",
 
+        // Animation mode – clip section / value correction (UI Toolkit)
+        ["ui.animMode.clip.section"]  = "アニメーションクリップ",
+        ["ui.correction.title"]       = "シェイプキー値補正",
+        ["ui.correction.desc"]        = "クリップ全体の各シェイプキーのキーフレーム値を再スケールします。\n表情改変によりシェイプキーの最大値が破綻する場合（VRChat のまばたき競合など）に使用してください。",
+        ["ui.correction.noTracks"]    = "このクリップにキーフレームのあるシェイプキーがありません。",
+        ["ui.correction.col.shape"]   = "シェイプキー",
+        ["ui.correction.col.min"]     = "最小値 (0–100)",
+        ["ui.correction.col.max"]     = "最大値 (0–100)",
+        ["ui.correction.col.min.tip"] = "補正後の下限値（デフォルト 0）。\n0 より大きい値にすると、元の値 0 がこの値になるようリスケールされます（元の値 100 は最大値の設定値に変わります）。\n例：Min=20 にすると、シェイプキーが完全にニュートラルに戻ることを防げます。",
+        ["ui.correction.col.max.tip"] = "補正後の上限値（デフォルト 100）。\n100 未満の値にすると、元の値 100 がこの値になるようリスケールされます（元の値 0 は最小値の設定値に変わります）。\n例：まばたきシェイプキーの Max=80 にすると、このアニメーション内で目が完全に閉じないように制限できます。",
+        ["ui.correction.apply"]       = "補正を反映",
+        ["status.correction.applied"] = "補正を反映しました。",
+        ["status.correction.none"]    = "補正対象がありません（全て既定値です）。",
+
+        // Shape key list (UI Toolkit)
+        ["ui.list.title"]     = "シェイプキー",
+        ["ui.list.noMatch"]   = "フィルター条件に一致するシェイプキーがありません。",
+        ["ui.fav.add"]        = "お気に入り追加",
+        ["ui.fav.remove"]     = "お気に入り解除",
+        ["ui.key.add"]        = "現在時刻にキーフレームを追加",
+        ["ui.key.remove"]     = "現在時刻のキーフレームを削除",
+        ["ui.row.zero.tip"]   = "値を0にリセット",
+        ["ui.row.zeroLR.tip"] = "左右の値を0にリセット",
+
         // FX setup mode (アバターへ適用)
         ["ui.fx.tab"]                    = "アバターへ適用",
         ["ui.fx.section.avatar"]         = "アバター / FXレイヤー",
         ["ui.fx.avatar.label"]           = "アバター: {0}",
+        ["ui.fx.avatar.fieldLabel"]      = "対象アバター",
+        ["ui.fx.fx.fieldLabel"]          = "FXレイヤー",
         ["ui.fx.avatar.notFound"]        = "VRChat アバターが見つかりません。VRC Avatar Descriptor の付いたアバター配下のメッシュを指定してください。（VRChat SDK が未導入の可能性もあります）",
         ["ui.fx.avatar.manualController"] = "コントローラーを直接指定",
         ["ui.fx.fx.label"]               = "FX: {0}",
@@ -247,6 +301,12 @@ public static class DenEmoLoc
         ["ui.fx.picker.empty"]           = "フォルダにシェイプキーアニメーションがありません",
         ["ui.fx.picker.folder.tip"]      = "参照フォルダを変更",
         ["status.fx.applied"]            = "表情の差し替えが完了しました",
+
+        // Vertex preview options popup
+        ["ui.vertexPreview.title"]         = "頂点プレビュー設定",
+        ["ui.vertexPreview.normalColor"]   = "通常の色",
+        ["ui.vertexPreview.selectedColor"] = "選択中の色",
+        ["ui.vertexPreview.size"]          = "サイズ",
     };
 
     static readonly Dictionary<string, string> EN = new Dictionary<string, string>
@@ -325,6 +385,27 @@ public static class DenEmoLoc
         ["ui.footer.overwriteEnable.tip"] = "Saves directly to the specified animation file. When disabled, a dialog will open to choose the save path.",
         ["ui.footer.overwriteTarget"] = "Overwrite target",
 
+        // UI Toolkit sections (titles / filter chips / save options)
+        ["ui.section.targetMesh"]    = "TARGET MESH",
+        ["ui.section.animSource"]    = "ANIMATION SOURCE",
+        ["ui.section.searchFilter"]  = "SEARCH & FILTER",
+        ["ui.section.saveSettings"]  = "SAVE SETTINGS",
+        ["ui.section.saveAnim"]      = "SAVE ANIMATION",
+        ["ui.filter.keyword"]        = "🔍 Keyword",
+        ["ui.filter.fav"]            = "★ Fav",
+        ["ui.filter.enabled"]        = "✓ Enabled",
+        ["ui.filter.nonzero"]        = "≠0 Non-zero",
+        ["ui.filter.symmetry"]       = "↔ Symmetry",
+        ["ui.filter.keyedOnly"]      = "◆ Keyed Only",
+        ["ui.filter.keyedOnly.tip"]  = "Show only shape keys that have tracks/keyframes in the current clip",
+        ["ui.filter.previewOptions"] = "⚙ Preview",
+        ["ui.footer.browse.title"]   = "Select Folder",
+        ["ui.footer.autoBackup"]     = "Auto backup on overwrite",
+        ["ui.footer.autoBackup.tip"] = "Copies the existing .anim file to _backups/ before overwriting.",
+        ["ui.animMode.saveAsNew"]     = "Save as new clip",
+        ["ui.animMode.saveAsNew.tip"] = "Opens a file dialog to save as a new animation clip. The original clip's folder is used as the default path.",
+        ["ui.animMode.save.button"]   = "Save Animation",
+
         // Dialogs & messages
         ["dlg.error"] = "Error",
         ["dlg.info"] = "Info",
@@ -371,6 +452,7 @@ public static class DenEmoLoc
 
         // Timeline
         ["ui.timeline.title"]          = "TIMELINE",
+        ["ui.timeline.noClip"]         = "No animation clip loaded.",
         ["ui.timeline.attach"]         = "↘ Attach",
         ["ui.timeline.attach.tip"]     = "Return timeline to main window",
         ["ui.timeline.detach"]         = "↗ Detach",
@@ -405,6 +487,12 @@ public static class DenEmoLoc
         ["ui.timeline.menu.copyFrame"] = "Copy frame",
         ["ui.timeline.menu.paste"]     = "Paste at current time",
         ["ui.timeline.help.tip"]       = "Timeline controls\n- Zoom: Ctrl + mouse wheel (wheel alone works in the detached window)\n- Space: Play / Stop\n- Left / Right: step one frame\n- , / . : go to previous / next keyframe\n- Delete: delete all keys at the current frame\n- Ctrl+C / Ctrl+V: copy / paste frame\n- Right-click a key: delete, copy, change interpolation",
+        // Timeline separate window (UI Toolkit)
+        ["ui.timeline.separate.notice"] = "Timeline is open in a separate window.",
+        ["ui.timeline.separate.focus"]  = "Focus Timeline Window",
+        ["ui.timeline.separate.close"]  = "Close Timeline Window",
+        ["ui.timeline.window.notOpen"]  = "DenEmo Window is not open.",
+        ["ui.timeline.window.open"]     = "Open DenEmo",
         ["dlg.timeline.deleteFrame.title"] = "Delete Frame Keys",
         ["dlg.timeline.deleteFrame.msg"]   = "Delete all keyframes at {0}s?",
         ["dlg.timeline.deleteTrack.title"] = "Delete Track",
@@ -421,10 +509,36 @@ public static class DenEmoLoc
         ["ui.animMode.animWindowConflict"] = "⚠ Unity's Animation window preview is active. Editing the same clip in both tools can cause value conflicts and slowdowns. Consider exiting the Animation window preview.",
         ["status.anim.tweaksDiscarded"]    = "Discarded {0} unrecorded slider change(s) (use the ◆ button or REC to record them)",
 
+        // Animation mode – clip section / value correction (UI Toolkit)
+        ["ui.animMode.clip.section"]  = "ANIMATION CLIP",
+        ["ui.correction.title"]       = "SHAPE KEY VALUE CORRECTION",
+        ["ui.correction.desc"]        = "Rescale keyframe values of individual shape keys across the entire clip.\nUseful when an expression edit makes a shape key's full range look broken (e.g. blink conflicts in VRChat).",
+        ["ui.correction.noTracks"]    = "No shape keys with keyframes found in this clip.",
+        ["ui.correction.col.shape"]   = "Shape Key",
+        ["ui.correction.col.min"]     = "Min (0–100)",
+        ["ui.correction.col.max"]     = "Max (0–100)",
+        ["ui.correction.col.min.tip"] = "Lower bound after correction (default 0).\nWhen above 0, the original value 0 is raised to this value while the original 100 maps to the Max setting.\nExample: Min=20 prevents the shape key from fully returning to neutral.",
+        ["ui.correction.col.max.tip"] = "Upper bound after correction (default 100).\nWhen below 100, the original value 100 is lowered to this value while the original 0 maps to the Min setting.\nExample: Max=80 on a blink shape prevents the eye from fully closing in this animation.",
+        ["ui.correction.apply"]       = "Apply Correction",
+        ["status.correction.applied"] = "Correction applied.",
+        ["status.correction.none"]    = "No corrections to apply (all values are at their defaults).",
+
+        // Shape key list (UI Toolkit)
+        ["ui.list.title"]     = "SHAPE KEYS",
+        ["ui.list.noMatch"]   = "No results match the current filter.",
+        ["ui.fav.add"]        = "Add to favorites",
+        ["ui.fav.remove"]     = "Remove from favorites",
+        ["ui.key.add"]        = "Add keyframe at current time",
+        ["ui.key.remove"]     = "Remove keyframe at current time",
+        ["ui.row.zero.tip"]   = "Reset value to zero",
+        ["ui.row.zeroLR.tip"] = "Reset both L/R values to zero",
+
         // FX setup mode (Apply to Avatar)
         ["ui.fx.tab"]                    = "APPLY TO AVATAR",
         ["ui.fx.section.avatar"]         = "AVATAR / FX LAYER",
         ["ui.fx.avatar.label"]           = "Avatar: {0}",
+        ["ui.fx.avatar.fieldLabel"]      = "Target Avatar",
+        ["ui.fx.fx.fieldLabel"]          = "FX Layer",
         ["ui.fx.avatar.notFound"]        = "No VRChat avatar found. Assign a mesh under an avatar with a VRC Avatar Descriptor. (The VRChat SDK may not be installed.)",
         ["ui.fx.avatar.manualController"] = "Assign controller manually",
         ["ui.fx.fx.label"]               = "FX: {0}",
@@ -474,6 +588,12 @@ public static class DenEmoLoc
         ["ui.fx.picker.empty"]           = "No blendshape animations in this folder",
         ["ui.fx.picker.folder.tip"]      = "Change folder",
         ["status.fx.applied"]            = "Expressions replaced successfully",
+
+        // Vertex preview options popup
+        ["ui.vertexPreview.title"]         = "Vertex Preview Settings",
+        ["ui.vertexPreview.normalColor"]   = "Normal Color",
+        ["ui.vertexPreview.selectedColor"] = "Selected Color",
+        ["ui.vertexPreview.size"]          = "Size",
     };
 
     public static string T(string key)

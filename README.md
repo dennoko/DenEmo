@@ -94,12 +94,13 @@ Core/
   LipSyncExclusionRule.cs     VRChatリップシンクシェイプ自動除外
 UI/
   AnimationModeUI.cs          マルチフレームモードのオーケストレーター
-  AnimationTimelineUI.cs      タイムラインUI（.Controls.cs / .Scrubber.cs / .Tracks.cs）
+  TimelineUITKView.cs         タイムラインUI（UI Toolkit / Painter2D。埋め込み・別窓兼用）
   AnimationClipCorrectionUI.cs シェイプキー値補正UI
   ShapeKeyListUI.cs           シェイプキーリスト（.Rows.cs / .Segments.cs）
   DenEmoTimelineWindow.cs     タイムライン別ウィンドウ
-  DenEmoTheme.cs              デザイントークン・スタイル定義
-  DenEmoCommonUI.cs           共通UIコンポーネント
+  DennokoTheme.uss            デザイントークン（USS変数）
+  DenEmoStyles.uss            プロジェクト固有のUSSクラス
+  DenEmoUiAssets.cs           UXML/USSのGUIDロード
   VertexPreviewOptionsPopup.cs 頂点プレビュー表示設定ポップアップ
 Models/
   AnimationClipModel.cs       アニメーションクリップの状態管理

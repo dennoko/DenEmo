@@ -1,5 +1,50 @@
 # UI Toolkit (USS) への移行計画
 
+## 進捗状況
+
+- [x] Step 1: `DennokoTheme.uss` の導入（`UI/DennokoTheme.uss`、GUID は `UI/DenEmoUiAssets.cs` に定数化）
+- [x] Step 2: `VertexPreviewOptionsPopup` の UI Toolkit 化（`UI/VertexPreviewOptionsPopup.uxml` + `OnOpen()` 構築）— 確認済み
+- [x] Step 4: メインウィンドウ `CreateGUI()` 化 & 外枠 UXML（`UI/DenEmoWindow.uxml` + `UI/DenEmoStyles.uss`。ヘッダー/タブバー/ステータスバーを UI Toolkit 化し、コンテンツ部は `IMGUIContainer` で既存描画をホスト）— 確認済み
+- [x] Step 3: アニメーション設定UI（`AnimationClipCorrectionUI` / `AnimationModeUI`）の移行 — 確認済み
+  - ※ これらはメインウィンドウの IMGUI 描画フロー内に埋め込まれているため、Step 4 の骨格移行を先に実施する順序に変更した
+  - Animation モードは UI Toolkit の `ScrollView`（`anim-scroll`）で構成: 対象メッシュ（IMGUI）→ クリップ設定カード（UXML）→ 値補正カード（UXML + 動的行）→ タイムライン以下（IMGUI）。Pose / FX は従来どおり `content-imgui`
+  - クリップ差し替え・Animation ウィンドウ競合・対象メッシュの有無は `schedule.Execute().Every(250)` のポーリングで UI に反映
+  - 確認時のフィードバック: ScrollView がコンテンツ実寸を希望サイズとして報告し、兄弟要素（ヘッダー等）が flex-shrink で潰れる問題を修正（クローム要素の `flex-shrink: 0` + `flex-basis: 0`）
+- [x] Step 5: シェイプキーリストの ScrollView 移行 — **Unity 上での動作確認待ち**
+  - `ShapeKeyListUI` を全面 UI Toolkit 化。外枠は `ShapeKeyList.uxml`、行は `ShapeKeyRow.uxml` を CloneTree して動的生成
+  - 行の集合（行プラン）を 150ms ポーリングで構築しシグネチャ比較、差分時のみ再構築。値・アイコン・グループカウント等は行バインディング経由で同期
+  - Pose モードも `pose-scroll`（UITK ScrollView）に移行: 対象メッシュ〜検索フィルター（IMGUI）→ リスト（UITK）→ 保存設定（IMGUI）。`content-imgui` は FX モード専用に
+  - Animation モードの `anim-bottom-imgui` を `anim-mid-imgui`（タイムライン〜検索）+ リスト（UITK）+ `anim-save-imgui`（保存）に分割。リスト要素はモード切替時にホスト間を移動
+  - スライダードラッグは PointerDown/Up/CaptureOut で検出し、Undo 1 回/ジェスチャ + SMR 反映スロットル（50ms）を維持。UITK スライダーは hotControl を使わないため、`AnimationDrawContext.OnSliderDragStateChanged` でキー記録フラッシュのジェスチャ検知を補完
+- [x] Step 6: タイムラインの IMGUIContainer 統合 — **Unity 上での動作確認待ち**
+  - タイムライン本体（`AnimationTimelineUI.Draw`）を専用の `anim-timeline-imgui`（IMGUIContainer）へカプセル化。描画コード自体は方針どおり IMGUI のまま維持
+  - 旧 `anim-mid-imgui` は検索フィルター専用の `anim-search-imgui` に縮小。「別ウィンドウで開かれています」通知カードと REC 中バナーは UI Toolkit 化（表示は 250ms ポーリングで追従）
+  - `DenEmoTimelineWindow` を `CreateGUI()` 化: 外枠は `DenEmoTimelineWindow.uxml`（dennoko-root + UITK ScrollView）、タイムラインは IMGUIContainer で `DrawTimelineForSeparateWindow` を描画。`DenEmoTheme.PushEditorTheme` は IMGUI ハンドラ内のみに残存（Step 7 で削除）
+  - `AnimationModeUI.DrawRecordingBanner` / `_recBannerStyle` を削除（UITK バナーへ置換）
+- [x] Step 6.5: 残存 IMGUI セクションの UI Toolkit 化 — **Unity 上での動作確認待ち**
+  - `DenEmoWindow.Sections.cs` の IMGUI 描画（対象メッシュ / アニメーション参照 / 検索・絞り込み / 保存設定 / アニメーション保存）を全て UXML カード + C# バインディングへ置換。旧 `pose-top` / `pose-bottom` / `anim-top` / `anim-search` / `anim-save` の各 IMGUIContainer を削除
+  - 対象メッシュカードと検索カードは Pose / Animation / FX（対象メッシュのみ）で共有し、モード切替時にホスト間を移動。サブメッシュ行は C# で動的生成
+  - フィルターチップはボタン型トグル（`.dennoko-chip` + ON 時 `dennoko-button-active`）。頂点フィルター・キー有りのみ・複数メッシュ絞り込み（DropdownField）も UITK 化。SceneView / IMGUI 側で変わる状態は 250ms ポーリング（`OnUiPoll`）で追従
+  - FX モードは当初 `fx-scroll`（UITK ScrollView）+ 共有対象メッシュカード + `fx-content-imgui` に再構成（`content-imgui` / `DrawWindowContents` は削除）。→ Step 6.6 で `fx-content-imgui` も撤去
+  - ドラッグ&ドロップは rootVisualElement の `DragUpdated/DragPerformEvent` で受け付け。検索・フィルター差分反映と Include フラグ遅延保存は `OnEditorUpdate` 駆動へ移動
+  - ローカライズキー追加: `ui.section.*`（5 件）、`ui.filter.keyword/fav/enabled/nonzero/symmetry/keyedOnly(.tip)/previewOptions`、`ui.footer.browse.title/autoBackup(.tip)`、`ui.animMode.saveAsNew(.tip)/save.button`
+- [x] Step 6.6: FX モード（アバターへ適用）の UI Toolkit 化 — **Unity 上での動作確認待ち**
+  - `FxSetupModeUI` の IMGUI 描画（`Draw` / `DrawAvatarSection` / `DrawMappingSection` / `DrawEntryRow` / `DrawApplySection` / `DrawResultCard` / `EnsureStyles` 等）を全廃し、`fx-avatar-card` / `fx-list-card` / `fx-apply-card` の 3 カード（`DenEmoWindow.uxml`）への UITK バインディングへ置換。`fx-content-imgui` IMGUIContainer と `OnFxContentGUI` / `HandleDragAndDrop` を削除
+  - 差し替え一覧は `ScrollView` 内に C# で行を動的生成（`MakeEntryRow`）。展開トグル・スロットボタン・解除✕・参照箇所トグル・パス不一致注記を含む。割当て済み行は `.dennoko-fx-row--assigned`（左端 success バー）、ホバー再生中は `.dennoko-fx-row--playing`
+  - ホバープレビューは行/スロットの `PointerEnter/Leave` で `FxHoverPreview.SetHover` を駆動（旧 Repaint ベースの rect 判定を置換）。時間進行は従来どおり `OnEditorUpdate → Tick`。カード表示と再生ハイライトは 250ms ポーリング（`PollUI`）で追従
+  - `FxClipPickerPopup` を `PopupWindowContent.OnOpen` で `FxClipPickerPopup.uxml`（GUID `c4e8f2a7…`）を CloneTree する UITK 実装へ置換。行は動的生成、ホバーでプレビュー、クリックで割当てて閉じる
+  - フィルターチップ（割当て済みのみ / 複製・直接モード）はボタン型トグル（`.dennoko-chip` + `dennoko-button-active`）。info バンド（プレビュー中 / 適用結果）は `.dennoko-info-band`
+  - 残る IMGUI は タイムライン本体（方針どおり維持）のみ
+- [x] Step 6.7: タイムラインの UI Toolkit 化 — **Unity 上での動作確認待ち**
+  - 試作（別タブ「Timeline(Exp)」）が良好だったため本採用。`TimelineUITKView` を Animation モードのタイムライン（`anim-timeline-host`）と別ウィンドウ（`DenEmoTimelineWindow`）の両方で使用。状態・ロジックは `AnimationModeUI`（ClipModel / Editor / Preview / Playback）を共有
+  - トランスポート・FPS/長さ/フレーム/速度・補間・REC・ループは UITK ネイティブコントロール。ルーラー/スクラバー/スクロールバー/トラックレーンのグラフィックは `generateVisualContent`（Painter2D）で描画し、色は USS 変数（`CustomStyleProperty`）から解決。シーク/ズーム/キードラッグ/ラベル幅スプリッタは PointerEvent + ポインタキャプチャ、右クリックは GenericMenu、別窓化/結合はヘッダーのボタン
+  - クリップ差し替えロジックは `AnimationModeUI.ApplyClipSelection` に公開メソッド化。`TimelineUITKView.Build` は `showClipField` / `isSeparateWindow` / `requireZoomModifier` で埋め込み・別窓の両用途に対応
+  - 検証用の 4 番目タブと `TimelineExp` モードは削除。IMGUI タイムライン（`AnimationTimelineUI.*` 4 ファイル）と `AnimationModeUI.DrawTimeline` / `DenEmoWindow.DrawTimelineForSeparateWindow` / `OnAnimTimelineGUI` を削除
+- [x] Step 7: 旧 `DenEmoTheme.cs` の完全削除
+  - `DenEmoTheme.cs` と未使用の `DenEmoCommonUI.cs`（`DrawHeader` / `DrawStatusBar`）を削除。`Push/PopEditorTheme` / `Initialize` / `BeginSection` 等の呼び出しも全廃
+  - `DenEmoWindow.VertexFilter.cs` の SceneView オーバーレイ文字は IMGUI（USS 不可）のため、テーマ本文色 `#cccccc` を持つローカル `GUIStyle`（`SceneGuideStyle`）に置換
+  - これで全 UI が UI Toolkit（UXML/USS）化。色はすべて `DennokoTheme.uss` / `DenEmoStyles.uss` の USS 変数経由
+
 本ドキュメントは、DenEmo の既存 IMGUI ベースの UI レイアウトから、**UI Toolkit (UXML/USS)** への移行計画をまとめたものである。移行にあたっては、`.claude/skills/dennokoworks_color_schema` スキルの USS 対応アップデートに準拠し、既存の UI レイアウトとフローティングデザイン（ダークテーマ）の維持を最優先する。
 
 ---

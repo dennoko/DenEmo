@@ -4,15 +4,10 @@ using System.IO;
 
 public static class DenEmoProjectPrefs
 {
-    // Use absolute project path (Assets folder path) as project key to scope prefs per project
-    public static string ProjectKey
-    {
-        get
-        {
-            string path = Path.GetFullPath(Application.dataPath).Replace('\\', '/');
-            return path;
-        }
-    }
+    // Use absolute project path (Assets folder path) as project key to scope prefs per project.
+    // Application.dataPath はセッション中不変なので、アクセスごとの GetFullPath + 文字列連結を避けて一度だけ解決する。
+    public static readonly string ProjectKey =
+        Path.GetFullPath(Application.dataPath).Replace('\\', '/');
 
     static string Scoped(string key) => $"DenEmo|{ProjectKey}|{key}";
 

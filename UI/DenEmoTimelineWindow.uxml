@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <!-- メインウィンドウが閉じていてタイムラインが開けない時の通知 -->
+    <ui:VisualElement name="tlwin-notice" class="dennoko-card" style="margin: 10px; padding: 10px; align-items: center; justify-content: center; flex-grow: 1;">
+        <ui:Label name="tlwin-notice-label" text="DenEmo Window is not open." class="dennoko-text-tertiary dennoko-wrap" style="margin-bottom: 8px;" />
+        <ui:Button name="tlwin-open-main" text="Open DenEmo Window" class="dennoko-button-primary" />
+    </ui:VisualElement>
+
+    <!-- タイムライン表示領域（C# が TimelineUITKView を構築） -->
+    <ui:ScrollView name="tlwin-scroll" style="flex-grow: 1; flex-basis: 0;">
+        <ui:VisualElement name="tlwin-host" style="flex-grow: 1;" />
+    </ui:ScrollView>
+</ui:UXML>
