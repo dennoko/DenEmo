@@ -17,8 +17,13 @@ namespace DenEmo.Models
     {
         private const float DefaultVertexMovementThreshold = 0.000001f;
         private Vector3[] _blendShapeDeltaVertices;
-        private Vector3[] _blendShapeDeltaNormals;
-        private Vector3[] _blendShapeDeltaTangents;
+
+        // 頂点フィルタ用マスクキャッシュ: メッシュごとに「シェイプ index → 移動頂点ビットマスク」を保持。
+        // 初回ピック時に全シェイプを 1 度だけ走査してビルドし、2 回目以降のピックは O(shapeCount) のビット参照で済む。
+        private int   _vertexMaskMeshId;
+        private int   _vertexMaskVertexCount;
+        private float _vertexMaskThreshold = -1f;
+        private System.Collections.BitArray[] _vertexMaskByShape;
 
         public List<ShapeKeyItem>        Items            { get; private set; } = new List<ShapeKeyItem>();
         public List<GroupSegment>        GroupSegments    { get; private set; } = new List<GroupSegment>();
@@ -65,8 +70,12 @@ namespace DenEmo.Models
                     if (smr != null) ActiveMeshes.Add(smr);
         }
 
+        /// <summary>Items が作り直されるたびに増える世代番号。参照を保持する側の再取得判定に使う。</summary>
+        public int ItemsGeneration { get; private set; }
+
         public void RefreshList(string searchText, bool showOnlyIncluded)
         {
+            ItemsGeneration++;
             Items.Clear();
             GroupSegments.Clear();
 
@@ -160,34 +169,57 @@ namespace DenEmo.Models
             int blendShapeCount = mesh.blendShapeCount;
             if (blendShapeCount <= 0) return result;
 
-            EnsureBlendShapeFrameBuffers(vertexCount);
-            float thresholdSquared = movementThreshold * movementThreshold;
-
-            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeCount; blendShapeIndex++)
-            {
-                int frameCount = mesh.GetBlendShapeFrameCount(blendShapeIndex);
-                for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
-                {
-                    mesh.GetBlendShapeFrameVertices(blendShapeIndex, frameIndex, _blendShapeDeltaVertices, _blendShapeDeltaNormals, _blendShapeDeltaTangents);
-                    if (_blendShapeDeltaVertices[vertexIndex].sqrMagnitude > thresholdSquared)
-                    {
-                        result.Add(blendShapeIndex);
-                        break;
-                    }
-                }
-            }
+            var masks = EnsureVertexMovementMask(mesh, movementThreshold);
+            for (int blendShapeIndex = 0; blendShapeIndex < masks.Length; blendShapeIndex++)
+                if (masks[blendShapeIndex].Get(vertexIndex))
+                    result.Add(blendShapeIndex);
 
             return result;
         }
 
-        private void EnsureBlendShapeFrameBuffers(int vertexCount)
+        /// <summary>
+        /// メッシュの「シェイプ index → 移動頂点マスク」を構築（またはキャッシュ返却）する。
+        /// メッシュインスタンス・頂点数・しきい値が一致する限り再構築しない。
+        /// 判定は頂点デルタのみを使うため、法線・接線バッファは取得しない（ネイティブ→マネージドのコピー量が 1/3）。
+        /// </summary>
+        private System.Collections.BitArray[] EnsureVertexMovementMask(Mesh mesh, float movementThreshold)
         {
+            int meshId          = mesh.GetInstanceID();
+            int vertexCount     = mesh.vertexCount;
+            int blendShapeCount = mesh.blendShapeCount;
+
+            if (_vertexMaskByShape != null
+                && _vertexMaskMeshId == meshId
+                && _vertexMaskVertexCount == vertexCount
+                && _vertexMaskByShape.Length == blendShapeCount
+                && Mathf.Approximately(_vertexMaskThreshold, movementThreshold))
+                return _vertexMaskByShape;
+
             if (_blendShapeDeltaVertices == null || _blendShapeDeltaVertices.Length != vertexCount)
                 _blendShapeDeltaVertices = new Vector3[vertexCount];
-            if (_blendShapeDeltaNormals == null || _blendShapeDeltaNormals.Length != vertexCount)
-                _blendShapeDeltaNormals = new Vector3[vertexCount];
-            if (_blendShapeDeltaTangents == null || _blendShapeDeltaTangents.Length != vertexCount)
-                _blendShapeDeltaTangents = new Vector3[vertexCount];
+
+            float thresholdSquared = movementThreshold * movementThreshold;
+            var masks = new System.Collections.BitArray[blendShapeCount];
+
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeCount; blendShapeIndex++)
+            {
+                var mask = new System.Collections.BitArray(vertexCount);
+                int frameCount = mesh.GetBlendShapeFrameCount(blendShapeIndex);
+                for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+                {
+                    mesh.GetBlendShapeFrameVertices(blendShapeIndex, frameIndex, _blendShapeDeltaVertices, null, null);
+                    for (int v = 0; v < vertexCount; v++)
+                        if (_blendShapeDeltaVertices[v].sqrMagnitude > thresholdSquared)
+                            mask.Set(v, true);
+                }
+                masks[blendShapeIndex] = mask;
+            }
+
+            _vertexMaskByShape     = masks;
+            _vertexMaskMeshId      = meshId;
+            _vertexMaskVertexCount = vertexCount;
+            _vertexMaskThreshold   = movementThreshold;
+            return masks;
         }
 
         public void BuildGroups()
@@ -330,6 +362,28 @@ namespace DenEmo.Models
             }
         }
 
+        /// <summary>指定名に一致するアイテムを into に収集する（呼び出し側で使い回すバッファに書き込む）。</summary>
+        public void CollectItemsByName(HashSet<string> names, List<ShapeKeyItem> into)
+        {
+            into.Clear();
+            if (names == null) return;
+            foreach (var item in Items)
+                if (names.Contains(item.Name)) into.Add(item);
+        }
+
+        /// <summary>あらかじめ収集済みのアイテム参照だけをメッシュ値と同期する（再生中の高頻度呼び出し用。全 Items 走査を避ける）。</summary>
+        public void SyncValues(IReadOnlyList<ShapeKeyItem> items)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                var smr  = item.OwnerSmr;
+                if (smr == null || smr.sharedMesh == null) continue;
+                if (item.Index >= 0 && item.Index < smr.sharedMesh.blendShapeCount)
+                    item.Value = smr.GetBlendShapeWeight(item.Index);
+            }
+        }
+
         // --- Helpers ---
         private static bool IsVrcShapeName(string name)
         {
@@ -392,12 +446,12 @@ namespace DenEmo.Models
         {
             if (tokens == null || tokens.Length == 0) return true;
             if (string.IsNullOrEmpty(name)) return false;
-            var nmLower = name.ToLowerInvariant();
             for (int i = 0; i < tokens.Length; i++)
             {
                 var t = tokens[i];
                 if (string.IsNullOrEmpty(t)) continue;
-                if (nmLower.IndexOf(t.ToLowerInvariant(), StringComparison.Ordinal) < 0) return false;
+                // OrdinalIgnoreCase で大文字小文字を無視するため ToLowerInvariant のアロケーションが不要。
+                if (name.IndexOf(t, StringComparison.OrdinalIgnoreCase) < 0) return false;
             }
             return true;
         }

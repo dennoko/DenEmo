@@ -73,11 +73,13 @@ namespace DenEmo.Core
         {
             if (motion is AnimationClip clip)
             {
-                if (!TryAnalyzeClip(clip, targetSmrPaths, out bool matches, out int curveCount, out string firstPath))
-                    return;
-
+                // 同一クリップは多数のステートから参照され得る。解析（GetCurveBindings のフルコピー）は
+                // 未知クリップの初回だけ行い、2 回目以降はスロット追加のみで済ませる。
                 if (!byClip.TryGetValue(clip, out var entry))
                 {
+                    if (!TryAnalyzeClip(clip, targetSmrPaths, out bool matches, out int curveCount, out string firstPath))
+                        return;
+
                     entry = new FxExpressionEntry
                     {
                         Clip = clip,

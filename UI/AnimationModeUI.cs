@@ -176,12 +176,15 @@ namespace DenEmo.UI
             _lastRecordFlush = now;
 
             bool recordUndo = !_dragUndoRecorded;
+            // 保留中の全シェイプを 1 回の SetEditorCurves コミットにまとめる（LR 同期や複数スライダー操作で
+            // シェイプごとの逐次コミットによるクリップ内部再構築を避ける）。
+            var entries = new List<(string, float)>(_pendingRecords.Count);
             foreach (var kv in _pendingRecords)
             {
-                Editor.RecordKey(kv.Key, ClipModel.CurrentTime, kv.Value, CurrentInterp, recordUndo);
-                recordUndo = false;
+                entries.Add((kv.Key, kv.Value));
                 _unrecordedTweaks.Remove(kv.Key);
             }
+            Editor.RecordKeysThrottled(entries, ClipModel.CurrentTime, CurrentInterp, recordUndo);
             _dragUndoRecorded = true;
             _pendingRecords.Clear();
 

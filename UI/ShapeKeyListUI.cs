@@ -154,6 +154,11 @@ namespace DenEmo.UI
         {
             if (_model == null || _rowsScroll == null) return;
 
+            // リストが非表示（FxSetup モード等）またはパネル未接続なら、全アイテム走査を伴う
+            // 行プラン構築・シグネチャ計算をスキップする。_structureDirty は保持されるため、
+            // 再表示された最初のティックで確実に再構築される。
+            if (Root.panel == null || Root.resolvedStyle.display == DisplayStyle.None) return;
+
             BuildRowPlan(_plan);
             int sig = ComputePlanSignature(_plan);
 

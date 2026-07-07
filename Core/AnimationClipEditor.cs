@@ -79,6 +79,39 @@ namespace DenEmo.Core
             }
         }
 
+        /// <summary>
+        /// REC スロットルフラッシュ用: 保留中の複数シェイプを 1 回の SetEditorCurves コミットでまとめて記録する。
+        /// キャッシュは全無効化（MarkDirty）せず該当トラックのみ増分更新するため、プレビューのサンプル対象マップ
+        /// （Revision + Mesh キャッシュ）が毎フラッシュ再構築されない。recordUndo=false でジェスチャ内の
+        /// 2 回目以降の Undo スナップショットを省略する。未知シェイプ（新規トラック）が含まれる場合のみ全再構築へフォールバック。
+        /// </summary>
+        public void RecordKeysThrottled(IReadOnlyList<(string shapeName, float value)> entries, float time, InterpolationType interp, bool recordUndo)
+        {
+            if (Clip == null || entries.Count == 0) return;
+
+            if (recordUndo) Undo.RecordObject(Clip, "Record Keyframe");
+            float tol = _model.FrameTolerance;
+
+            var bindings = new List<EditorCurveBinding>(entries.Count);
+            var curves   = new List<AnimationCurve>(entries.Count);
+            var updates  = new List<(string, AnimationCurve)>(entries.Count);
+
+            foreach (var (shapeName, value) in entries)
+            {
+                var binding = MakeBinding(shapeName);
+                var curve = AnimationUtility.GetEditorCurve(Clip, binding) ?? new AnimationCurve();
+                WriteKey(curve, time, value, interp, tol);
+                bindings.Add(binding);
+                curves.Add(curve);
+                updates.Add((shapeName, curve));
+            }
+
+            SetEditorCurvesBatch(bindings, curves);
+            EditorUtility.SetDirty(Clip);
+            if (!_model.UpdateTrackCurvesBatch(updates))
+                _model.MarkDirty();
+        }
+
         // ─── Keyframe delete ─────────────────────────────────────────────────
 
         /// <summary>指定時刻に最も近いキーを 1 つ削除する。</summary>
@@ -95,7 +128,7 @@ namespace DenEmo.Core
 
             Undo.RecordObject(Clip, "Delete Keyframe");
             curve.RemoveKey(idx);
-            bool hasKeys = curve.keys.Length > 0;
+            bool hasKeys = curve.length > 0;
             AnimationUtility.SetEditorCurve(Clip, binding, hasKeys ? curve : null);
             if (hasKeys) CommitTrack(shapeName, curve);
             else         Commit();
@@ -117,7 +150,7 @@ namespace DenEmo.Core
                 if (idx < 0) continue;
                 track.Curve.RemoveKey(idx);
                 bindings.Add(track.Binding);
-                curves.Add(track.Curve.keys.Length > 0 ? track.Curve : null);
+                curves.Add(track.Curve.length > 0 ? track.Curve : null);
             }
 
             if (bindings.Count > 0)
@@ -155,7 +188,7 @@ namespace DenEmo.Core
 
                 deleted += removeCount;
                 bindings.Add(track.Binding);
-                curves.Add(track.Curve.keys.Length > 0 ? track.Curve : null);
+                curves.Add(track.Curve.length > 0 ? track.Curve : null);
             }
 
             if (deleted > 0)
@@ -193,7 +226,9 @@ namespace DenEmo.Core
             newFrame = Mathf.Clamp(newFrame, 0, _model.TotalFrames);
             int dir = newFrame > oldFrame ? 1 : -1;
 
-            // 移動対象（oldFrame にキーを持つトラック）と、各トラックの到達限界を求める
+            // 移動対象（oldFrame にキーを持つトラック）と、各トラックの到達限界を求める。
+            // 限界計算はキャッシュ済み KeyTimes（float[]）だけで足りるため、ドラッグ中の毎イベントで
+            // curve.keys（配列フルコピー）を触らない。
             var moving = new List<(AnimationTrack track, int keyIndex)>();
             int reached = newFrame;
 
@@ -203,10 +238,10 @@ namespace DenEmo.Core
 
                 int keyIndex = -1;
                 int limit    = newFrame;
-                var keys     = track.Curve.keys;
-                for (int i = 0; i < keys.Length; i++)
+                var times    = track.KeyTimes;
+                for (int i = 0; i < times.Length; i++)
                 {
-                    int f = Mathf.RoundToInt(keys[i].time * fps);
+                    int f = Mathf.RoundToInt(times[i] * fps);
                     if (f == oldFrame) { keyIndex = i; continue; }
                     // 移動方向にある最初の他キーの 1 フレーム手前まで
                     if (dir > 0 && f > oldFrame && f - 1 < limit) limit = f - 1;
@@ -225,16 +260,25 @@ namespace DenEmo.Core
                 Undo.RecordObject(Clip, shapeName == null ? "Move All Keyframes" : "Move Keyframe");
             float newTime = reached / fps;
 
-            EditorUtility.SetDirty(Clip);
+            // 全トラックの変更を集めて 1 回でコミットする（T 回のクリップ内部再構築を回避）。
+            var bindings = new List<EditorCurveBinding>(moving.Count);
+            var curves   = new List<AnimationCurve>(moving.Count);
+            var updates  = new List<(string, AnimationCurve)>(moving.Count);
             foreach (var (track, keyIndex) in moving)
             {
-                var k = track.Curve.keys[keyIndex];
+                var k = track.Curve[keyIndex];   // インデクサは配列全体をコピーしない
                 k.time = newTime;
                 track.Curve.MoveKey(keyIndex, k);
-                AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
-                // キャッシュは全再構築せず、移動したトラックのみ更新する（ドラッグ中の負荷対策）
-                _model.UpdateTrackCurve(track.ShapeName, track.Curve);
+                bindings.Add(track.Binding);
+                curves.Add(track.Curve);
+                updates.Add((track.ShapeName, track.Curve));
             }
+
+            SetEditorCurvesBatch(bindings, curves);
+            EditorUtility.SetDirty(Clip);
+            // キャッシュは全再構築せず、移動したトラックのみ更新する（AllKeyTimes は 1 回だけ遅延再構築）。
+            if (!_model.UpdateTrackCurvesBatch(updates))
+                _model.MarkDirty();
 
             return reached;
         }
@@ -267,7 +311,8 @@ namespace DenEmo.Core
 
             foreach (var track in _model.Tracks)
             {
-                for (int i = 0; i < track.Curve.keys.Length; i++)
+                int keyCount = track.Curve.length;   // ループ条件で毎回 keys 配列をコピーしない
+                for (int i = 0; i < keyCount; i++)
                     ApplyTangentMode(track.Curve, i, interp);
                 bindings.Add(track.Binding);
                 curves.Add(track.Curve);

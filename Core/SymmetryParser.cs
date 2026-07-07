@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace DenEmo.Core
 {
@@ -12,12 +13,43 @@ namespace DenEmo.Core
 
     public static class SymmetryParser
     {
+        // シェイプ名は不変であり、左右同期モードではアイドル中も高頻度で再パースされる（150ms ポーリング）。
+        // パース結果をメモ化して EndsWith の総当たりを初回のみに抑える。名前の総数は高々数百。
+        private readonly struct LRParse
+        {
+            public readonly bool   Matched;
+            public readonly string BaseName;
+            public readonly LRSide Side;
+            public LRParse(bool matched, string baseName, LRSide side)
+            {
+                Matched = matched; BaseName = baseName; Side = side;
+            }
+        }
+
+        private static readonly Dictionary<string, LRParse> _parseCache = new Dictionary<string, LRParse>();
+
         public static bool TryParseLRSuffix(string name, out string baseName, out LRSide side)
+        {
+            if (string.IsNullOrEmpty(name)) { baseName = name; side = LRSide.None; return false; }
+
+            if (_parseCache.TryGetValue(name, out var cached))
+            {
+                baseName = cached.BaseName;
+                side     = cached.Side;
+                return cached.Matched;
+            }
+
+            bool matched = ParseLRSuffixUncached(name, out baseName, out side);
+            _parseCache[name] = new LRParse(matched, baseName, side);
+            return matched;
+        }
+
+        private static bool ParseLRSuffixUncached(string name, out string baseName, out LRSide side)
         {
             baseName = name;
             side = LRSide.None;
             if (string.IsNullOrEmpty(name)) return false;
-            
+
             string n = name.Trim();
 
             // 1. 括弧形式の判定
