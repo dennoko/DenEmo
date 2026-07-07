@@ -8,7 +8,9 @@ namespace DenEmo
     /// <summary>
     /// DenEmo の現行バージョン。ローカルの version.json を GUID 経由で取得し、
     /// アップデートチェックの際にリモートの version.json と比較する。
+    /// インポート時（コンパイル完了時）や起動時に自動的にアップデートチェックを実行する。
     /// </summary>
+    [InitializeOnLoad]
     internal static class DenEmoVersion
     {
         private const string VersionJsonGuid = "92a2ece039bec4741829e3eb4c9bb41c";
@@ -31,6 +33,49 @@ namespace DenEmo
         internal const string RepoName  = "DenEmo";
         internal const string RepoBranch = "main";
         internal const string VersionFilePath = "version.json";
+
+        // セッションキー
+        internal const string VerCheckDoneKey   = "DenEmo_VerCheck_Done";
+        internal const string VerCheckStateKey  = "DenEmo_VerCheck_State";
+        internal const string VerCheckLatestKey = "DenEmo_VerCheck_Latest";
+        internal const string VerCheckUrlKey    = "DenEmo_VerCheck_Url";
+        internal const string VerCheckMessageKey = "DenEmo_VerCheck_Message";
+
+        static DenEmoVersion()
+        {
+            // インポート時、またはUnity起動時に自動で非同期取得を開始する
+            StartCheckBackgroundTask();
+        }
+
+        internal static void StartCheckBackgroundTask()
+        {
+            if (SessionState.GetBool(VerCheckDoneKey, false)) return;
+
+            Dennoko.DennokoVersionChecker.CheckAsync(
+                RepoOwner, RepoName, RepoBranch, VersionFilePath, Current, OnVersionChecked);
+        }
+
+        private static void OnVersionChecked(Dennoko.DennokoVersionChecker.Result result)
+        {
+            SessionState.SetBool(VerCheckDoneKey, true);
+            SessionState.SetInt(VerCheckStateKey, (int)result.State);
+            SessionState.SetString(VerCheckLatestKey, result.LatestVersion ?? string.Empty);
+            SessionState.SetString(VerCheckUrlKey, result.Url ?? string.Empty);
+            SessionState.SetString(VerCheckMessageKey, result.Message ?? string.Empty);
+
+            // すでにエディタウィンドウが開かれている場合は再描画を促す
+            var windows = Resources.FindObjectsOfTypeAll<DenEmoWindow>();
+            if (windows != null && windows.Length > 0)
+            {
+                foreach (var w in windows)
+                {
+                    if (w != null)
+                    {
+                        w.LoadVersionResultFromSessionState();
+                    }
+                }
+            }
+        }
 
         [Serializable]
         private class VersionInfo

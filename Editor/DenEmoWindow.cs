@@ -82,8 +82,10 @@ namespace DenEmo
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
         private Label  _statusLabel;
         private Label  _versionLabel;
+        // LocalVersion は OnEnable で設定する（コンストラクタ／フィールド初期化子から
+        // AssetDatabase.GUIDToAssetPath を呼ぶと Unity が例外を投げるため）。
         private Dennoko.DennokoVersionChecker.Result _versionResult =
-            new Dennoko.DennokoVersionChecker.Result { State = Dennoko.DennokoVersionChecker.State.Checking, LocalVersion = DenEmoVersion.Current };
+            new Dennoko.DennokoVersionChecker.Result { State = Dennoko.DennokoVersionChecker.State.Checking };
         private Button _langButton;
         private Button _tabPose;
         private Button _tabAnim;
@@ -121,6 +123,7 @@ namespace DenEmo
         private void OnEnable()
         {
             Instance = this;
+            _versionResult.LocalVersion = DenEmoVersion.Current;
             DenEmoLoc.LoadPrefs();
             saveFolder           = DenEmoProjectPrefs.GetString("DenEmo_SaveFolder", saveFolder);
             searchText           = DenEmoProjectPrefs.GetString("DenEmo_SearchText", string.Empty);
@@ -409,40 +412,28 @@ namespace DenEmo
         }
 
         // ─── バージョン表記 / アップデートチェック ───────────────────────────
-        const string VerCheckDoneKey   = "DenEmo_VerCheck_Done";
-        const string VerCheckStateKey  = "DenEmo_VerCheck_State";
-        const string VerCheckLatestKey = "DenEmo_VerCheck_Latest";
 
         /// <summary>起動時にリモートの version.json を取得して更新有無を判定する。
         /// 同一 Unity セッション中はキャッシュ結果を再利用しネットワークアクセスを抑制する。</summary>
         private void StartVersionCheck()
         {
-            // トラブルシュート時は Dennoko.DennokoVersionChecker.VerboseLog = true で
-            // 取得URL・HTTPステータス・レスポンスを Console に出せる（通常はオフ）。
-            if (SessionState.GetBool(VerCheckDoneKey, false))
+            LoadVersionResultFromSessionState();
+            if (!SessionState.GetBool(DenEmoVersion.VerCheckDoneKey, false))
             {
-                _versionResult = new Dennoko.DennokoVersionChecker.Result
-                {
-                    State = (Dennoko.DennokoVersionChecker.State)SessionState.GetInt(VerCheckStateKey, 0),
-                    LocalVersion = DenEmoVersion.Current,
-                    LatestVersion = SessionState.GetString(VerCheckLatestKey, string.Empty),
-                };
-                ApplyVersionLabel();
-                return;
+                DenEmoVersion.StartCheckBackgroundTask();
             }
-
-            ApplyVersionLabel(); // Checking 状態を先に反映
-            Dennoko.DennokoVersionChecker.CheckAsync(
-                DenEmoVersion.RepoOwner, DenEmoVersion.RepoName, DenEmoVersion.RepoBranch,
-                DenEmoVersion.VersionFilePath, DenEmoVersion.Current, OnVersionChecked);
         }
 
-        private void OnVersionChecked(Dennoko.DennokoVersionChecker.Result result)
+        internal void LoadVersionResultFromSessionState()
         {
-            _versionResult = result;
-            SessionState.SetBool(VerCheckDoneKey, true);
-            SessionState.SetInt(VerCheckStateKey, (int)result.State);
-            SessionState.SetString(VerCheckLatestKey, result.LatestVersion ?? string.Empty);
+            _versionResult = new Dennoko.DennokoVersionChecker.Result
+            {
+                State = (Dennoko.DennokoVersionChecker.State)SessionState.GetInt(DenEmoVersion.VerCheckStateKey, 0),
+                LocalVersion = DenEmoVersion.Current,
+                LatestVersion = SessionState.GetString(DenEmoVersion.VerCheckLatestKey, string.Empty),
+                Url = SessionState.GetString(DenEmoVersion.VerCheckUrlKey, string.Empty),
+                Message = SessionState.GetString(DenEmoVersion.VerCheckMessageKey, string.Empty)
+            };
             ApplyVersionLabel();
         }
 
