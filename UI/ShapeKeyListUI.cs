@@ -27,6 +27,7 @@ namespace DenEmo.UI
         public Action<string, bool>    OnFavoriteChanged;
         public Action                  OnSnapshotCreate;
         public Action                  OnSnapshotRestore;
+        public Func<ShapeKeyItem, bool> IsUnchanged;
 
         // ─── Bind state ───────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ namespace DenEmo.UI
         public VisualElement Root { get; private set; }
 
         private Label           _title;
+        private Button          _bulkMenu;
         private Button          _snapCreate, _snapRestore;
         private Label           _emptyLabel, _noMatchLabel;
         private ScrollView      _rowsScroll;
@@ -70,6 +72,7 @@ namespace DenEmo.UI
             Root.style.flexShrink = 0;
 
             _title        = Root.Q<Label>("shape-list-title");
+            _bulkMenu     = Root.Q<Button>("shape-list-bulk-menu");
             _snapCreate   = Root.Q<Button>("shape-list-snap-create");
             _snapRestore  = Root.Q<Button>("shape-list-snap-restore");
             _emptyLabel   = Root.Q<Label>("shape-list-empty");
@@ -78,6 +81,7 @@ namespace DenEmo.UI
 
             if (_rowsScroll == null) return Root; // UXML ロード失敗時は空のまま返す
 
+            if (_bulkMenu != null) _bulkMenu.clicked += ShowBulkMenu;
             _snapCreate.clicked  += () => OnSnapshotCreate?.Invoke();
             _snapRestore.clicked += () => OnSnapshotRestore?.Invoke();
 
@@ -111,6 +115,8 @@ namespace DenEmo.UI
             _title.text       = DenEmoLoc.T("ui.list.title");
             _snapCreate.text  = DenEmoLoc.T("ui.snapshot.create");
             _snapRestore.text = DenEmoLoc.T("ui.snapshot.restore");
+            if (_bulkMenu != null)
+                _bulkMenu.tooltip = DenEmoLoc.T("ui.list.bulkMenu.tip");
             _emptyLabel.text  = DenEmoLoc.T("ui.mesh.noShapes");
             _noMatchLabel.text = DenEmoLoc.T("ui.list.noMatch");
             _structureDirty = true; // 行内ツールチップの言語を更新するため再構築する
@@ -188,6 +194,79 @@ namespace DenEmo.UI
                 }
                 return h * 31 + plan.Count;
             }
+        }
+
+        // ─── Bulk Operations ─────────────────────────────────────────────────
+
+        private void ShowBulkMenu()
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.checkAll")), false, BulkCheckAll);
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.uncheckAll")), false, BulkUncheckAll);
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.uncheckUnchanged")), false, BulkUncheckUnchanged);
+            menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.checkFavorites")), false, BulkCheckFavorites);
+            menu.ShowAsContext();
+        }
+
+        private void BulkCheckAll()
+        {
+            if (_model == null) return;
+            foreach (var item in _model.Items)
+            {
+                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVisible)
+                {
+                    item.IsIncluded = true;
+                }
+            }
+            OnIncludeFlagsChanged?.Invoke();
+            SyncDynamicState();
+        }
+
+        private void BulkUncheckAll()
+        {
+            if (_model == null) return;
+            foreach (var item in _model.Items)
+            {
+                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVisible)
+                {
+                    item.IsIncluded = false;
+                }
+            }
+            OnIncludeFlagsChanged?.Invoke();
+            SyncDynamicState();
+        }
+
+        private void BulkUncheckUnchanged()
+        {
+            if (_model == null) return;
+            foreach (var item in _model.Items)
+            {
+                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                bool unchanged = IsUnchanged != null ? IsUnchanged(item) : Mathf.Approximately(item.Value, 0f);
+                if (unchanged)
+                {
+                    item.IsIncluded = false;
+                }
+            }
+            OnIncludeFlagsChanged?.Invoke();
+            SyncDynamicState();
+        }
+
+        private void BulkCheckFavorites()
+        {
+            if (_model == null) return;
+            foreach (var item in _model.Items)
+            {
+                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVisible)
+                {
+                    item.IsIncluded = item.IsFavorite;
+                }
+            }
+            OnIncludeFlagsChanged?.Invoke();
+            SyncDynamicState();
         }
     }
 }

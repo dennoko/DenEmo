@@ -83,6 +83,13 @@ public static class DenEmoLoc
         ["ui.snapshot.create"] = "一時保存（スナップショット）",
         ["ui.snapshot.restore"] = "スナップショットにリセット",
 
+        // Bulk operations
+        ["ui.list.bulkMenu.tip"] = "一括操作",
+        ["ui.bulk.checkAll"] = "表示中をすべてチェック",
+        ["ui.bulk.uncheckAll"] = "表示中のチェックをすべて外す",
+        ["ui.bulk.uncheckUnchanged"] = "変更のないチェックを外す (値が0)",
+        ["ui.bulk.checkFavorites"] = "表示中のお気に入りのみチェック",
+
         // Search
         ["ui.search.title"] = "シェイプキー検索",
         ["ui.search.clear"] = "クリア",
@@ -372,6 +379,13 @@ public static class DenEmoLoc
         // Snapshot
         ["ui.snapshot.create"] = "Snapshot",
         ["ui.snapshot.restore"] = "Restore Snapshot",
+
+        // Bulk operations
+        ["ui.list.bulkMenu.tip"] = "Bulk operations",
+        ["ui.bulk.checkAll"] = "Check All Visible",
+        ["ui.bulk.uncheckAll"] = "Uncheck All Visible",
+        ["ui.bulk.uncheckUnchanged"] = "Uncheck Unchanged (Value is 0)",
+        ["ui.bulk.checkFavorites"] = "Check Favorites Only",
 
         // Search
         ["ui.search.title"] = "Blendshape Search",

@@ -211,6 +211,7 @@ namespace DenEmo
             _listUI.OnFavoriteChanged  = OnFavoriteChanged;
             _listUI.OnSnapshotCreate  = () => CreateSnapshot(false);
             _listUI.OnSnapshotRestore = RestoreSnapshot;
+            _listUI.IsUnchanged       = IsShapeKeyUnchanged;
         }
 
         private void OnDisable()
@@ -819,6 +820,34 @@ namespace DenEmo
                 float.TryParse(parts[3], System.Globalization.NumberStyles.Float, ic, out float a))
                 return new Color(r, g, b, a);
             return def;
+        }
+
+        private bool IsShapeKeyUnchanged(ShapeKeyItem item)
+        {
+            if (_currentMode == EditorMode.Animation)
+            {
+                var clip = _animModeUI.ClipModel.Clip;
+                if (clip != null)
+                {
+                    var binding = new EditorCurveBinding
+                    {
+                        type = typeof(SkinnedMeshRenderer),
+                        path = !string.IsNullOrEmpty(item.SmrPath) ? item.SmrPath : ShapeKeyModel.ComputeSmrPath(item.OwnerSmr ?? _model.TargetSkinnedMesh),
+                        propertyName = "blendShape." + item.Name
+                    };
+                    var curve = AnimationUtility.GetEditorCurve(clip, binding);
+                    if (curve != null)
+                    {
+                        foreach (var key in curve.keys)
+                        {
+                            if (!Mathf.Approximately(key.value, 0f))
+                                return false;
+                        }
+                    }
+                    return true; // No curve or all keys are 0
+                }
+            }
+            return Mathf.Approximately(item.Value, 0f);
         }
     }
 }

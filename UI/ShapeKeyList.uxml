@@ -4,6 +4,7 @@
         <ui:VisualElement name="shape-list-toolbar" class="dennoko-list-toolbar">
             <ui:Label name="shape-list-title" text="SHAPE KEYS" class="dennoko-section-title" />
             <ui:VisualElement class="dennoko-flex-spacer" />
+            <ui:Button name="shape-list-bulk-menu" text="✓▼" class="dennoko-snap-button" />
             <ui:Button name="shape-list-snap-create" class="dennoko-snap-button" />
             <ui:Button name="shape-list-snap-restore" class="dennoko-snap-button" />
         </ui:VisualElement>

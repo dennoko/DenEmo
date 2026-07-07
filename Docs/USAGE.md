@@ -125,6 +125,17 @@ Shape keys are automatically grouped by name prefix (e.g., all `mouth_*` keys fo
 
 > Example: You have a complex expression dialed in. Take a Snapshot, then experiment freely. If the experiment fails, Restore Snapshot brings back the working state in one click.
 
+### Bulk Check Operations
+
+Clicking the `✓▼` button in the toolbar opens a menu to perform bulk operations on the shape key checkboxes (inclusion toggles).
+
+* **Check All Visible**: Checks all shape keys currently displayed in the list (matching search and filters). VRChat system shape keys (prefixed with `vrc.`) and LipSync shape keys are excluded.
+* **Uncheck All Visible**: Unchecks all shape keys currently displayed in the list.
+* **Uncheck Unchanged (Value is 0)**: Unchecks all shape keys that are unchanged in the animation, regardless of the current search or filter visibility.
+  * **Single Frame Mode (Pose)**: Unchecks shape keys whose current slider value is `0`.
+  * **Multi Frame Mode (Animation)**: Unchecks shape keys that are constant at `0` throughout the entire animation clip (i.e. have no keyframes, or all of their keyframes have a value of `0`).
+* **Check Favorites Only**: Checks only the starred (favorite) shape keys among those currently visible, and unchecks the rest.
+
 ---
 
 ### SAVE SETTINGS
