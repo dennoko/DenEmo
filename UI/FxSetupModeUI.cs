@@ -22,7 +22,6 @@ namespace DenEmo.UI
         // ─── 検出状態 ─────────────────────────────────────────────────────────
         private Component          _descriptor;
         private AnimatorController _controller;        // 実際にスキャン/書き換えする対象
-        private AnimatorController _manualController;  // Descriptor 不在時の手動指定
         private bool _fxMissing;            // Descriptor はあるが FX が未設定
         private bool _fxReadFailed;         // baseAnimationLayers を読めなかった（SDK 差異）
         private bool _fxOverrideUnsupported;
@@ -46,16 +45,15 @@ namespace DenEmo.UI
 
         // ─── UI Toolkit 要素 ─────────────────────────────────────────────────
         private VisualElement _avatarCard;
-        private Label         _avatarFound;
+        private Label         _avatarFieldLabel;
+        private ObjectField   _avatarField;
+        private Label         _controllerFieldLabel;
+        private ObjectField   _controllerField;
+        private Label         _statusLabel;
         private Label         _avatarNotFound;
         private Label         _readFailedLabel;
         private Label         _overrideLabel;
         private Label         _missingLabel;
-        private VisualElement _manualRow;
-        private Label         _manualLabel;
-        private ObjectField   _manualField;
-        private VisualElement _controllerRow;
-        private Label         _controllerLabel;
         private Button        _rescanButton;
 
         private VisualElement _listCard;
@@ -109,7 +107,15 @@ namespace DenEmo.UI
         {
             _applyDirect = DenEmoProjectPrefs.GetBool("DenEmo_Fx_ApplyMode_Direct", false);
             _lastResult  = null;
-            Refresh(model);
+            if (_avatarField == null || (_avatarField.value == null && _controllerField.value == null))
+            {
+                AutoDetect(model);
+            }
+            else if (_avatarField != null && _avatarField.value == null)
+            {
+                AutoDetect(model);
+            }
+            ScanAndRebuild(model);
         }
 
         public void OnExit()
@@ -124,49 +130,46 @@ namespace DenEmo.UI
 
         public void Tick(EditorWindow window) => _hover.Tick();
 
-        public void OnUndoRedo(ShapeKeyModel model) => Refresh(model);
+        public void OnUndoRedo(ShapeKeyModel model)
+        {
+            ScanAndRebuild(model);
+        }
 
         public void OnTargetChanged(ShapeKeyModel model)
         {
             _hover.Stop();
             _mappings.Clear();
             _lastResult = null;
-            Refresh(model);
+            AutoDetect(model);
+            ScanAndRebuild(model);
         }
 
         /// <summary>アバター/FX の再検出と一覧の再スキャン。</summary>
         public void Refresh(ShapeKeyModel model)
         {
+            AutoDetect(model);
+            ScanAndRebuild(model);
+        }
+
+        private void AutoDetect(ShapeKeyModel model)
+        {
             _descriptor = null;
+            _avatarRoot = null;
             _controller = null;
             _fxMissing = false;
             _fxReadFailed = false;
             _fxOverrideUnsupported = false;
-            _avatarRoot = null;
-            _entries = new List<FxExpressionEntry>();
-            _targetSmrPaths.Clear();
 
             var target = model?.TargetSkinnedMesh;
             if (target == null)
             {
-                _hover.SetRoot(null);
-                UpdateUI();
+                if (_avatarField != null) _avatarField.SetValueWithoutNotify(null);
+                if (_controllerField != null) _controllerField.SetValueWithoutNotify(null);
                 return;
             }
 
             _descriptor = VrcAvatarReflection.FindDescriptor(target.transform);
             _avatarRoot = _descriptor != null ? _descriptor.transform : target.transform.root;
-            _hover.SetRoot(_avatarRoot);
-
-            // FX クリップのバインディングパスと突き合わせる対象メッシュのパス集合
-            var meshes = (model.ActiveMeshes != null && model.ActiveMeshes.Count > 0)
-                ? model.ActiveMeshes
-                : new List<SkinnedMeshRenderer> { target };
-            foreach (var smr in meshes)
-            {
-                if (smr == null) continue;
-                _targetSmrPaths.Add(ComputePathFrom(_avatarRoot, smr.transform));
-            }
 
             if (_descriptor != null)
             {
@@ -187,14 +190,84 @@ namespace DenEmo.UI
                 }
             }
 
-            // Descriptor なし / 読み取り失敗時は手動指定コントローラーで代替
-            if (_controller == null && _manualController != null)
-                _controller = _manualController;
+            if (_avatarField != null)
+                _avatarField.SetValueWithoutNotify(_avatarRoot != null ? _avatarRoot.gameObject : null);
+            if (_controllerField != null)
+                _controllerField.SetValueWithoutNotify(_controller);
+        }
+
+        private void OnAvatarFieldChanged(GameObject newAvatarGo)
+        {
+            _avatarRoot = newAvatarGo != null ? newAvatarGo.transform : null;
+            _descriptor = _avatarRoot != null ? VrcAvatarReflection.FindDescriptor(_avatarRoot) : null;
+            _fxMissing = false;
+            _fxReadFailed = false;
+            _fxOverrideUnsupported = false;
+            _controller = null;
+
+            if (_descriptor != null)
+            {
+                if (!VrcAvatarReflection.TryGetFxController(_descriptor, out var rc, out bool isDefault))
+                {
+                    _fxReadFailed = true;
+                }
+                else if (rc == null || isDefault)
+                {
+                    _fxMissing = rc == null;
+                    _controller = rc as AnimatorController;
+                    if (rc != null && _controller == null) _fxOverrideUnsupported = true;
+                }
+                else
+                {
+                    _controller = rc as AnimatorController;
+                    if (_controller == null) _fxOverrideUnsupported = true;
+                }
+            }
+
+            if (_controllerField != null)
+                _controllerField.SetValueWithoutNotify(_controller);
+
+            ScanAndRebuild(_boundModel);
+        }
+
+        private void OnControllerFieldChanged(AnimatorController newController)
+        {
+            _controller = newController;
+            _fxMissing = false;
+            _fxReadFailed = false;
+            _fxOverrideUnsupported = false;
+
+            ScanAndRebuild(_boundModel);
+        }
+
+        private void ScanAndRebuild(ShapeKeyModel model)
+        {
+            _entries = new List<FxExpressionEntry>();
+            _targetSmrPaths.Clear();
+
+            var target = model?.TargetSkinnedMesh;
+            if (target == null)
+            {
+                _hover.SetRoot(null);
+                UpdateUI();
+                return;
+            }
+
+            _hover.SetRoot(_avatarRoot);
+
+            var meshes = (model.ActiveMeshes != null && model.ActiveMeshes.Count > 0)
+                ? model.ActiveMeshes
+                : new List<SkinnedMeshRenderer> { target };
+            foreach (var smr in meshes)
+            {
+                if (smr == null) continue;
+                var root = _avatarRoot != null ? _avatarRoot : target.transform.root;
+                _targetSmrPaths.Add(ComputePathFrom(root, smr.transform));
+            }
 
             if (_controller != null)
                 _entries = FxLayerScanner.Scan(_controller, _targetSmrPaths);
 
-            // 存在しなくなったマッピングを掃除
             var alive = new HashSet<AnimationClip>();
             foreach (var e in _entries) alive.Add(e.Clip);
             var stale = new List<AnimationClip>();
@@ -222,18 +295,17 @@ namespace DenEmo.UI
             _getSaveFolder = getSaveFolder;
             _window        = window;
 
-            _avatarCard      = root.Q<VisualElement>("fx-avatar-card");
-            _avatarFound     = root.Q<Label>("fx-avatar-found");
-            _avatarNotFound  = root.Q<Label>("fx-avatar-notfound");
-            _readFailedLabel = root.Q<Label>("fx-readfailed");
-            _overrideLabel   = root.Q<Label>("fx-override-unsupported");
-            _missingLabel    = root.Q<Label>("fx-missing");
-            _manualRow       = root.Q<VisualElement>("fx-manual-row");
-            _manualLabel     = root.Q<Label>("fx-manual-label");
-            _manualField     = root.Q<ObjectField>("fx-manual-field");
-            _controllerRow   = root.Q<VisualElement>("fx-controller-row");
-            _controllerLabel = root.Q<Label>("fx-controller-label");
-            _rescanButton    = root.Q<Button>("fx-rescan");
+            _avatarCard           = root.Q<VisualElement>("fx-avatar-card");
+            _avatarFieldLabel     = root.Q<Label>("fx-avatar-field-label");
+            _avatarField          = root.Q<ObjectField>("fx-avatar-field");
+            _controllerFieldLabel = root.Q<Label>("fx-controller-field-label");
+            _controllerField      = root.Q<ObjectField>("fx-controller-field");
+            _statusLabel          = root.Q<Label>("fx-status-label");
+            _avatarNotFound       = root.Q<Label>("fx-avatar-notfound");
+            _readFailedLabel      = root.Q<Label>("fx-readfailed");
+            _overrideLabel        = root.Q<Label>("fx-override-unsupported");
+            _missingLabel         = root.Q<Label>("fx-missing");
+            _rescanButton         = root.Q<Button>("fx-rescan");
 
             _listCard               = root.Q<VisualElement>("fx-list-card");
             _searchField            = root.Q<TextField>("fx-search");
@@ -262,17 +334,18 @@ namespace DenEmo.UI
             _resultNoteLabel       = root.Q<Label>("fx-result-note");
             _resultBackupLabel     = root.Q<Label>("fx-result-backup");
 
-            _manualField.objectType        = typeof(AnimatorController);
-            _manualField.allowSceneObjects = false;
-            _manualField.RegisterValueChangedCallback(evt =>
+            _avatarField.objectType = typeof(GameObject);
+            _avatarField.allowSceneObjects = true;
+            _avatarField.RegisterValueChangedCallback(evt =>
             {
-                _manualController = evt.newValue as AnimatorController;
-                if (_descriptor == null)
-                {
-                    _mappings.Clear();
-                    _lastResult = null;
-                }
-                Refresh(_boundModel);
+                OnAvatarFieldChanged(evt.newValue as GameObject);
+            });
+
+            _controllerField.objectType = typeof(AnimatorController);
+            _controllerField.allowSceneObjects = false;
+            _controllerField.RegisterValueChangedCallback(evt =>
+            {
+                OnControllerFieldChanged(evt.newValue as AnimatorController);
             });
 
             _rescanButton.clicked += () => Refresh(_boundModel);
@@ -317,11 +390,12 @@ namespace DenEmo.UI
         {
             if (_avatarCard == null) return;
             _avatarCard.Q<Label>("fx-avatar-title").text = DenEmoLoc.T("ui.fx.section.avatar");
+            _avatarFieldLabel.text = DenEmoLoc.T("ui.fx.avatar.fieldLabel");
+            _controllerFieldLabel.text = DenEmoLoc.T("ui.fx.fx.fieldLabel");
             _avatarNotFound.text  = DenEmoLoc.T("ui.fx.avatar.notFound");
             _readFailedLabel.text = DenEmoLoc.T("ui.fx.fx.readFailed");
             _overrideLabel.text   = DenEmoLoc.T("ui.fx.fx.overrideUnsupported");
             _missingLabel.text    = DenEmoLoc.T("ui.fx.fx.missing");
-            _manualLabel.text     = DenEmoLoc.T("ui.fx.avatar.manualController");
             _rescanButton.text    = DenEmoLoc.T("ui.fx.rescan");
 
             _listCard.Q<Label>("fx-list-title").text = DenEmoLoc.T("ui.fx.section.list");
@@ -387,11 +461,7 @@ namespace DenEmo.UI
         private void UpdateAvatarCard()
         {
             bool found = _descriptor != null;
-            _avatarFound.style.display    = found ? DisplayStyle.Flex : DisplayStyle.None;
             _avatarNotFound.style.display = found ? DisplayStyle.None : DisplayStyle.Flex;
-            if (found)
-                _avatarFound.text = DenEmoLoc.Tf("ui.fx.avatar.label",
-                    _avatarRoot != null ? _avatarRoot.name : _descriptor.name) + " ✓";
 
             _readFailedLabel.style.display = (found && _fxReadFailed) ? DisplayStyle.Flex : DisplayStyle.None;
             _overrideLabel.style.display   = (found && !_fxReadFailed && _fxOverrideUnsupported)
@@ -400,16 +470,11 @@ namespace DenEmo.UI
                                               && _fxMissing && _controller == null)
                 ? DisplayStyle.Flex : DisplayStyle.None;
 
-            bool manual = !found || _fxReadFailed;
-            _manualRow.style.display = manual ? DisplayStyle.Flex : DisplayStyle.None;
-            if (manual && !ReferenceEquals(_manualField.value, _manualController))
-                _manualField.SetValueWithoutNotify(_manualController);
-
             bool hasController = _controller != null;
-            _controllerRow.style.display = hasController ? DisplayStyle.Flex : DisplayStyle.None;
             if (hasController)
-                _controllerLabel.text = DenEmoLoc.Tf("ui.fx.fx.label", _controller.name)
-                    + " — " + DenEmoLoc.Tf("ui.fx.fx.stats", _entries.Count);
+                _statusLabel.text = DenEmoLoc.Tf("ui.fx.fx.stats", _entries.Count);
+            else
+                _statusLabel.text = string.Empty;
         }
 
         // ─── 差し替えマッピング一覧 ───────────────────────────────────────────
@@ -802,14 +867,18 @@ namespace DenEmo.UI
                 _mappings.Clear();
                 _expanded.Clear();
 
-                // 複製モードで Descriptor 不在なら、以降は複製側を作業対象にする
-                if (!_applyDirect && !result.DescriptorUpdated && !string.IsNullOrEmpty(result.NewControllerPath))
+                // 複製モードなら、以降は複製側を作業対象にする
+                if (!_applyDirect && !string.IsNullOrEmpty(result.NewControllerPath))
                 {
                     var copy = AssetDatabase.LoadAssetAtPath<AnimatorController>(result.NewControllerPath);
-                    if (copy != null) _manualController = copy;
+                    if (copy != null)
+                    {
+                        _controllerField.SetValueWithoutNotify(copy);
+                        _controller = copy;
+                    }
                 }
 
-                Refresh(model);
+                ScanAndRebuild(model);
                 StatusSink?.Invoke(DenEmoLoc.T("status.fx.applied"), 1);
             }
             else

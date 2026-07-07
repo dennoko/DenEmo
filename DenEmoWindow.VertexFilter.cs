@@ -8,11 +8,25 @@ namespace DenEmo
     {
         // ─── Scene GUI ────────────────────────────────────────────────────────
 
+        // SceneView オーバーレイ用の本文ラベル（IMGUI のため USS を使えず、テーマの本文色を直に持つ）
+        private static GUIStyle _sceneGuideStyle;
+        private static GUIStyle SceneGuideStyle
+        {
+            get
+            {
+                if (_sceneGuideStyle == null)
+                {
+                    _sceneGuideStyle = new GUIStyle(EditorStyles.label) { fontSize = 12 };
+                    _sceneGuideStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f); // --dennoko-text-secondary
+                }
+                return _sceneGuideStyle;
+            }
+        }
+
         private void OnSceneGUI(SceneView sceneView)
         {
             if (!vertexPickMode && !_vertexResultPending) return;
             if (_model.TargetSkinnedMesh == null || _model.TargetSkinnedMesh.sharedMesh == null) return;
-            DenEmoTheme.Initialize();
 
             UpdateVertexGuideCache();
             if (vertexGuideWorldPositions == null || vertexGuideWorldPositions.Length == 0) return;
@@ -23,7 +37,7 @@ namespace DenEmo
                 GUI.Label(
                     new Rect(16, 16, 520, 22),
                     DenEmoLoc.T("ui.filter.vertex.guide"),
-                    DenEmoTheme.SecondaryTextStyle);
+                    SceneGuideStyle);
                 Handles.EndGUI();
             }
 

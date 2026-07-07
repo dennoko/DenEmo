@@ -96,7 +96,8 @@ namespace DenEmo
         private ScrollView     _animScroll;
         private VisualElement  _animTargetHost;
         private VisualElement  _animSearchHost;
-        private IMGUIContainer _animTimelineGui;
+        private VisualElement    _animTimelineHost;
+        private TimelineUITKView _animTimelineView;
         private VisualElement  _animListHost;
         private VisualElement  _animClipCard;
         private VisualElement  _animTimelineNotice;
@@ -174,6 +175,8 @@ namespace DenEmo
             LoadCollapsedGroupsPrefs();
 
             _currentMode = (EditorMode)DenEmoProjectPrefs.GetInt("DenEmo_Mode", 0);
+            if (!System.Enum.IsDefined(typeof(EditorMode), _currentMode))
+                _currentMode = EditorMode.Pose; // 旧バージョンの無効なモード（削除された実験タブ等）への保険
 
             var animClipGuid = DenEmoProjectPrefs.GetString("DenEmo_AnimClipGuid", "");
             if (!string.IsNullOrEmpty(animClipGuid))
@@ -302,7 +305,10 @@ namespace DenEmo
         {
             _model.SyncValuesFromMesh();
             if (_currentMode == EditorMode.Animation)
+            {
                 _animModeUI.OnUndoRedo();
+                _animTimelineView?.RefreshStructure();
+            }
             else if (_currentMode == EditorMode.FxSetup)
                 _fxSetupUI.OnUndoRedo(_model);
             Repaint();
@@ -334,7 +340,7 @@ namespace DenEmo
             _animScroll     = root.Q<ScrollView>("anim-scroll");
             _animTargetHost = root.Q<VisualElement>("anim-target-host");
             _animSearchHost = root.Q<VisualElement>("anim-search-host");
-            _animTimelineGui = root.Q<IMGUIContainer>("anim-timeline-imgui");
+            _animTimelineHost = root.Q<VisualElement>("anim-timeline-host");
             _animListHost   = root.Q<VisualElement>("anim-list-host");
             _animClipCard   = root.Q<VisualElement>("anim-clip-card");
 
@@ -347,8 +353,6 @@ namespace DenEmo
 
             _fxScroll     = root.Q<ScrollView>("fx-scroll");
             _fxTargetHost = root.Q<VisualElement>("fx-target-host");
-
-            _animTimelineGui.onGUIHandler = OnAnimTimelineGUI;
 
             // セクションカード（対象メッシュ / 参照 / 検索 / 保存）の配線
             BindSectionCards(root);
@@ -365,6 +369,12 @@ namespace DenEmo
             // シェイプキーリスト（UI Toolkit）。モード切替時にホスト間を移動する
             var listRoot = _listUI.Bind(_model, collapsedGroups, () => symmetryMode);
             _poseListHost.Add(listRoot);
+
+            // Animation モードのタイムライン（UI Toolkit）。クリップカードがあるためクリップ欄は非表示
+            _animTimelineView = new TimelineUITKView();
+            _animTimelineHost.Add(_animTimelineView.Build(
+                _animModeUI, _model, this,
+                showClipField: false, isSeparateWindow: false, requireZoomModifier: true));
 
             _animModeUI.BindClipSectionUI(_animClipCard, _model, () => saveFolder, this);
             _animModeUI.CorrectionUI.Bind(
@@ -403,6 +413,7 @@ namespace DenEmo
             _listUI.RefreshLabels();
             RefreshSectionLabels();
             _fxSetupUI.RefreshLabels();
+            _animTimelineView?.RefreshLabels();
             _animTimelineNoticeLabel.text = DenEmoLoc.T("ui.timeline.separate.notice");
             _animTimelineFocus.text       = DenEmoLoc.T("ui.timeline.separate.focus");
             _animTimelineClose.text       = DenEmoLoc.T("ui.timeline.separate.close");
@@ -481,13 +492,16 @@ namespace DenEmo
                 _searchCard.style.display = display;
             // 補正カードの表示は CorrectionUI.Refresh がクリップの有無も見て決める
 
-            // タイムライン: 別窓化中は通知カード、それ以外は IMGUI 描画（クリップ未設定時は高さ 0）
+            // タイムライン: 別窓化中は通知カード、それ以外は UI Toolkit タイムライン（クリップ未設定時は非表示）
             bool detached = DenEmoTimelineWindow.Instance != null;
-            _animTimelineNotice.style.display = (hasTarget && detached)  ? DisplayStyle.Flex : DisplayStyle.None;
-            _animTimelineGui.style.display    = (hasTarget && !detached) ? DisplayStyle.Flex : DisplayStyle.None;
+            bool hasClip  = _animModeUI.ClipModel.Clip != null;
+            bool showInlineTimeline = hasTarget && !detached && hasClip;
+            _animTimelineNotice.style.display = (hasTarget && detached) ? DisplayStyle.Flex : DisplayStyle.None;
+            _animTimelineHost.style.display   = showInlineTimeline ? DisplayStyle.Flex : DisplayStyle.None;
+            _animTimelineView?.SetActive(_currentMode == EditorMode.Animation && showInlineTimeline);
 
-            // REC 中バナー（録画状態はタイムライン内の IMGUI 操作で変わるためポーリングで反映）
-            bool showRecBanner = hasTarget && _animModeUI.IsRecording && _animModeUI.ClipModel.Clip != null;
+            // REC 中バナー（録画状態はタイムライン内の操作で変わるためポーリングで反映）
+            bool showRecBanner = hasTarget && _animModeUI.IsRecording && hasClip;
             _animRecBanner.style.display = showRecBanner ? DisplayStyle.Flex : DisplayStyle.None;
 
             UpdateListAnimContext();
@@ -535,20 +549,11 @@ namespace DenEmo
             _statusLabel.EnableInClassList("dennoko-status--error",   statusLevel == 3);
         }
 
-        // Animation モード: タイムライン（anim-timeline-imgui。IMGUI カプセル化）
-        private void OnAnimTimelineGUI()
-        {
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                _animModeUI.DrawTimeline(_model, this);
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
-        }
+        // 別ウィンドウ（DenEmoTimelineWindow）が共有する Animation 状態
+        internal AnimationModeUI SeparateTimelineMode => _animModeUI;
+        internal ShapeKeyModel   SeparateTimelineModel => _model;
+        // 別ウィンドウのタイムラインはプレビュー整合のため Animation モード時のみ有効
+        internal bool IsAnimationModeActive => _currentMode == EditorMode.Animation;
 
         // 検索・フィルター変更の反映と Include フラグの遅延保存（OnEditorUpdate から呼ぶ）
         private void TickListMaintenance()
@@ -719,17 +724,6 @@ namespace DenEmo
                 UpdateStatusBar();
                 Repaint();
             }
-        }
-        // ─── Timeline Separate Window Support ─────────────────────────────────
-
-        public void DrawTimelineForSeparateWindow(EditorWindow timelineWindow)
-        {
-            if (_currentMode != EditorMode.Animation)
-            {
-                GUILayout.Label(DenEmoLoc.EnglishMode ? "Multi Frame mode is not active." : "マルチフレームモードではありません。");
-                return;
-            }
-            _animModeUI.DrawTimeline(_model, timelineWindow);
         }
 
         // ─── Vertex preview prefs helpers ─────────────────────────────────────

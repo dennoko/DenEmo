@@ -1,12 +1,13 @@
-using UnityEditor;
 using UnityEngine;
+using UnityEditor;
 using UnityEngine.UIElements;
 
 namespace DenEmo.UI
 {
     /// <summary>
-    /// タイムラインを別ウィンドウとして表示する（描画は DenEmoWindow に委譲）。
-    /// 外枠は UI Toolkit、タイムライン本体は IMGUIContainer でカプセル化する。
+    /// タイムラインを別ウィンドウとして表示する。
+    /// 外枠・タイムライン本体ともに UI Toolkit（TimelineUITKView）。
+    /// 状態は DenEmo 本体の AnimationModeUI を共有し、本体が閉じている間は通知を表示する。
     /// </summary>
     public class DenEmoTimelineWindow : EditorWindow
     {
@@ -17,6 +18,10 @@ namespace DenEmo.UI
         private Label         _noticeLabel;
         private Button        _openMainButton;
         private ScrollView    _scroll;
+        private VisualElement _host;
+
+        private TimelineUITKView _view;
+        private AnimationModeUI  _boundMode; // _view を構築したときの本体 AnimationModeUI
 
         public static void ShowWindow()
         {
@@ -39,44 +44,49 @@ namespace DenEmo.UI
             _noticeLabel    = root.Q<Label>("tlwin-notice-label");
             _openMainButton = root.Q<Button>("tlwin-open-main");
             _scroll         = root.Q<ScrollView>("tlwin-scroll");
-            var timelineGui = root.Q<IMGUIContainer>("tlwin-imgui");
+            _host           = root.Q<VisualElement>("tlwin-host");
 
-            timelineGui.onGUIHandler = OnTimelineGUI;
             _openMainButton.clicked += () => DenEmoWindow.ShowWindow();
 
-            // DenEmo 本体の開閉と言語切替はこのウィンドウの外で起きるため、ポーリングで追従する
+            // 本体の開閉・言語切替・クリップ差し替えはこのウィンドウの外で起きるためポーリングで追従する
             root.schedule.Execute(UpdateChromeState).Every(250);
             UpdateChromeState();
-        }
-
-        private void OnTimelineGUI()
-        {
-            if (DenEmoWindow.Instance == null) return;
-            DenEmoTheme.Initialize();
-            DenEmoTheme.PushEditorTheme();
-            try
-            {
-                DenEmoWindow.Instance.DrawTimelineForSeparateWindow(this);
-            }
-            finally
-            {
-                DenEmoTheme.PopEditorTheme();
-            }
         }
 
         private void UpdateChromeState()
         {
             if (_noticeBox == null) return;
-            bool hasMain = DenEmoWindow.Instance != null;
-            _noticeBox.style.display = hasMain ? DisplayStyle.None : DisplayStyle.Flex;
-            _scroll.style.display    = hasMain ? DisplayStyle.Flex : DisplayStyle.None;
+            var main = DenEmoWindow.Instance;
+            // プレビュー整合のため、本体が開いていて Animation モードのときのみタイムラインを表示する
+            bool available = main != null && main.IsAnimationModeActive;
+
+            _noticeBox.style.display = available ? DisplayStyle.None : DisplayStyle.Flex;
+            _scroll.style.display    = available ? DisplayStyle.Flex : DisplayStyle.None;
             _noticeLabel.text        = DenEmoLoc.T("ui.timeline.window.notOpen");
             _openMainButton.text     = DenEmoLoc.T("ui.timeline.window.open");
+
+            if (!available)
+            {
+                _view?.SetActive(false);
+                return;
+            }
+
+            // 本体が新しく開き直された場合（AnimationModeUI が別インスタンス）はビューを作り直す
+            if (_view == null || !ReferenceEquals(_boundMode, main.SeparateTimelineMode))
+            {
+                _host.Clear();
+                _boundMode = main.SeparateTimelineMode;
+                _view = new TimelineUITKView();
+                _host.Add(_view.Build(
+                    _boundMode, main.SeparateTimelineModel, this,
+                    showClipField: false, isSeparateWindow: true, requireZoomModifier: false));
+            }
+            _view.RefreshLabels();
+            _view.SetActive(true);
         }
 
-        // 常時 EditorApplication.update += Repaint で再描画し続けるとエディタが
-        // アイドル時もフル稼働するため購読しない。再生中の再描画は
-        // AnimationModeUI.OnUpdate がサンプル実行時のみ Instance.Repaint() を呼ぶ。
+        // 常時 EditorApplication.update += Repaint で再描画し続けるとアイドル時もフル稼働するため購読しない。
+        // 再生中の再描画は AnimationModeUI.OnUpdate がサンプル実行時のみ Instance.Repaint() を呼ぶ。
         private void OnEnable()
         {
             Instance = this;

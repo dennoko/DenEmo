@@ -165,6 +165,7 @@ public static class DenEmoLoc
 
         // Timeline
         ["ui.timeline.title"]          = "タイムライン",
+        ["ui.timeline.noClip"]         = "アニメーションクリップが読み込まれていません。",
         ["ui.timeline.attach"]         = "↘ 結合",
         ["ui.timeline.attach.tip"]     = "メインウィンドウに戻す",
         ["ui.timeline.detach"]         = "↗ 別窓化",
@@ -249,6 +250,8 @@ public static class DenEmoLoc
         ["ui.fx.tab"]                    = "アバターへ適用",
         ["ui.fx.section.avatar"]         = "アバター / FXレイヤー",
         ["ui.fx.avatar.label"]           = "アバター: {0}",
+        ["ui.fx.avatar.fieldLabel"]      = "対象アバター",
+        ["ui.fx.fx.fieldLabel"]          = "FXレイヤー",
         ["ui.fx.avatar.notFound"]        = "VRChat アバターが見つかりません。VRC Avatar Descriptor の付いたアバター配下のメッシュを指定してください。（VRChat SDK が未導入の可能性もあります）",
         ["ui.fx.avatar.manualController"] = "コントローラーを直接指定",
         ["ui.fx.fx.label"]               = "FX: {0}",
@@ -449,6 +452,7 @@ public static class DenEmoLoc
 
         // Timeline
         ["ui.timeline.title"]          = "TIMELINE",
+        ["ui.timeline.noClip"]         = "No animation clip loaded.",
         ["ui.timeline.attach"]         = "↘ Attach",
         ["ui.timeline.attach.tip"]     = "Return timeline to main window",
         ["ui.timeline.detach"]         = "↗ Detach",
@@ -533,6 +537,8 @@ public static class DenEmoLoc
         ["ui.fx.tab"]                    = "APPLY TO AVATAR",
         ["ui.fx.section.avatar"]         = "AVATAR / FX LAYER",
         ["ui.fx.avatar.label"]           = "Avatar: {0}",
+        ["ui.fx.avatar.fieldLabel"]      = "Target Avatar",
+        ["ui.fx.fx.fieldLabel"]          = "FX Layer",
         ["ui.fx.avatar.notFound"]        = "No VRChat avatar found. Assign a mesh under an avatar with a VRC Avatar Descriptor. (The VRChat SDK may not be installed.)",
         ["ui.fx.avatar.manualController"] = "Assign controller manually",
         ["ui.fx.fx.label"]               = "FX: {0}",

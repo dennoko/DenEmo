@@ -142,8 +142,8 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <!-- タイムライン（IMGUI カプセル化。クリップ未設定時は高さ 0） -->
-        <ui:IMGUIContainer name="anim-timeline-imgui" />
+        <!-- タイムライン（UI Toolkit。C# が TimelineUITKView を構築） -->
+        <ui:VisualElement name="anim-timeline-host" />
 
         <!-- REC 中バナー -->
         <ui:VisualElement name="anim-rec-banner" class="dennoko-card" style="display: none;">
@@ -170,19 +170,26 @@
         <!-- アバター / FX レイヤー検出 -->
         <ui:VisualElement name="fx-avatar-card" class="dennoko-card" style="display: none;">
             <ui:Label name="fx-avatar-title" text="AVATAR / FX" class="dennoko-section-title dennoko-card-header" />
-            <ui:Label name="fx-avatar-found" class="dennoko-text-success dennoko-wrap" style="display: none;" />
+            
+            <ui:VisualElement name="fx-avatar-field-row" class="dennoko-hrow">
+                <ui:Label name="fx-avatar-field-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <uie:ObjectField name="fx-avatar-field" class="dennoko-clip-field" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="fx-controller-field-row" class="dennoko-hrow">
+                <ui:Label name="fx-controller-field-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <uie:ObjectField name="fx-controller-field" class="dennoko-clip-field" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="fx-status-row" class="dennoko-hrow" style="align-items: center; margin-top: 4px;">
+                <ui:Label name="fx-status-label" class="dennoko-wrap dennoko-col-grow" style="margin-left: 90px; font-size: 11px;" />
+                <ui:Button name="fx-rescan" class="dennoko-mini-button dennoko-mini-button--auto" />
+            </ui:VisualElement>
+
             <ui:Label name="fx-avatar-notfound" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
             <ui:Label name="fx-readfailed" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
             <ui:Label name="fx-override-unsupported" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
             <ui:Label name="fx-missing" class="dennoko-text-warning dennoko-wrap" style="display: none;" />
-            <ui:VisualElement name="fx-manual-row" class="dennoko-hrow" style="display: none;">
-                <ui:Label name="fx-manual-label" class="dennoko-text-tertiary dennoko-field-label" />
-                <uie:ObjectField name="fx-manual-field" class="dennoko-clip-field" />
-            </ui:VisualElement>
-            <ui:VisualElement name="fx-controller-row" class="dennoko-hrow" style="display: none;">
-                <ui:Label name="fx-controller-label" class="dennoko-wrap dennoko-col-grow" />
-                <ui:Button name="fx-rescan" class="dennoko-mini-button dennoko-mini-button--auto" />
-            </ui:VisualElement>
         </ui:VisualElement>
 
         <!-- 表情の差し替え一覧 -->

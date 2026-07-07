@@ -5,8 +5,8 @@
         <ui:Button name="tlwin-open-main" text="Open DenEmo Window" class="dennoko-button-primary" />
     </ui:VisualElement>
 
-    <!-- タイムライン表示領域 -->
+    <!-- タイムライン表示領域（C# が TimelineUITKView を構築） -->
     <ui:ScrollView name="tlwin-scroll" style="flex-grow: 1; flex-basis: 0;">
-        <ui:IMGUIContainer name="tlwin-imgui" style="flex-grow: 1;" />
+        <ui:VisualElement name="tlwin-host" style="flex-grow: 1;" />
     </ui:ScrollView>
 </ui:UXML>

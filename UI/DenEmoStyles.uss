@@ -231,6 +231,140 @@
     margin: 3px 8px;
 }
 
+/* ─── Timeline(Exp): UI Toolkit 版タイムライン（検証） ─────── */
+
+.dennoko-root .dennoko-tl-settings,
+.dennoko-root .dennoko-tl-transport {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.dennoko-root .dennoko-tl-caption {
+    -unity-text-align: middle-left;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-tl-num {
+    width: 46px;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-tl-transport-btn {
+    width: 28px;
+    height: 22px;
+    margin: 1px;
+}
+
+.dennoko-root .dennoko-tl-play {
+    width: 40px;
+}
+
+.dennoko-root .dennoko-tl-area {
+    margin-top: 8px;
+    padding: 2px;
+}
+
+/* 左固定パネル + 右レーンの 1 行 */
+.dennoko-root .dennoko-tl-strip {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.dennoko-root .dennoko-tl-left {
+    flex-shrink: 0;
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+}
+
+.dennoko-root .dennoko-tl-splitter {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--dennoko-outline);
+}
+
+.dennoko-root .dennoko-tl-lane {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.dennoko-root .dennoko-tl-ruler {
+    background-color: var(--dennoko-surface-2);
+}
+
+.dennoko-root .dennoko-tl-scrub,
+.dennoko-root .dennoko-tl-scrollbar,
+.dennoko-root .dennoko-tl-track-lane {
+    background-color: var(--dennoko-surface-0);
+}
+
+.dennoko-root .dennoko-tl-tracks {
+    margin-top: 0;
+}
+
+.dennoko-root .dennoko-tl-tracks #unity-content-container > * {
+    flex-shrink: 0;
+}
+
+/* ルーラーの目盛りラベル（レーン基準の絶対配置） */
+.dennoko-root .dennoko-tl-tick {
+    position: absolute;
+    font-size: 9px;
+    color: var(--dennoko-text-tertiary);
+}
+
+.dennoko-root .dennoko-tl-tick-tiny {
+    position: absolute;
+    font-size: 8px;
+    color: var(--dennoko-text-tertiary);
+}
+
+/* トラック行の左パネル内訳 */
+.dennoko-root .dennoko-tl-track-name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    font-size: 11px;
+    color: var(--dennoko-text-tertiary);
+    margin-left: 8px;
+}
+
+.dennoko-root .dennoko-tl-key-btn {
+    width: 25px;
+    flex-shrink: 0;
+}
+
+/* ズームコントロール（ルーラー左パネル） */
+.dennoko-root .dennoko-tl-zoombox {
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 4px;
+    flex-grow: 1;
+}
+
+.dennoko-root .dennoko-tl-zoom-pct {
+    font-size: 9px;
+    color: var(--dennoko-text-tertiary);
+}
+
+.dennoko-root .dennoko-tl-zoom-reset {
+    width: auto;
+    height: 14px;
+    font-size: 9px;
+    padding: 0 4px;
+    margin-top: 2px;
+}
+
 /* ─── FX モード（アバターへ適用） ────────────────────────── */
 
 /* 情報バンド（プレビュー中 / 適用結果） */
@@ -481,7 +615,7 @@
 }
 
 /* ─── タイムライン ───────────────────────────────────────── */
-.dennoko-root #anim-timeline-imgui {
+.dennoko-root #anim-timeline-host {
     margin-bottom: 8px;
 }
 

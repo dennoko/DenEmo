@@ -35,8 +35,15 @@
   - `FxClipPickerPopup` を `PopupWindowContent.OnOpen` で `FxClipPickerPopup.uxml`（GUID `c4e8f2a7…`）を CloneTree する UITK 実装へ置換。行は動的生成、ホバーでプレビュー、クリックで割当てて閉じる
   - フィルターチップ（割当て済みのみ / 複製・直接モード）はボタン型トグル（`.dennoko-chip` + `dennoko-button-active`）。info バンド（プレビュー中 / 適用結果）は `.dennoko-info-band`
   - 残る IMGUI は タイムライン本体（方針どおり維持）のみ
-- [ ] Step 7: 旧 `DenEmoTheme.cs` の完全削除（`DenEmoCommonUI.DrawHeader` / `DrawStatusBar` は未使用化済み。ここで削除する）
-  - ※ 前提: タイムライン内部（`AnimationTimelineUI` / `DenEmoTimelineWindow.OnTimelineGUI`）と `DenEmoWindow.VertexFilter.cs` の SceneView 描画が依然 DenEmoTheme を使用しているため、削除にはこれらの置き換え（IMGUI のスタイル/色をスリム化した定数ホルダーへ移すか、SceneView 描画のハードコード化）が必要
+- [x] Step 6.7: タイムラインの UI Toolkit 化 — **Unity 上での動作確認待ち**
+  - 試作（別タブ「Timeline(Exp)」）が良好だったため本採用。`TimelineUITKView` を Animation モードのタイムライン（`anim-timeline-host`）と別ウィンドウ（`DenEmoTimelineWindow`）の両方で使用。状態・ロジックは `AnimationModeUI`（ClipModel / Editor / Preview / Playback）を共有
+  - トランスポート・FPS/長さ/フレーム/速度・補間・REC・ループは UITK ネイティブコントロール。ルーラー/スクラバー/スクロールバー/トラックレーンのグラフィックは `generateVisualContent`（Painter2D）で描画し、色は USS 変数（`CustomStyleProperty`）から解決。シーク/ズーム/キードラッグ/ラベル幅スプリッタは PointerEvent + ポインタキャプチャ、右クリックは GenericMenu、別窓化/結合はヘッダーのボタン
+  - クリップ差し替えロジックは `AnimationModeUI.ApplyClipSelection` に公開メソッド化。`TimelineUITKView.Build` は `showClipField` / `isSeparateWindow` / `requireZoomModifier` で埋め込み・別窓の両用途に対応
+  - 検証用の 4 番目タブと `TimelineExp` モードは削除。IMGUI タイムライン（`AnimationTimelineUI.*` 4 ファイル）と `AnimationModeUI.DrawTimeline` / `DenEmoWindow.DrawTimelineForSeparateWindow` / `OnAnimTimelineGUI` を削除
+- [x] Step 7: 旧 `DenEmoTheme.cs` の完全削除
+  - `DenEmoTheme.cs` と未使用の `DenEmoCommonUI.cs`（`DrawHeader` / `DrawStatusBar`）を削除。`Push/PopEditorTheme` / `Initialize` / `BeginSection` 等の呼び出しも全廃
+  - `DenEmoWindow.VertexFilter.cs` の SceneView オーバーレイ文字は IMGUI（USS 不可）のため、テーマ本文色 `#cccccc` を持つローカル `GUIStyle`（`SceneGuideStyle`）に置換
+  - これで全 UI が UI Toolkit（UXML/USS）化。色はすべて `DennokoTheme.uss` / `DenEmoStyles.uss` の USS 変数経由
 
 本ドキュメントは、DenEmo の既存 IMGUI ベースの UI レイアウトから、**UI Toolkit (UXML/USS)** への移行計画をまとめたものである。移行にあたっては、`.claude/skills/dennokoworks_color_schema` スキルの USS 対応アップデートに準拠し、既存の UI レイアウトとフローティングデザイン（ダークテーマ）の維持を最優先する。
 

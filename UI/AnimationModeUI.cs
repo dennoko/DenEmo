@@ -54,7 +54,6 @@ namespace DenEmo.UI
         public AnimationClipEditor        Editor       { get; }
         public AnimationPreviewController Preview      { get; } = new AnimationPreviewController();
         public AnimationPlayback          Playback     { get; } = new AnimationPlayback();
-        public AnimationTimelineUI        TimelineUI   { get; } = new AnimationTimelineUI();
         public AnimationClipCorrectionUI  CorrectionUI { get; } = new AnimationClipCorrectionUI();
 
         public AnimationModeUI()
@@ -257,16 +256,7 @@ namespace DenEmo.UI
             _clipField.objectType = typeof(AnimationClip);
             _clipField.allowSceneObjects = false;
             _clipField.RegisterValueChangedCallback(evt =>
-            {
-                var newClip = evt.newValue as AnimationClip;
-                if (ReferenceEquals(newClip, ClipModel.Clip)) return;
-                StopPreview();
-                ClipModel.SmoothLoopEnabled = false;
-                ClipModel.SetClip(newClip);
-                if (newClip != null && shapeModel.TargetSkinnedMesh != null)
-                    StartPreview(shapeModel);
-                window.Repaint();
-            });
+                ApplyClipSelection(evt.newValue as AnimationClip, shapeModel, window));
 
             _clipNewButton.clicked += () => CreateNewClip(shapeModel, getSaveFolder(), window);
 
@@ -275,6 +265,21 @@ namespace DenEmo.UI
 
             RefreshClipSectionLabels();
             RefreshClipSectionState();
+        }
+
+        /// <summary>
+        /// クリップの差し替え（クリップ設定カードと実験タイムラインタブで共有）。
+        /// プレビューの停止 → 差し替え → 再開までを一括で行う。
+        /// </summary>
+        public void ApplyClipSelection(AnimationClip newClip, ShapeKeyModel shapeModel, EditorWindow window)
+        {
+            if (ReferenceEquals(newClip, ClipModel.Clip)) return;
+            StopPreview();
+            ClipModel.SmoothLoopEnabled = false;
+            ClipModel.SetClip(newClip);
+            if (newClip != null && shapeModel.TargetSkinnedMesh != null)
+                StartPreview(shapeModel);
+            window.Repaint();
         }
 
         /// <summary>言語切替時に呼ぶ。クリップ設定カードと補正カードのラベルを更新する。</summary>
@@ -304,14 +309,6 @@ namespace DenEmo.UI
             // Unity 標準 Animation ウィンドウのプレビューと SMR 書き込みが競合する（B-2 対策）
             bool conflict = !noClip && UnityEditor.AnimationMode.InAnimationMode();
             _conflictWarn.style.display = conflict ? DisplayStyle.Flex : DisplayStyle.None;
-        }
-
-        // ─── Draw: Timeline ───────────────────────────────────────────────────
-
-        public void DrawTimeline(ShapeKeyModel shapeModel, EditorWindow window)
-        {
-            if (ClipModel.Clip == null) return;
-            TimelineUI.Draw(this, shapeModel, window);
         }
 
         // ─── Animation draw context ───────────────────────────────────────────
