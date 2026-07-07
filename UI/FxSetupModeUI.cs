@@ -98,10 +98,15 @@ namespace DenEmo.UI
             _targetSmrPaths.Clear();
 
             var target = model?.TargetSkinnedMesh;
-            if (target == null) return;
+            if (target == null)
+            {
+                _hover.SetRoot(null);
+                return;
+            }
 
             _descriptor = VrcAvatarReflection.FindDescriptor(target.transform);
             _avatarRoot = _descriptor != null ? _descriptor.transform : target.transform.root;
+            _hover.SetRoot(_avatarRoot);
 
             // FX クリップのバインディングパスと突き合わせる対象メッシュのパス集合
             var meshes = (model.ActiveMeshes != null && model.ActiveMeshes.Count > 0)
@@ -378,9 +383,6 @@ namespace DenEmo.UI
 
             string tooltip = BuildSlotTooltip(entry);
             GUILayout.Label(new GUIContent(label, tooltip), DenEmoTheme.SecondaryTextStyle, GUILayout.MinWidth(60));
-            if (Event.current.type == EventType.Repaint &&
-                GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
-                hoveredClip = entry.Clip;
 
             GUILayout.Label("→", DenEmoTheme.CaptionStyle, GUILayout.Width(16));
 
@@ -398,10 +400,6 @@ namespace DenEmo.UI
             }
             HandleSlotDragAndDrop(slotRect, entry, window);
 
-            if (mapping != null && mapping.NewClip != null &&
-                Event.current.type == EventType.Repaint && slotRect.Contains(Event.current.mousePosition))
-                hoveredClip = mapping.NewClip;
-
             // 割当て解除
             if (mapping != null)
             {
@@ -417,6 +415,19 @@ namespace DenEmo.UI
             }
 
             EditorGUILayout.EndHorizontal();
+
+            // 行全体のホバー判定を Repaint イベントで行う
+            if (Event.current.type == EventType.Repaint)
+            {
+                var rowRect = GUILayoutUtility.GetLastRect();
+                if (rowRect.Contains(Event.current.mousePosition))
+                {
+                    if (mapping != null && mapping.NewClip != null && slotRect.Contains(Event.current.mousePosition))
+                        hoveredClip = mapping.NewClip;
+                    else
+                        hoveredClip = entry.Clip;
+                }
+            }
 
             // 割当て済み行の左端アクセントバー
             if (Event.current.type == EventType.Repaint && mapping != null && mapping.NewClip != null)
@@ -602,7 +613,7 @@ namespace DenEmo.UI
             _hover.Stop();
 
             var result = _applyDirect
-                ? FxMotionReplacer.ReplaceDirect(_controller, jobs, backup: true)
+                ? FxMotionReplacer.ReplaceDirect(_controller, jobs, backup: false)
                 : FxMotionReplacer.ReplaceWithDuplicate(_controller, jobs, _descriptor, _targetSmrPaths);
 
             _lastResult = result;
@@ -641,7 +652,11 @@ namespace DenEmo.UI
             if (!string.IsNullOrEmpty(_lastResult.NewControllerPath))
             {
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(DenEmoLoc.Tf("ui.fx.result.newController", _lastResult.NewControllerPath), DenEmoTheme.CaptionStyle);
+                var shortPath = EllipsizedPath(_lastResult.NewControllerPath);
+                var content = new GUIContent(
+                    DenEmoLoc.Tf("ui.fx.result.newController", shortPath),
+                    _lastResult.NewControllerPath);
+                GUILayout.Label(content, DenEmoTheme.CaptionStyle);
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button(DenEmoLoc.T("ui.fx.result.ping"), DenEmoTheme.MiniButtonStyle, GUILayout.Width(40), GUILayout.Height(16)))
                 {
@@ -658,9 +673,21 @@ namespace DenEmo.UI
             }
 
             if (!string.IsNullOrEmpty(_lastResult.BackupPath))
-                GUILayout.Label(DenEmoLoc.Tf("ui.fx.result.backup", _lastResult.BackupPath), DenEmoTheme.CaptionStyle);
+            {
+                var shortPath = EllipsizedPath(_lastResult.BackupPath);
+                var content = new GUIContent(
+                    DenEmoLoc.Tf("ui.fx.result.backup", shortPath),
+                    _lastResult.BackupPath);
+                GUILayout.Label(content, DenEmoTheme.CaptionStyle);
+            }
 
             EditorGUILayout.EndVertical();
+        }
+
+        private static string EllipsizedPath(string path, int maxLen = 35)
+        {
+            if (string.IsNullOrEmpty(path) || path.Length <= maxLen) return path;
+            return "..." + path.Substring(path.Length - (maxLen - 3));
         }
 
         // ─── スタイル ─────────────────────────────────────────────────────────
