@@ -42,6 +42,19 @@
     padding: 1px 4px;
 }
 
+/* バージョン再取得ボタン (タイトル横の小さな ↻)。手動でアップデートチェックを再実行する */
+.dennoko-root .dennoko-version-reload-button {
+    width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    padding: 0;
+    font-size: 12px;
+    color: var(--dennoko-text-tertiary);
+}
+.dennoko-root .dennoko-version-reload-button:hover {
+    color: var(--dennoko-text-primary);
+}
+
 /* ─── モードタブバー ─────────────────────────────────────── */
 
 .dennoko-root .dennoko-tabbar {

@@ -4,6 +4,7 @@
         <ui:VisualElement class="dennoko-header-titlegroup">
             <ui:Label name="title-label" text="DenEmo" class="dennoko-title" />
             <ui:Label name="version-label" text="" class="dennoko-version-label" />
+            <ui:Button name="version-reload-button" text="↻" class="dennoko-version-reload-button" />
         </ui:VisualElement>
         <ui:Button name="lang-button" text="EN" class="dennoko-lang-button" />
     </ui:VisualElement>

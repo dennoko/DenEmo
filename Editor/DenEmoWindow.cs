@@ -82,6 +82,7 @@ namespace DenEmo
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
         private Label  _statusLabel;
         private Label  _versionLabel;
+        private Button _versionReloadButton;
         // LocalVersion は OnEnable で設定する（コンストラクタ／フィールド初期化子から
         // AssetDatabase.GUIDToAssetPath を呼ぶと Unity が例外を投げるため）。
         private Dennoko.DennokoVersionChecker.Result _versionResult =
@@ -339,6 +340,7 @@ namespace DenEmo
             _tabFx       = root.Q<Button>("tab-fx");
             _statusLabel = root.Q<Label>("status-bar");
             _versionLabel = root.Q<Label>("version-label");
+            _versionReloadButton = root.Q<Button>("version-reload-button");
 
             _poseScroll     = root.Q<ScrollView>("pose-scroll");
             _poseTargetHost = root.Q<VisualElement>("pose-target-host");
@@ -399,6 +401,18 @@ namespace DenEmo
                 RefreshChromeLabels();
                 Repaint();
             };
+
+            if (_versionReloadButton != null)
+            {
+                _versionReloadButton.tooltip = DenEmoLoc.T("ui.version.reload.tooltip");
+                _versionReloadButton.clicked += () =>
+                {
+                    // 明示的に再取得する。前回の結果（成功/失敗）を破棄して再チェックし、
+                    // 即座に「確認中...」表示へ切り替える。完了時に OnVersionChecked から再描画される。
+                    DenEmoVersion.ForceRecheck();
+                    LoadVersionResultFromSessionState();
+                };
+            }
             _tabPose.clicked += () => SwitchMode(EditorMode.Pose);
             _tabAnim.clicked += () => SwitchMode(EditorMode.Animation);
             _tabFx.clicked   += () => SwitchMode(EditorMode.FxSetup);
@@ -418,10 +432,9 @@ namespace DenEmo
         private void StartVersionCheck()
         {
             LoadVersionResultFromSessionState();
-            if (!SessionState.GetBool(DenEmoVersion.VerCheckDoneKey, false))
-            {
-                DenEmoVersion.StartCheckBackgroundTask();
-            }
+            // 取得の要否は StartCheckBackgroundTask 内で判定する（成功済みなら何もしない／
+            // 前回エラーなら再試行）。ウィンドウを開き直すたびに一時的な失敗から自己回復できる。
+            DenEmoVersion.StartCheckBackgroundTask();
         }
 
         internal void LoadVersionResultFromSessionState()
@@ -491,6 +504,8 @@ namespace DenEmo
         {
             if (_langButton == null) return;
             _langButton.text = DenEmoLoc.EnglishMode ? "JA" : "EN";
+            if (_versionReloadButton != null)
+                _versionReloadButton.tooltip = DenEmoLoc.T("ui.version.reload.tooltip");
             ApplyVersionLabel();
             _tabPose.text    = DenEmoLoc.T("ui.animMode.tab.pose");
             _tabAnim.text    = DenEmoLoc.T("ui.animMode.tab.anim");

@@ -90,6 +90,7 @@ namespace Dennoko
 
         private static Result BuildResult(UnityWebRequest req, string localVersion)
         {
+            string url = req != null ? req.url : "(null)";
 #if UNITY_2020_2_OR_NEWER
             bool hasError = req.result != UnityWebRequest.Result.Success;
             Log($"completed: result={req.result} httpCode={req.responseCode} error={req.error}");
@@ -99,7 +100,9 @@ namespace Dennoko
 #endif
             if (hasError)
             {
-                Log("→ Error (network/HTTP error). version.json が push 済みか・URL・ブランチ名を確認。");
+                // 取得失敗は（VerboseLog に関わらず）常に一度だけ警告する。
+                // owner/repo/branch/URL・version.json の push 有無・ネットワークを確認する材料。
+                Warn($"取得失敗: url={url} httpCode={req.responseCode} error={req.error}");
                 return Error(localVersion);
             }
 
@@ -107,17 +110,17 @@ namespace Dennoko
             Log($"response body: {Truncate(json)}");
             if (string.IsNullOrEmpty(json))
             {
-                Log("→ Error (empty body).");
+                Warn($"取得失敗: レスポンスが空。url={url} httpCode={req.responseCode}");
                 return Error(localVersion);
             }
 
             VersionInfo info;
             try { info = JsonUtility.FromJson<VersionInfo>(json); }
-            catch (Exception e) { Log($"→ Error (JSON parse failed): {e.Message}"); return Error(localVersion); }
+            catch (Exception e) { Warn($"取得失敗: JSON パース失敗: {e.Message} url={url} body={Truncate(json)}"); return Error(localVersion); }
 
             if (info == null || string.IsNullOrEmpty(info.version))
             {
-                Log("→ Error (version フィールドが空)。");
+                Warn($"取得失敗: version フィールドが空。url={url} body={Truncate(json)}");
                 return Error(localVersion);
             }
 
@@ -186,6 +189,12 @@ namespace Dennoko
         private static void Log(string msg)
         {
             if (VerboseLog) Debug.Log($"[DennokoVersionChecker] {msg}");
+        }
+
+        /// <summary>失敗時の診断用。VerboseLog に関わらず常に出す（チェックはセッション1回のみ）。</summary>
+        private static void Warn(string msg)
+        {
+            Debug.LogWarning($"[DennokoVersionChecker] {msg}");
         }
 
         private static string Truncate(string s, int max = 300)

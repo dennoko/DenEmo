@@ -58,9 +58,32 @@ namespace DenEmo
             EditorApplication.delayCall += StartCheckBackgroundTask;
         }
 
+        // 同一ドメイン内での二重リクエスト防止（ドメインリロードで false に戻る）
+        private static bool _checking;
+
+        /// <summary>
+        /// 手動での再取得。前回結果（成功/失敗・ローカル版キャッシュ）を破棄して再チェックする。
+        /// リロードボタンから呼ぶ。取得中は二重起動しない。
+        /// </summary>
+        internal static void ForceRecheck()
+        {
+            if (_checking) return; // 進行中なら何もしない
+            _currentCache = null;  // ローカル版も読み直す（version.json を直したケースに対応）
+            SessionState.SetBool(VerCheckDoneKey, false);
+            SessionState.SetBool(VerCheckErrorKey, false);
+            StartCheckBackgroundTask();
+        }
+
         internal static void StartCheckBackgroundTask()
         {
-            if (SessionState.GetBool(VerCheckDoneKey, false)) return;
+            // 成功済みなら再取得しない。だがエラー時は「インポート直後の一時的な失敗
+            // （パッケージ取り込み時のドメインリロードでリクエストが中断される等）」を想定し、
+            // 次のトリガー（ウィンドウを開く / ドメインリロード）で再試行する。
+            bool done  = SessionState.GetBool(VerCheckDoneKey, false);
+            bool error = SessionState.GetBool(VerCheckErrorKey, false);
+            if (done && !error) return;
+            if (_checking) return;
+            _checking = true;
 
             Dennoko.DennokoVersionChecker.CheckAsync(
                 RepoOwner, RepoName, RepoBranch, VersionFilePath, Current, OnVersionChecked);
@@ -68,6 +91,7 @@ namespace DenEmo
 
         private static void OnVersionChecked(Dennoko.DennokoVersionChecker.Result result)
         {
+            _checking = false;
             SessionState.SetBool(VerCheckDoneKey, true);
             SessionState.SetBool(VerCheckErrorKey, result.State == Dennoko.DennokoVersionChecker.State.Error);
             SessionState.SetString(VerCheckLatestKey, result.LatestVersion ?? string.Empty);

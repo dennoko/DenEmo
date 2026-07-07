@@ -35,6 +35,7 @@ public static class DenEmoLoc
         ["ui.version.checking"] = "確認中...",
         ["ui.version.update"] = "更新あり {0}",
         ["ui.version.error"] = "最新版を取得できません",
+        ["ui.version.reload.tooltip"] = "アップデートを再確認",
 
         // Sections
         ["ui.section.basic"] = "基本設定",
@@ -332,6 +333,7 @@ public static class DenEmoLoc
         ["ui.version.checking"] = "Checking...",
         ["ui.version.update"] = "Update available {0}",
         ["ui.version.error"] = "Update check failed",
+        ["ui.version.reload.tooltip"] = "Re-check for updates",
 
         // Sections
         ["ui.section.basic"] = "Basic Settings",
