@@ -23,7 +23,7 @@ namespace Dennoko
     public static class DennokoVersionChecker
     {
         /// <summary>true にすると取得URL・HTTPステータス・レスポンス・比較結果を Console に出力する。</summary>
-        public static bool VerboseLog = true;
+        public static bool VerboseLog = false;
 
         public enum State { Checking, UpToDate, UpdateAvailable, Error }
 
@@ -142,7 +142,14 @@ namespace Dennoko
             Message = null,
         };
 
-        /// <summary>latest がローカル版より新しいか。SemVer 優先、パース不能時は文字列不一致で判定。</summary>
+        /// <summary>
+        /// latest がローカル版より新しいか（＝更新あり）。SemVer 優先、パース不能時は
+        /// 文字列不一致で判定。キャッシュした最新版と現在のローカル版を照合し直す用途で
+        /// 表示側から呼べるよう公開する（State をキャッシュせず都度再計算するのが正しい使い方）。
+        /// </summary>
+        public static bool IsUpdateAvailable(string latestVersion, string localVersion)
+            => IsNewer(latestVersion, localVersion);
+
         private static bool IsNewer(string latest, string local)
         {
             var l = Normalize(latest);
@@ -153,12 +160,27 @@ namespace Dennoko
             return !string.Equals(l, c, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// 比較用に正規化する。BOM / 先頭 v / プレリリース・ビルドメタデータを除去し、
+        /// 2 桁以下（"3", "3.0"）は 3 桁（"3.0.0"）へゼロ埋めする。
+        /// ゼロ埋めしないと Version 型で Build=-1 となり "3.0" &lt; "3.0.0" の誤判定が出る。
+        /// </summary>
         private static string Normalize(string v)
         {
-            if (string.IsNullOrEmpty(v)) return "0";
-            v = v.Trim();
-            if (v.StartsWith("v") || v.StartsWith("V")) v = v.Substring(1);
-            return v;
+            if (string.IsNullOrEmpty(v)) return "0.0.0";
+            v = v.Trim().Trim('﻿').Trim(); // 空白と BOM を除去
+            if (v.Length > 0 && (v[0] == 'v' || v[0] == 'V')) v = v.Substring(1);
+            // "1.2.0-beta" / "1.2.0+build" などのサフィックスは比較対象外
+            int cut = v.IndexOfAny(new[] { '-', '+', ' ' });
+            if (cut >= 0) v = v.Substring(0, cut);
+            if (string.IsNullOrEmpty(v)) return "0.0.0";
+
+            var parts = v.Split('.');
+            if (parts.Length >= 3) return v;
+            var padded = new string[3];
+            for (int i = 0; i < 3; i++)
+                padded[i] = (i < parts.Length && !string.IsNullOrEmpty(parts[i])) ? parts[i] : "0";
+            return string.Join(".", padded);
         }
 
         private static void Log(string msg)

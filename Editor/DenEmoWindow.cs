@@ -426,11 +426,29 @@ namespace DenEmo
 
         internal void LoadVersionResultFromSessionState()
         {
+            // State（更新有無）はキャッシュせず、常に「現在のローカル版 vs 取得済みの最新版」で
+            // 再計算する。こうしないと、取得時のローカル版が後から正しく解決された場合に
+            // 「v3.0.0 更新あり 3.0.0」のような矛盾表示が残ってしまう。
+            string local = DenEmoVersion.Current;
+            string latest = SessionState.GetString(DenEmoVersion.VerCheckLatestKey, string.Empty);
+            bool done = SessionState.GetBool(DenEmoVersion.VerCheckDoneKey, false);
+            bool error = SessionState.GetBool(DenEmoVersion.VerCheckErrorKey, false);
+
+            Dennoko.DennokoVersionChecker.State state;
+            if (!done)
+                state = Dennoko.DennokoVersionChecker.State.Checking;
+            else if (error || string.IsNullOrEmpty(latest))
+                state = Dennoko.DennokoVersionChecker.State.Error;
+            else if (Dennoko.DennokoVersionChecker.IsUpdateAvailable(latest, local))
+                state = Dennoko.DennokoVersionChecker.State.UpdateAvailable;
+            else
+                state = Dennoko.DennokoVersionChecker.State.UpToDate;
+
             _versionResult = new Dennoko.DennokoVersionChecker.Result
             {
-                State = (Dennoko.DennokoVersionChecker.State)SessionState.GetInt(DenEmoVersion.VerCheckStateKey, 0),
-                LocalVersion = DenEmoVersion.Current,
-                LatestVersion = SessionState.GetString(DenEmoVersion.VerCheckLatestKey, string.Empty),
+                State = state,
+                LocalVersion = local,
+                LatestVersion = latest,
                 Url = SessionState.GetString(DenEmoVersion.VerCheckUrlKey, string.Empty),
                 Message = SessionState.GetString(DenEmoVersion.VerCheckMessageKey, string.Empty)
             };

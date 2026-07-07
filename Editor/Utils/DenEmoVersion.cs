@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEngine;
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace DenEmo
 {
@@ -14,17 +15,22 @@ namespace DenEmo
     internal static class DenEmoVersion
     {
         private const string VersionJsonGuid = "92a2ece039bec4741829e3eb4c9bb41c";
+        // version.json をどうしても読めなかった場合の最終フォールバック。
+        // 通常は下記 2 経路（GUID / スクリプト相対）のどちらかで解決するので使われない。
+        private const string FallbackVersion = "0.0.0";
         private static string _currentCache = null;
 
         internal static string Current
         {
             get
             {
-                if (_currentCache == null)
+                // 失敗（null）はキャッシュしない。インポート直後で version.json が
+                // まだ読めなかった場合でも、次回アクセス時に再試行できるようにする。
+                if (string.IsNullOrEmpty(_currentCache))
                 {
                     _currentCache = LoadLocalVersion();
                 }
-                return _currentCache;
+                return string.IsNullOrEmpty(_currentCache) ? FallbackVersion : _currentCache;
             }
         }
 
@@ -34,17 +40,22 @@ namespace DenEmo
         internal const string RepoBranch = "main";
         internal const string VersionFilePath = "version.json";
 
-        // セッションキー
+        // セッションキー。State（比較結果）は保存しない — ローカル版が後から正しく
+        // 解決され得るため、表示のたびに「保存した最新版 vs 現在のローカル版」で
+        // 更新有無を再計算する。ここでは取得が成功したか（Error だったか）だけ保存する。
         internal const string VerCheckDoneKey   = "DenEmo_VerCheck_Done";
-        internal const string VerCheckStateKey  = "DenEmo_VerCheck_State";
+        internal const string VerCheckErrorKey  = "DenEmo_VerCheck_Error";
         internal const string VerCheckLatestKey = "DenEmo_VerCheck_Latest";
         internal const string VerCheckUrlKey    = "DenEmo_VerCheck_Url";
         internal const string VerCheckMessageKey = "DenEmo_VerCheck_Message";
 
         static DenEmoVersion()
         {
-            // インポート時、またはUnity起動時に自動で非同期取得を開始する
-            StartCheckBackgroundTask();
+            // 静的コンストラクタはドメインリロード中（アセットインポートやコンパイル完了
+            // 直後）に走るため、この時点では version.json が AssetDatabase に未登録で
+            // GUIDToAssetPath が空を返すことがある。delayCall で 1 tick 遅らせ、
+            // AssetDatabase が使える状態になってから取得を開始する。
+            EditorApplication.delayCall += StartCheckBackgroundTask;
         }
 
         internal static void StartCheckBackgroundTask()
@@ -58,7 +69,7 @@ namespace DenEmo
         private static void OnVersionChecked(Dennoko.DennokoVersionChecker.Result result)
         {
             SessionState.SetBool(VerCheckDoneKey, true);
-            SessionState.SetInt(VerCheckStateKey, (int)result.State);
+            SessionState.SetBool(VerCheckErrorKey, result.State == Dennoko.DennokoVersionChecker.State.Error);
             SessionState.SetString(VerCheckLatestKey, result.LatestVersion ?? string.Empty);
             SessionState.SetString(VerCheckUrlKey, result.Url ?? string.Empty);
             SessionState.SetString(VerCheckMessageKey, result.Message ?? string.Empty);
@@ -83,27 +94,50 @@ namespace DenEmo
             public string version;
         }
 
+        /// <summary>ローカルの version.json を読む。読めなければ null（呼び出し側で
+        /// フォールバックし、次回アクセス時に再試行する）。</summary>
         private static string LoadLocalVersion()
         {
-            var path = AssetDatabase.GUIDToAssetPath(VersionJsonGuid);
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            // 1) GUID 経由（アセット移動に追従。ただし AssetDatabase 準備前は空を返し得る）
+            var v = TryReadVersion(AssetDatabase.GUIDToAssetPath(VersionJsonGuid));
+            if (v != null) return v;
+
+            // 2) スクリプト位置からの相対探索（AssetDatabase 未準備でも解決できる保険）
+            return TryReadVersion(ResolveVersionJsonByScriptPath());
+        }
+
+        private static string TryReadVersion(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            try
             {
-                try
-                {
-                    var json = File.ReadAllText(path);
-                    var info = JsonUtility.FromJson<VersionInfo>(json);
-                    if (info != null && !string.IsNullOrEmpty(info.version))
-                    {
-                        return info.version;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[DenEmoVersion] Failed to load local version.json: {e.Message}");
-                }
+                var info = JsonUtility.FromJson<VersionInfo>(File.ReadAllText(path));
+                if (info != null && !string.IsNullOrEmpty(info.version)) return info.version;
             }
-            // フォールバック用の初期値
-            return "3.0.0";
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[DenEmoVersion] Failed to read version.json ({path}): {e.Message}");
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// このスクリプトの位置を起点に上位フォルダを辿って version.json を探す。
+        /// [CallerFilePath] はコンパイル時パスなので、パッケージを他プロジェクトへ
+        /// インポートして再コンパイルされれば、そのプロジェクト内の正しいパスに解決される
+        /// （AssetDatabase のインポート完了状況に依存しない）。
+        /// </summary>
+        private static string ResolveVersionJsonByScriptPath([CallerFilePath] string scriptPath = null)
+        {
+            if (string.IsNullOrEmpty(scriptPath)) return null;
+            var dir = Path.GetDirectoryName(scriptPath);
+            for (int i = 0; i < 5 && !string.IsNullOrEmpty(dir); i++)
+            {
+                var candidate = Path.Combine(dir, "version.json");
+                if (File.Exists(candidate)) return candidate;
+                dir = Path.GetDirectoryName(dir);
+            }
+            return null;
         }
     }
 }
