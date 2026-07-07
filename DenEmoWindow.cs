@@ -416,6 +416,8 @@ namespace DenEmo
         /// 同一 Unity セッション中はキャッシュ結果を再利用しネットワークアクセスを抑制する。</summary>
         private void StartVersionCheck()
         {
+            // トラブルシュート時は Dennoko.DennokoVersionChecker.VerboseLog = true で
+            // 取得URL・HTTPステータス・レスポンスを Console に出せる（通常はオフ）。
             if (SessionState.GetBool(VerCheckDoneKey, false))
             {
                 _versionResult = new Dennoko.DennokoVersionChecker.Result

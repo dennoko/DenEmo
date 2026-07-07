@@ -22,6 +22,9 @@ namespace Dennoko
     /// </summary>
     public static class DennokoVersionChecker
     {
+        /// <summary>true にすると取得URL・HTTPステータス・レスポンス・比較結果を Console に出力する。</summary>
+        public static bool VerboseLog = false;
+
         public enum State { Checking, UpToDate, UpdateAvailable, Error }
 
         public struct Result
@@ -52,10 +55,11 @@ namespace Dennoko
             if (onResult == null) return;
 
             UnityWebRequest req;
+            string requestUrl;
             try
             {
-                var url = $"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filePath}";
-                req = UnityWebRequest.Get(url);
+                requestUrl = $"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{filePath}";
+                req = UnityWebRequest.Get(requestUrl);
             }
             catch (Exception e)
             {
@@ -64,6 +68,7 @@ namespace Dennoko
                 return;
             }
 
+            Log($"GET {requestUrl}  (local={localVersion})");
             var op = req.SendWebRequest();
             op.completed += _ =>
             {
@@ -87,21 +92,37 @@ namespace Dennoko
         {
 #if UNITY_2020_2_OR_NEWER
             bool hasError = req.result != UnityWebRequest.Result.Success;
+            Log($"completed: result={req.result} httpCode={req.responseCode} error={req.error}");
 #else
             bool hasError = req.isNetworkError || req.isHttpError;
+            Log($"completed: httpCode={req.responseCode} netErr={req.isNetworkError} httpErr={req.isHttpError} error={req.error}");
 #endif
-            if (hasError) return Error(localVersion);
+            if (hasError)
+            {
+                Log("→ Error (network/HTTP error). version.json が push 済みか・URL・ブランチ名を確認。");
+                return Error(localVersion);
+            }
 
             var json = req.downloadHandler != null ? req.downloadHandler.text : null;
-            if (string.IsNullOrEmpty(json)) return Error(localVersion);
+            Log($"response body: {Truncate(json)}");
+            if (string.IsNullOrEmpty(json))
+            {
+                Log("→ Error (empty body).");
+                return Error(localVersion);
+            }
 
             VersionInfo info;
             try { info = JsonUtility.FromJson<VersionInfo>(json); }
-            catch { return Error(localVersion); }
+            catch (Exception e) { Log($"→ Error (JSON parse failed): {e.Message}"); return Error(localVersion); }
 
-            if (info == null || string.IsNullOrEmpty(info.version)) return Error(localVersion);
+            if (info == null || string.IsNullOrEmpty(info.version))
+            {
+                Log("→ Error (version フィールドが空)。");
+                return Error(localVersion);
+            }
 
             var state = IsNewer(info.version, localVersion) ? State.UpdateAvailable : State.UpToDate;
+            Log($"→ {state} (remote={info.version}, local={localVersion})");
             return new Result
             {
                 State = state,
@@ -138,6 +159,18 @@ namespace Dennoko
             v = v.Trim();
             if (v.StartsWith("v") || v.StartsWith("V")) v = v.Substring(1);
             return v;
+        }
+
+        private static void Log(string msg)
+        {
+            if (VerboseLog) Debug.Log($"[DennokoVersionChecker] {msg}");
+        }
+
+        private static string Truncate(string s, int max = 300)
+        {
+            if (string.IsNullOrEmpty(s)) return "(empty)";
+            s = s.Replace("\n", " ").Replace("\r", " ");
+            return s.Length <= max ? s : s.Substring(0, max) + "…";
         }
     }
 }
