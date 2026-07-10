@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -101,6 +102,39 @@ namespace DenEmo.Core
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 全プレイアブルレイヤー（baseAnimationLayers、存在すれば specialAnimationLayers も）の
+        /// コントローラーを列挙する。ジェスチャー追跡でドライバーを FX 以外のレイヤーからも探すために使う。
+        /// null・重複は除外。読めなければ空リストのまま返す。
+        /// </summary>
+        public static void GetAllLayerControllers(Component descriptor, List<RuntimeAnimatorController> result)
+        {
+            if (descriptor == null || result == null) return;
+
+            var dtype = descriptor.GetType();
+            string[] fieldNames = { "baseAnimationLayers", "specialAnimationLayers" };
+
+            foreach (var fieldName in fieldNames)
+            {
+                var field = dtype.GetField(fieldName);
+                var arr = field?.GetValue(descriptor) as Array;
+                if (arr == null) continue;
+
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    object elem = arr.GetValue(i);
+                    if (elem == null) continue;
+
+                    var ctrlField = elem.GetType().GetField("animatorController");
+                    var controller = ctrlField?.GetValue(elem) as RuntimeAnimatorController;
+                    if (controller == null) continue;
+                    if (result.Contains(controller)) continue;
+
+                    result.Add(controller);
+                }
+            }
         }
 
         private static Array GetBaseAnimationLayers(Component descriptor)

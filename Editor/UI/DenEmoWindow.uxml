@@ -203,6 +203,7 @@
                 <ui:TextField name="fx-search" class="dennoko-clip-field" />
                 <ui:Button name="fx-chip-assigned" class="dennoko-chip" />
             </ui:VisualElement>
+            <ui:VisualElement name="fx-gesture-filter-row" class="dennoko-hrow dennoko-fx-gesture-filter-row" />
             <ui:Label name="fx-list-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
             <ui:Button name="fx-show-all" class="dennoko-button-secondary dennoko-action-button" style="display: none;" />
             <ui:Label name="fx-list-empty-filtered" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />

@@ -440,6 +440,24 @@
     font-size: 11px;
 }
 
+/* ジェスチャータグ（FX 行のクリップ名右隣） */
+.dennoko-root .dennoko-fx-gesture-tag {
+    font-size: 9px;
+    padding: 0 5px;
+    margin-left: 4px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--dennoko-outline);
+    color: var(--dennoko-text-secondary);
+    background-color: var(--dennoko-hover-overlay);
+}
+
+/* ジェスチャー絞り込みチップ行（折り返しあり） */
+.dennoko-root .dennoko-fx-gesture-filter-row {
+    flex-wrap: wrap;
+}
+
 .dennoko-root .dennoko-fx-arrow {
     margin: 0 4px;
     color: var(--dennoko-text-tertiary);

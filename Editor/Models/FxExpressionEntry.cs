@@ -4,6 +4,20 @@ using UnityEngine;
 
 namespace DenEmo.Models
 {
+    /// <summary>
+    /// ステートへ入るトランジション条件（ParameterDriver 経由の間接条件を含む）から推定したジェスチャー文脈。
+    /// -1 = そのハンドに条件なし、0〜7 = GestureLeft / GestureRight の値。
+    /// </summary>
+    public struct FxGestureHint
+    {
+        public int Left;
+        public int Right;
+
+        public FxGestureHint(int left, int right) { Left = left; Right = right; }
+
+        public bool IsEmpty => Left < 0 && Right < 0;
+    }
+
     /// <summary>FX コントローラー内で 1 つの AnimationClip を参照している場所（ステート直下 or BlendTree 子）。</summary>
     public class FxMotionSlot
     {
@@ -22,6 +36,9 @@ namespace DenEmo.Models
 
         /// <summary>"Left Hand > Fist" のような表示用パス。</summary>
         public string DisplayPath;
+
+        /// <summary>この参照箇所を再生し得るジェスチャー文脈（GestureTraceUtil が充填。空 = 不明/ジェスチャー非依存）。</summary>
+        public readonly List<FxGestureHint> GestureHints = new List<FxGestureHint>();
     }
 
     /// <summary>FX 内の 1 クリップと、その全参照箇所の集約。</summary>

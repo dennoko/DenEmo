@@ -35,6 +35,8 @@ namespace DenEmo.UI
         private string _search = string.Empty;
         private bool   _showOnlyAssigned;
         private bool   _showAllClips;       // メッシュパスフィルタ解除（0件時の救済）
+        private int _filterHand    = 0;  // 0 = 指定なし, 1 = 左手, 2 = 右手
+        private int _filterGesture = -1; // -1 = 指定なし, 0〜7 = GestureTraceUtil.GestureNames の番号
 
         // ─── プレビュー / 適用 ────────────────────────────────────────────────
         private readonly FxHoverPreview _hover = new FxHoverPreview();
@@ -59,6 +61,10 @@ namespace DenEmo.UI
         private VisualElement _listCard;
         private TextField     _searchField;
         private Button        _assignedChip;
+        private VisualElement _gestureFilterRow;
+        private Button        _gfLeftChip;
+        private Button        _gfRightChip;
+        private readonly Button[] _gfGestureChips = new Button[8];
         private Label         _listEmptyLabel;
         private Button        _showAllButton;
         private Label         _listEmptyFilteredLabel;
@@ -266,7 +272,23 @@ namespace DenEmo.UI
             }
 
             if (_controller != null)
+            {
                 _entries = FxLayerScanner.Scan(_controller, _targetSmrPaths);
+
+                // ジェスチャータグ推定: FX 単体では Gesture 等のレイヤーにあるドライバーを拾えないため、
+                // ディスクリプタから取得できる全プレイアブルレイヤーのコントローラーを解析対象に含める。
+                // ディスクリプタが無ければ FX 単体にフォールバック。
+                var controllerList = new List<AnimatorController> { _controller };
+                if (_descriptor != null)
+                {
+                    var tmp = new List<RuntimeAnimatorController>();
+                    VrcAvatarReflection.GetAllLayerControllers(_descriptor, tmp);
+                    foreach (var rc in tmp)
+                        if (rc is AnimatorController ac && !controllerList.Contains(ac))
+                            controllerList.Add(ac);
+                }
+                GestureTraceUtil.PopulateGestureHints(controllerList, _entries);
+            }
 
             var alive = new HashSet<AnimationClip>();
             foreach (var e in _entries) alive.Add(e.Clip);
@@ -310,6 +332,7 @@ namespace DenEmo.UI
             _listCard               = root.Q<VisualElement>("fx-list-card");
             _searchField            = root.Q<TextField>("fx-search");
             _assignedChip           = root.Q<Button>("fx-chip-assigned");
+            _gestureFilterRow       = root.Q<VisualElement>("fx-gesture-filter-row");
             _listEmptyLabel         = root.Q<Label>("fx-list-empty");
             _showAllButton          = root.Q<Button>("fx-show-all");
             _listEmptyFilteredLabel = root.Q<Label>("fx-list-empty-filtered");
@@ -360,6 +383,7 @@ namespace DenEmo.UI
                 _showOnlyAssigned = !_showOnlyAssigned;
                 RebuildEntryList();
             };
+            BuildGestureFilterChips();
             _showAllButton.clicked += () =>
             {
                 _showAllClips = true;
@@ -385,6 +409,55 @@ namespace DenEmo.UI
             RefreshLabels();
         }
 
+        /// <summary>ジェスチャー絞り込みチップ（左手/右手 + 8 ジェスチャー）を作り、行へ追加する。BindUI から一度だけ呼ぶ。</summary>
+        private void BuildGestureFilterChips()
+        {
+            if (_gestureFilterRow == null) return;
+
+            _gfLeftChip = new Button(() =>
+            {
+                _filterHand = (_filterHand == 1) ? 0 : 1;
+                UpdateGestureFilterChips();
+                RebuildEntryList();
+            });
+            _gfLeftChip.AddToClassList("dennoko-chip");
+            _gestureFilterRow.Add(_gfLeftChip);
+
+            _gfRightChip = new Button(() =>
+            {
+                _filterHand = (_filterHand == 2) ? 0 : 2;
+                UpdateGestureFilterChips();
+                RebuildEntryList();
+            });
+            _gfRightChip.AddToClassList("dennoko-chip");
+            _gestureFilterRow.Add(_gfRightChip);
+
+            for (int i = 0; i < _gfGestureChips.Length; i++)
+            {
+                int gesture = i; // クロージャ用にコピー
+                var chip = new Button(() =>
+                {
+                    _filterGesture = (_filterGesture == gesture) ? -1 : gesture;
+                    UpdateGestureFilterChips();
+                    RebuildEntryList();
+                }) { text = GestureTraceUtil.GestureNames[gesture] }; // VRChat 慣例に合わせ英語固定（非ローカライズ）
+                chip.AddToClassList("dennoko-chip");
+                _gfGestureChips[gesture] = chip;
+                _gestureFilterRow.Add(chip);
+            }
+
+            UpdateGestureFilterChips();
+        }
+
+        /// <summary>_filterHand / _filterGesture の状態を 10 個のチップの選択表示へ反映する。</summary>
+        private void UpdateGestureFilterChips()
+        {
+            SetChipState(_gfLeftChip,  _filterHand == 1);
+            SetChipState(_gfRightChip, _filterHand == 2);
+            for (int i = 0; i < _gfGestureChips.Length; i++)
+                SetChipState(_gfGestureChips[i], _filterGesture == i);
+        }
+
         /// <summary>言語設定に依存するラベルを更新し、動的テキストも作り直す。</summary>
         public void RefreshLabels()
         {
@@ -400,6 +473,8 @@ namespace DenEmo.UI
 
             _listCard.Q<Label>("fx-list-title").text = DenEmoLoc.T("ui.fx.section.list");
             _assignedChip.text           = DenEmoLoc.T("ui.fx.filter.assignedOnly");
+            _gfLeftChip.text             = DenEmoLoc.T("ui.fx.gesture.filter.left");
+            _gfRightChip.text            = DenEmoLoc.T("ui.fx.gesture.filter.right");
             _showAllButton.text          = DenEmoLoc.T("ui.fx.filter.showAll");
             _listEmptyLabel.text         = DenEmoLoc.T("ui.fx.list.empty");
             _listEmptyFilteredLabel.text = DenEmoLoc.T("ui.fx.list.emptyFiltered");
@@ -531,9 +606,37 @@ namespace DenEmo.UI
                         if (nameLower.IndexOf(t.ToLowerInvariant(), System.StringComparison.Ordinal) < 0) { match = false; break; }
                     if (!match) continue;
                 }
+                if (_filterHand != 0 || _filterGesture >= 0)
+                {
+                    if (!EntryMatchesGestureFilter(entry)) continue;
+                }
                 list.Add(entry);
             }
             return list;
+        }
+
+        /// <summary>ジェスチャー絞り込みに一致するか（いずれかの slot のいずれかの hint が一致すれば表示）。</summary>
+        private bool EntryMatchesGestureFilter(FxExpressionEntry entry)
+        {
+            foreach (var slot in entry.Slots)
+                foreach (var h in slot.GestureHints)
+                {
+                    if (_filterHand == 1)
+                    {
+                        if (h.Left < 0) continue;
+                        if (_filterGesture >= 0 && h.Left != _filterGesture) continue;
+                        return true;
+                    }
+                    if (_filterHand == 2)
+                    {
+                        if (h.Right < 0) continue;
+                        if (_filterGesture >= 0 && h.Right != _filterGesture) continue;
+                        return true;
+                    }
+                    // 手の指定なし・ジェスチャーのみ: どちらかの手が一致すれば良い
+                    if (h.Left == _filterGesture || h.Right == _filterGesture) return true;
+                }
+            return false;
         }
 
         /// <summary>1 エントリぶんの行（＋不一致注記・展開スロット）を生成する。</summary>
@@ -577,6 +680,29 @@ namespace DenEmo.UI
             var name = new Label(label) { tooltip = BuildSlotTooltip(entry) };
             name.AddToClassList("dennoko-fx-name");
             row.Add(name);
+
+            // ジェスチャータグ（全 slot の hint 和集合。最大 3 個、超過分は +n にまとめ tooltip へ全件）
+            var hintList = AggregateHints(entry);
+            if (hintList.Count > 0)
+            {
+                var allFormatted = new List<string>();
+                foreach (var h in hintList) allFormatted.Add(FormatHint(h));
+
+                if (hintList.Count <= 3)
+                {
+                    foreach (var text in allFormatted)
+                        row.Add(MakeGestureTag(text));
+                }
+                else
+                {
+                    row.Add(MakeGestureTag(allFormatted[0]));
+                    row.Add(MakeGestureTag(allFormatted[1]));
+                    var more = MakeGestureTag(DenEmoLoc.Tf("ui.fx.gesture.more", hintList.Count - 2));
+                    more.tooltip = DenEmoLoc.Tf("ui.fx.gesture.tag.tip", string.Join(", ", allFormatted.ToArray()));
+                    more.pickingMode = PickingMode.Position; // tooltip を出すためホバー判定を有効化
+                    row.Add(more);
+                }
+            }
 
             var arrow = new Label("→");
             arrow.AddToClassList("dennoko-fx-arrow");
@@ -661,7 +787,7 @@ namespace DenEmo.UI
                 {
                     var s = slotInfo;
                     bool enabled = mapping == null || !mapping.DisabledSlotKeys.Contains(s.SlotKey);
-                    var toggle = new Toggle(s.DisplayPath) { value = enabled };
+                    var toggle = new Toggle(s.DisplayPath + SlotHintSuffix(s)) { value = enabled };
                     toggle.AddToClassList("dennoko-fx-slot-toggle");
                     toggle.RegisterValueChangedCallback(evt =>
                     {
@@ -703,8 +829,80 @@ namespace DenEmo.UI
         private static string BuildSlotTooltip(FxExpressionEntry entry)
         {
             var lines = new List<string>();
-            foreach (var slot in entry.Slots) lines.Add(slot.DisplayPath);
+            foreach (var slot in entry.Slots) lines.Add(slot.DisplayPath + SlotHintSuffix(slot));
             return string.Join("\n", lines.ToArray());
+        }
+
+        // ─── ジェスチャータグ ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// class 付きの小さなジェスチャータグ Label を作る（見た目は USS 側で完結）。
+        /// 通常タグはホバー判定を妨げないよう Ignore のまま。+n オーバーフロータグのみ
+        /// 呼び出し側で pickingMode = Position に切り替え、tooltip を出せるようにする。
+        /// </summary>
+        private static Label MakeGestureTag(string text)
+        {
+            var tag = new Label(text);
+            tag.AddToClassList("dennoko-fx-gesture-tag");
+            tag.pickingMode = PickingMode.Ignore; // ホバー判定を妨げない
+            return tag;
+        }
+
+        /// <summary>エントリ内の全 slot の hint を和集合・重複排除し、Left 単独→Right 単独→コンボの順に整列する。</summary>
+        private static List<FxGestureHint> AggregateHints(FxExpressionEntry entry)
+        {
+            var seen = new HashSet<FxGestureHint>();
+            var list = new List<FxGestureHint>();
+            foreach (var slot in entry.Slots)
+                foreach (var h in slot.GestureHints)
+                    if (!h.IsEmpty && seen.Add(h)) list.Add(h);
+            list.Sort(CompareHint);
+            return list;
+        }
+
+        private static int CompareHint(FxGestureHint a, FxGestureHint b)
+        {
+            int ra = HintRank(a), rb = HintRank(b);
+            if (ra != rb) return ra.CompareTo(rb);
+            if (ra == 0) return a.Left.CompareTo(b.Left);   // Left 単独
+            if (ra == 1) return a.Right.CompareTo(b.Right); // Right 単独
+            int c = a.Left.CompareTo(b.Left);               // コンボ: Left → Right
+            return c != 0 ? c : a.Right.CompareTo(b.Right);
+        }
+
+        private static int HintRank(FxGestureHint h)
+        {
+            if (h.Left >= 0 && h.Right >= 0) return 2; // コンボ
+            if (h.Right >= 0) return 1;                // Right 単独
+            return 0;                                  // Left 単独
+        }
+
+        /// <summary>hint を表示文字列に（Left 単独 / Right 単独 / コンボ）。</summary>
+        private static string FormatHint(FxGestureHint h)
+        {
+            if (h.Left >= 0 && h.Right >= 0)
+                return DenEmoLoc.Tf("ui.fx.gesture.both", GestureName(h.Left), GestureName(h.Right));
+            if (h.Left >= 0)
+                return DenEmoLoc.Tf("ui.fx.gesture.left", GestureName(h.Left));
+            return DenEmoLoc.Tf("ui.fx.gesture.right", GestureName(h.Right));
+        }
+
+        private static string GestureName(int g)
+        {
+            return (g >= 0 && g < GestureTraceUtil.GestureNames.Length)
+                ? GestureTraceUtil.GestureNames[g]
+                : g.ToString();
+        }
+
+        /// <summary>スロット表示に付ける " [L:Fist, R:Victory]" 形式のサフィックス（hint 無しは空）。</summary>
+        private static string SlotHintSuffix(FxMotionSlot slot)
+        {
+            if (slot.GestureHints.Count == 0) return string.Empty;
+            var parts = new List<string>();
+            foreach (var h in slot.GestureHints)
+                if (!h.IsEmpty) parts.Add(FormatHint(h));
+            if (parts.Count == 0) return string.Empty;
+            return "  [" + string.Join(", ", parts.ToArray()) + "]";
         }
 
         private static AnimationClip FindDraggedClip()
