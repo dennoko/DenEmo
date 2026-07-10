@@ -13,7 +13,12 @@ namespace DenEmo.Models
         public int Left;
         public int Right;
 
-        public FxGestureHint(int left, int right) { Left = left; Right = right; }
+        // -1 = セット制約なし、それ以外 = 検出された表情セットパラメータの値
+        public int Set;
+
+        public FxGestureHint(int left, int right) { Left = left; Right = right; Set = -1; }
+
+        public FxGestureHint(int left, int right, int set) { Left = left; Right = right; Set = set; }
 
         public bool IsEmpty => Left < 0 && Right < 0;
     }

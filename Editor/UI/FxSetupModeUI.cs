@@ -37,6 +37,10 @@ namespace DenEmo.UI
         private bool   _showAllClips;       // メッシュパスフィルタ解除（0件時の救済）
         private int _filterHand    = 0;  // 0 = 指定なし, 1 = 左手, 2 = 右手
         private int _filterGesture = -1; // -1 = 指定なし, 0〜7 = GestureTraceUtil.GestureNames の番号
+        private GestureTraceUtil.SetParamResult _setParam; // null = 表情セット未検出
+        private int _filterSetValue = -1;                  // -1 = セットフィルタなし
+        private VisualElement _setChipGroup;                // セットチップのコンテナ（行末尾に追加）
+        private readonly List<Button> _setChips = new List<Button>();
 
         // ─── プレビュー / 適用 ────────────────────────────────────────────────
         private readonly FxHoverPreview _hover = new FxHoverPreview();
@@ -255,6 +259,9 @@ namespace DenEmo.UI
             if (target == null)
             {
                 _hover.SetRoot(null);
+                _setParam = null;
+                _filterSetValue = -1;
+                RebuildSetChips();
                 UpdateUI();
                 return;
             }
@@ -287,8 +294,17 @@ namespace DenEmo.UI
                         if (rc is AnimatorController ac && !controllerList.Contains(ac))
                             controllerList.Add(ac);
                 }
-                GestureTraceUtil.PopulateGestureHints(controllerList, _entries);
+                var menuParams = new List<VrcAvatarReflection.ExpressionParamInfo>();
+                if (_descriptor != null) VrcAvatarReflection.GetExpressionParameters(_descriptor, menuParams);
+                _setParam = GestureTraceUtil.PopulateGestureHints(controllerList, _entries, menuParams);
+                _filterSetValue = -1;
             }
+            else
+            {
+                _setParam = null;
+                _filterSetValue = -1;
+            }
+            RebuildSetChips();
 
             var alive = new HashSet<AnimationClip>();
             foreach (var e in _entries) alive.Add(e.Clip);
@@ -458,6 +474,62 @@ namespace DenEmo.UI
                 SetChipState(_gfGestureChips[i], _filterGesture == i);
         }
 
+        /// <summary>
+        /// 表情セット（メニュー制御 Int パラメータ）の絞り込みチップを作り直す。
+        /// _setParam が null（未検出）ならチップなしで従来どおりの見た目にする。ScanAndRebuild から呼ぶ。
+        /// </summary>
+        private void RebuildSetChips()
+        {
+            if (_gestureFilterRow == null) return;
+
+            // BindUI 再実行でルートが差し替わった場合は旧ツリー上のグループを捨てて作り直す
+            if (_setChipGroup == null || _setChipGroup.parent != _gestureFilterRow)
+            {
+                _setChipGroup = new VisualElement();
+                _setChipGroup.style.flexDirection = FlexDirection.Row;
+                _setChipGroup.style.flexWrap = Wrap.Wrap;
+                _gestureFilterRow.Add(_setChipGroup);
+            }
+
+            _setChipGroup.Clear();
+            _setChips.Clear();
+
+            if (_setParam == null) return;
+
+            var nameLabel = new Label(_setParam.ParamName + ":")
+            {
+                tooltip = DenEmoLoc.Tf("ui.fx.set.filter.tip", _setParam.ParamName),
+            };
+            nameLabel.AddToClassList("dennoko-fx-set-label");
+            _setChipGroup.Add(nameLabel);
+
+            foreach (var v in _setParam.Values)
+            {
+                int value = v; // クロージャ用にコピー
+                bool isDefault = value == _setParam.DefaultValue;
+                var chip = new Button(() =>
+                {
+                    _filterSetValue = (_filterSetValue == value) ? -1 : value;
+                    UpdateSetChips();
+                    RebuildEntryList();
+                }) { text = isDefault ? (value + "★") : value.ToString() };
+                if (isDefault) chip.tooltip = DenEmoLoc.T("ui.fx.set.default.tip");
+                chip.AddToClassList("dennoko-chip");
+                _setChips.Add(chip);
+                _setChipGroup.Add(chip);
+            }
+
+            UpdateSetChips();
+        }
+
+        /// <summary>_filterSetValue の状態をセットチップの選択表示へ反映する。</summary>
+        private void UpdateSetChips()
+        {
+            if (_setParam == null) return;
+            for (int i = 0; i < _setChips.Count && i < _setParam.Values.Count; i++)
+                SetChipState(_setChips[i], _filterSetValue == _setParam.Values[i]);
+        }
+
         /// <summary>言語設定に依存するラベルを更新し、動的テキストも作り直す。</summary>
         public void RefreshLabels()
         {
@@ -487,6 +559,7 @@ namespace DenEmo.UI
             _manualNoteLabel.text   = DenEmoLoc.T("ui.fx.mode.manualNote");
             _resultPingButton.text  = DenEmoLoc.T("ui.fx.result.ping");
 
+            RebuildSetChips(); // tooltip (パラメータ名/デフォルト値) の言語切替反映
             UpdateUI();
         }
 
@@ -606,7 +679,7 @@ namespace DenEmo.UI
                         if (nameLower.IndexOf(t.ToLowerInvariant(), System.StringComparison.Ordinal) < 0) { match = false; break; }
                     if (!match) continue;
                 }
-                if (_filterHand != 0 || _filterGesture >= 0)
+                if (_filterHand != 0 || _filterGesture >= 0 || _filterSetValue >= 0)
                 {
                     if (!EntryMatchesGestureFilter(entry)) continue;
                 }
@@ -615,26 +688,39 @@ namespace DenEmo.UI
             return list;
         }
 
-        /// <summary>ジェスチャー絞り込みに一致するか（いずれかの slot のいずれかの hint が一致すれば表示）。</summary>
+        /// <summary>
+        /// ジェスチャー / 表情セット絞り込みに一致するか（同一 hint 上で両条件を満たせば表示）。
+        /// いずれかの slot のいずれかの hint が全条件に一致すれば true。
+        /// </summary>
         private bool EntryMatchesGestureFilter(FxExpressionEntry entry)
         {
             foreach (var slot in entry.Slots)
                 foreach (var h in slot.GestureHints)
                 {
+                    bool gestureOk;
                     if (_filterHand == 1)
                     {
-                        if (h.Left < 0) continue;
-                        if (_filterGesture >= 0 && h.Left != _filterGesture) continue;
-                        return true;
+                        gestureOk = h.Left >= 0 && (_filterGesture < 0 || h.Left == _filterGesture);
                     }
-                    if (_filterHand == 2)
+                    else if (_filterHand == 2)
                     {
-                        if (h.Right < 0) continue;
-                        if (_filterGesture >= 0 && h.Right != _filterGesture) continue;
-                        return true;
+                        gestureOk = h.Right >= 0 && (_filterGesture < 0 || h.Right == _filterGesture);
                     }
-                    // 手の指定なし・ジェスチャーのみ: どちらかの手が一致すれば良い
-                    if (h.Left == _filterGesture || h.Right == _filterGesture) return true;
+                    else if (_filterGesture >= 0)
+                    {
+                        // 手の指定なし・ジェスチャーのみ: どちらかの手が一致すれば良い
+                        gestureOk = h.Left == _filterGesture || h.Right == _filterGesture;
+                    }
+                    else
+                    {
+                        gestureOk = true; // ジェスチャー系フィルタ未使用（セットのみで絞り込み）
+                    }
+                    if (!gestureOk) continue;
+
+                    // h.Set == -1（セット非依存）の hint はセットフィルタに一致しない = 意図どおりフィルタで消える
+                    if (_filterSetValue >= 0 && h.Set != _filterSetValue) continue;
+
+                    return true;
                 }
             return false;
         }

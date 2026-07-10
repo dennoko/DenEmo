@@ -150,5 +150,67 @@ namespace DenEmo.Core
             // enum 値のハードコードは SDK 更新耐性が低いため名前比較にする
             return typeVal != null && typeVal.ToString() == "FX";
         }
+
+        /// <summary>Expression Menu のパラメータ 1 件（表情セット検出用の最小情報）。</summary>
+        public struct ExpressionParamInfo
+        {
+            public string Name;
+            public string ValueType;   // "Int" / "Float" / "Bool"
+            public float DefaultValue;
+        }
+
+        /// <summary>
+        /// descriptor の expressionParameters（VRCExpressionParameters）から全パラメータを読み取る。
+        /// SDK 未導入・フィールド構成差異があっても例外を投げず、静かに result を空のままにする。
+        /// </summary>
+        public static void GetExpressionParameters(Component descriptor, List<ExpressionParamInfo> result)
+        {
+            if (descriptor == null || result == null) return;
+
+            try
+            {
+                var exprParamsObj = GetMemberValue(descriptor, descriptor.GetType(), "expressionParameters");
+                if (exprParamsObj == null) return;
+
+                var paramsField = GetMemberValue(exprParamsObj, exprParamsObj.GetType(), "parameters");
+                if (!(paramsField is System.Collections.IEnumerable list)) return;
+
+                foreach (var elem in list)
+                {
+                    if (elem == null) continue;
+                    var elemType = elem.GetType();
+
+                    var nameObj = GetMemberValue(elem, elemType, "name");
+                    var name = nameObj as string;
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    var valueTypeObj = GetMemberValue(elem, elemType, "valueType");
+                    var defaultValueObj = GetMemberValue(elem, elemType, "defaultValue");
+
+                    result.Add(new ExpressionParamInfo
+                    {
+                        Name = name,
+                        ValueType = valueTypeObj?.ToString(),
+                        DefaultValue = defaultValueObj != null ? Convert.ToSingle(defaultValueObj) : 0f,
+                    });
+                }
+            }
+            catch
+            {
+                // SDK 差異・未導入時は静かに諦める（result はそれまでに追加できた分のみ）
+            }
+        }
+
+        /// <summary>フィールド優先・プロパティフォールバックでメンバー値を読む共通ヘルパ。</summary>
+        private static object GetMemberValue(object instance, Type type, string memberName)
+        {
+            var field = type.GetField(memberName);
+            if (field != null) return field.GetValue(instance);
+
+            var prop = type.GetProperty(memberName);
+            if (prop != null) return prop.GetValue(instance);
+
+            return null;
+        }
     }
 }

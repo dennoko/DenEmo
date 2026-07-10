@@ -453,6 +453,15 @@
     background-color: var(--dennoko-hover-overlay);
 }
 
+/* 表情セットラベル（FX 行のクリップ名右隣、ジェスチャータグとは別枠） */
+.dennoko-root .dennoko-fx-set-label {
+    font-size: 9px;
+    color: var(--dennoko-text-secondary);
+    align-self: center;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+
 /* ジェスチャー絞り込みチップ行（折り返しあり） */
 .dennoko-root .dennoko-fx-gesture-filter-row {
     flex-wrap: wrap;
