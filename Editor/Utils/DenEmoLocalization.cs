@@ -243,8 +243,8 @@ public static class DenEmoLoc
         ["ui.correction.col.max"]     = "最大値 (0–100)",
         ["ui.correction.col.min.tip"] = "補正後の下限値（デフォルト 0）。\n0 より大きい値にすると、元の値 0 がこの値になるようリスケールされます（元の値 100 は最大値の設定値に変わります）。\n例：Min=20 にすると、シェイプキーが完全にニュートラルに戻ることを防げます。",
         ["ui.correction.col.max.tip"] = "補正後の上限値（デフォルト 100）。\n100 未満の値にすると、元の値 100 がこの値になるようリスケールされます（元の値 0 は最小値の設定値に変わります）。\n例：まばたきシェイプキーの Max=80 にすると、このアニメーション内で目が完全に閉じないように制限できます。",
-        ["ui.correction.apply"]       = "補正を反映",
-        ["status.correction.applied"] = "補正を反映しました。",
+        ["ui.correction.apply"]       = "補正をタイムラインに反映",
+        ["status.correction.applied"] = "補正をタイムラインに反映しました。",
         ["status.correction.none"]    = "補正対象がありません（全て既定値です）。",
 
         // Shape key list (UI Toolkit)
@@ -548,8 +548,8 @@ public static class DenEmoLoc
         ["ui.correction.col.max"]     = "Max (0–100)",
         ["ui.correction.col.min.tip"] = "Lower bound after correction (default 0).\nWhen above 0, the original value 0 is raised to this value while the original 100 maps to the Max setting.\nExample: Min=20 prevents the shape key from fully returning to neutral.",
         ["ui.correction.col.max.tip"] = "Upper bound after correction (default 100).\nWhen below 100, the original value 100 is lowered to this value while the original 0 maps to the Min setting.\nExample: Max=80 on a blink shape prevents the eye from fully closing in this animation.",
-        ["ui.correction.apply"]       = "Apply Correction",
-        ["status.correction.applied"] = "Correction applied.",
+        ["ui.correction.apply"]       = "Apply Correction to Timeline",
+        ["status.correction.applied"] = "Correction applied to timeline.",
         ["status.correction.none"]    = "No corrections to apply (all values are at their defaults).",
 
         // Shape key list (UI Toolkit)

@@ -133,7 +133,7 @@
                 <ui:Label name="correction-empty" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
                 <ui:ScrollView name="correction-rows" class="dennoko-correction-rows" />
                 <ui:VisualElement class="dennoko-separator" />
-                <ui:Button name="correction-apply" text="Apply Correction" class="dennoko-button-primary dennoko-action-button" />
+                <ui:Button name="correction-apply" class="dennoko-button-primary dennoko-action-button" />
             </ui:VisualElement>
         </ui:VisualElement>
 

@@ -201,9 +201,11 @@ new_value = original_value * (Max - Min) / 100 + Min
 
 Curve tangents are scaled by the same factor, preserving the shape of the animation curve.
 
-Press **Apply Correction** to write the remapped values to the clip. The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from the defaults (0 and 100) are affected.
+Press **Apply Correction to Timeline** to apply the rescaled values to the animation clip in memory (the timeline). This action itself does not save the asset file. To save the changes, use the Save section at the very bottom of the window.
 
-> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction. All blink keyframes are rescaled into the 0-80 range - the curve shape and timing remain unchanged.
+The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from the defaults (0 and 100) are affected.
+
+> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction to Timeline. All blink keyframes are rescaled into the 0-80 range - the curve shape and timing remain unchanged. Then, use the Save section at the bottom of the window to save the clip.
 
 > Example: You want `mouth_open` to never fully close in this animation. Set Min to 20. Original 0 keyframes become 20, original 100 keyframes stay at 100.
 
