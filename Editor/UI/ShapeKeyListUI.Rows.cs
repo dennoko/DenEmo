@@ -114,7 +114,7 @@ namespace DenEmo.UI
                 for (int i = gb.Start; i < gb.End; i++)
                 {
                     var item = _model.Items[i];
-                    if (!item.IsVrcShape && !item.IsLipSyncShape) item.IsIncluded = evt.newValue;
+                    if (!item.IsVrcExcluded(_model.IsAnimationMode) && !item.IsLipSyncShape) item.IsIncluded = evt.newValue;
                 }
                 OnIncludeFlagsChanged?.Invoke();
                 SyncDynamicState();

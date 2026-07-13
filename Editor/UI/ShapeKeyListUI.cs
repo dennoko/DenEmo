@@ -213,7 +213,7 @@ namespace DenEmo.UI
             if (_model == null) return;
             foreach (var item in _model.Items)
             {
-                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
                 if (item.IsVisible)
                 {
                     item.IsIncluded = true;
@@ -228,7 +228,7 @@ namespace DenEmo.UI
             if (_model == null) return;
             foreach (var item in _model.Items)
             {
-                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
                 if (item.IsVisible)
                 {
                     item.IsIncluded = false;
@@ -243,7 +243,7 @@ namespace DenEmo.UI
             if (_model == null) return;
             foreach (var item in _model.Items)
             {
-                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
                 bool unchanged = IsUnchanged != null ? IsUnchanged(item) : Mathf.Approximately(item.Value, 0f);
                 if (unchanged)
                 {
@@ -259,7 +259,7 @@ namespace DenEmo.UI
             if (_model == null) return;
             foreach (var item in _model.Items)
             {
-                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
                 if (item.IsVisible)
                 {
                     item.IsIncluded = item.IsFavorite;

@@ -18,6 +18,19 @@ namespace DenEmo.Models
         public SkinnedMeshRenderer OwnerSmr { get; set; }
         public string              SmrPath  { get; set; }
 
+        public bool IsVrcExcluded(bool isAnimationMode)
+        {
+            if (IsVrcShape)
+            {
+                if (isAnimationMode && string.Equals(Name, "vrc.Blink", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
         public ShapeKeyItem(int index, string name, float initialValue)
         {
             Index          = index;

@@ -98,7 +98,7 @@ namespace DenEmo.UI
             for (int i = start; i < end; ++i)
             {
                 var item = _model.Items[i];
-                if (item.IsVrcShape || item.IsLipSyncShape || !item.IsVisible) continue;
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape || !item.IsVisible) continue;
 
                 if (SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side))
                 {

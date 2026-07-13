@@ -186,6 +186,7 @@ namespace DenEmo
             _currentMode = (EditorMode)DenEmoProjectPrefs.GetInt("DenEmo_Mode", 0);
             if (!System.Enum.IsDefined(typeof(EditorMode), _currentMode))
                 _currentMode = EditorMode.Pose; // 旧バージョンの無効なモード（削除された実験タブ等）への保険
+            _model.IsAnimationMode = _currentMode == EditorMode.Animation;
 
             var animClipGuid = DenEmoProjectPrefs.GetString("DenEmo_AnimClipGuid", "");
             if (!string.IsNullOrEmpty(animClipGuid))
@@ -704,6 +705,8 @@ namespace DenEmo
             }
 
             _currentMode = mode;
+            _model.IsAnimationMode = _currentMode == EditorMode.Animation;
+            _model.BuildGroups();
 
             if (_currentMode == EditorMode.Animation)
             {
@@ -720,6 +723,7 @@ namespace DenEmo
 
             UpdateModeTabVisuals();
             UpdateModeContentVisibility();
+            UpdateVisibility();
             Repaint();
         }
 
@@ -796,7 +800,7 @@ namespace DenEmo
 
             foreach (var item in _model.Items)
             {
-                if (item.IsVrcShape) { item.IsIncluded = false; continue; }
+                if (item.IsVrcExcluded(_model.IsAnimationMode)) { item.IsIncluded = false; continue; }
                 string path = item.SmrPath ?? "";
                 item.IsIncluded = pairs.Contains(path + "\n" + item.Name);
             }

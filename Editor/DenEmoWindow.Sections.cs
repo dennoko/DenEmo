@@ -628,7 +628,7 @@ namespace DenEmo
         private bool HasIncludedShapeKeys()
         {
             foreach (var item in _model.Items)
-                if (item.IsIncluded && !item.IsVrcShape && !item.IsLipSyncShape) return true;
+                if (item.IsIncluded && !item.IsVrcExcluded(_model.IsAnimationMode) && !item.IsLipSyncShape) return true;
             return false;
         }
 

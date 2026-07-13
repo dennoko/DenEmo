@@ -73,6 +73,9 @@ namespace DenEmo.Models
         /// <summary>Items が作り直されるたびに増える世代番号。参照を保持する側の再取得判定に使う。</summary>
         public int ItemsGeneration { get; private set; }
 
+        /// <summary>現在のエディタモードがアニメーションモードであるかどうか。</summary>
+        public bool IsAnimationMode { get; set; }
+
         public void RefreshList(string searchText, bool showOnlyIncluded)
         {
             ItemsGeneration++;
@@ -123,7 +126,7 @@ namespace DenEmo.Models
             {
                 item.IsVisible = false;
 
-                if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (item.IsVrcExcluded(IsAnimationMode) || item.IsLipSyncShape) continue;
                 if (!MatchesAllTokens(item.Name, searchTokens)) continue;
                 if (showOnlyIncluded  && !item.IsIncluded) continue;
                 if (showOnlyNonZero   && Mathf.Approximately(item.Value, 0f)) continue;
@@ -138,7 +141,7 @@ namespace DenEmo.Models
                 var pairVisible = new Dictionary<string, bool>();
                 foreach (var item in Items)
                 {
-                    if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                    if (item.IsVrcExcluded(IsAnimationMode) || item.IsLipSyncShape) continue;
                     if (Core.SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side) && side != Core.LRSide.None)
                     {
                         if (item.IsVisible) pairVisible[baseName] = true;
@@ -147,7 +150,7 @@ namespace DenEmo.Models
                 
                 foreach (var item in Items)
                 {
-                    if (item.IsVrcShape || item.IsLipSyncShape) continue;
+                    if (item.IsVrcExcluded(IsAnimationMode) || item.IsLipSyncShape) continue;
                     if (Core.SymmetryParser.TryParseLRSuffix(item.Name, out var baseName, out var side) && side != Core.LRSide.None)
                     {
                         if (pairVisible.ContainsKey(baseName) && pairVisible[baseName])
@@ -244,7 +247,7 @@ namespace DenEmo.Models
             int orderCounter = 0;
             foreach (var item in Items)
             {
-                if (item.IsVrcShape) continue;
+                if (item.IsVrcExcluded(IsAnimationMode)) continue;
                 var compositeKey = (item.OwnerSmr, itemKeys[item]);
                 if (!groupOrder.ContainsKey(compositeKey))
                 {
@@ -259,8 +262,9 @@ namespace DenEmo.Models
             Items.Sort((a, b) =>
             {
                 // VRC Shapeは常に最後（または特定の位置）に置くか、元の順序を維持
-                if (a.IsVrcShape != b.IsVrcShape) return a.IsVrcShape.CompareTo(b.IsVrcShape);
-                if (a.IsVrcShape) return a.Index.CompareTo(b.Index);
+                if (a.IsVrcExcluded(IsAnimationMode) != b.IsVrcExcluded(IsAnimationMode))
+                    return a.IsVrcExcluded(IsAnimationMode).CompareTo(b.IsVrcExcluded(IsAnimationMode));
+                if (a.IsVrcExcluded(IsAnimationMode)) return a.Index.CompareTo(b.Index);
 
                 if (a.OwnerSmr != b.OwnerSmr)
                 {
@@ -305,7 +309,7 @@ namespace DenEmo.Models
             for (int i = 0; i < Items.Count; i++)
             {
                 var item = Items[i];
-                if (item.IsVrcShape) { flush(); continue; } // VRC Shapeはセグメントに含めない（現状維持）
+                if (item.IsVrcExcluded(IsAnimationMode)) { flush(); continue; } // VRC Shapeはセグメントに含めない（現状維持）
 
                 if (curSmr != item.OwnerSmr)
                 {

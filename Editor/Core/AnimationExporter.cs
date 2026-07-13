@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -137,7 +137,7 @@ namespace DenEmo.Core
         {
             foreach (var item in model.Items)
             {
-                if (!item.IsIncluded || item.IsVrcShape || item.IsLipSyncShape) continue;
+                if (!item.IsIncluded || item.IsVrcExcluded(model.IsAnimationMode) || item.IsLipSyncShape) continue;
 
                 var smr = item.OwnerSmr ?? model.TargetSkinnedMesh;
                 if (smr == null) continue;
