@@ -679,6 +679,14 @@ namespace DenEmo.UI
             if (!entry.MatchesTargetMesh) label = "⚠ " + label;
             var name = new Label(label) { tooltip = BuildSlotTooltip(entry) };
             name.AddToClassList("dennoko-fx-name");
+            name.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (entry.Clip != null)
+                {
+                    Selection.activeObject = entry.Clip;
+                    EditorGUIUtility.PingObject(entry.Clip);
+                }
+            });
             row.Add(name);
 
             // ジェスチャータグ（全 slot の hint 和集合。最大 3 個、超過分は +n にまとめ tooltip へ全件）

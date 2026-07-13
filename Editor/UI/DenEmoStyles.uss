@@ -440,6 +440,11 @@
     font-size: 11px;
 }
 
+.dennoko-root .dennoko-fx-name:hover {
+    color: var(--dennoko-semantic-info);
+    text-decoration: underline;
+}
+
 /* ジェスチャータグ（FX 行のクリップ名右隣） */
 .dennoko-root .dennoko-fx-gesture-tag {
     font-size: 9px;
