@@ -61,6 +61,7 @@ namespace DenEmo
         private bool lastSymmetryMode      = false;
 
         private List<SkinnedMeshRenderer> _additionalTargets = new List<SkinnedMeshRenderer>();
+        private bool _hasManuallyCleared = false;
 
         // -1 = All targets, 0+ = GetAllTargetMeshes()[index]
         private int _meshFilterIndex = -1;
@@ -178,6 +179,7 @@ namespace DenEmo
             Undo.undoRedoPerformed += OnUndoRedo;
             EditorApplication.update += OnEditorUpdate;
             SceneView.duringSceneGui += OnSceneGUI;
+            EditorApplication.hierarchyChanged += OnHierarchyChanged;
             SetStatus(DenEmoLoc.T("status.ready"), 0, 0);
             LoadCollapsedGroupsPrefs();
 
@@ -216,6 +218,7 @@ namespace DenEmo
             _listUI.OnSnapshotCreate  = () => CreateSnapshot(false);
             _listUI.OnSnapshotRestore = RestoreSnapshot;
             _listUI.IsUnchanged       = IsShapeKeyUnchanged;
+            TryAutoSelectBodyMesh();
         }
 
         private void OnDisable()
@@ -223,6 +226,7 @@ namespace DenEmo
             Undo.undoRedoPerformed -= OnUndoRedo;
             EditorApplication.update -= OnEditorUpdate;
             SceneView.duringSceneGui -= OnSceneGUI;
+            EditorApplication.hierarchyChanged -= OnHierarchyChanged;
             _listUI.StopThrottle();
             _animModeUI.OnDisable();
             _fxSetupUI.OnDisable();
@@ -423,6 +427,7 @@ namespace DenEmo
             UpdateStatusBar();
 
             StartVersionCheck();
+            TryAutoSelectBodyMesh();
         }
 
         // ─── バージョン表記 / アップデートチェック ───────────────────────────
@@ -872,6 +877,78 @@ namespace DenEmo
                 }
             }
             return Mathf.Approximately(item.Value, 0f);
+        }
+
+        private void OnHierarchyChanged()
+        {
+            _hasManuallyCleared = false;
+            TryAutoSelectBodyMesh();
+        }
+
+        private void TryAutoSelectBodyMesh()
+        {
+            if (_model.TargetSkinnedMesh != null || _hasManuallyCleared) return;
+
+            var bodyMesh = FindBodyMeshInSingleActiveAvatar();
+            if (bodyMesh != null)
+            {
+                if (_targetMainField != null)
+                {
+                    SetMainTargetFromUI(bodyMesh);
+                }
+                else
+                {
+                    _model.SetTarget(bodyMesh);
+                    RefreshListAndCache();
+                }
+            }
+        }
+
+        private SkinnedMeshRenderer FindBodyMeshInSingleActiveAvatar()
+        {
+            var activeAvatars = new List<GameObject>();
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                if (!scene.isLoaded) continue;
+                foreach (var rootGo in scene.GetRootGameObjects())
+                {
+                    if (rootGo == null || !rootGo.activeInHierarchy) continue;
+
+                    var comps = rootGo.GetComponentsInChildren<Component>(false);
+                    foreach (var c in comps)
+                    {
+                        if (c == null) continue;
+                        var t = c.GetType();
+                        var name = t.Name;
+                        var full = t.FullName;
+                        if (name == "VRC_AvatarDescriptor" || name == "VRCAvatarDescriptor" ||
+                            (full != null && (full.Contains("VRC_AvatarDescriptor") || full.Contains("VRCAvatarDescriptor"))))
+                        {
+                            var avatarGo = c.gameObject;
+                            if (!activeAvatars.Contains(avatarGo))
+                            {
+                                activeAvatars.Add(avatarGo);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (activeAvatars.Count == 1)
+            {
+                var avatarGo = activeAvatars[0];
+                var smrs = avatarGo.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                foreach (var smr in smrs)
+                {
+                    if (smr != null && string.Equals(smr.name, "Body", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return smr;
+                    }
+                }
+            }
+
+            return null;
         }
     }
 }

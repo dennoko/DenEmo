@@ -444,6 +444,7 @@ namespace DenEmo
         /// <summary>メイン対象メッシュの変更（ObjectField / ドラッグ&ドロップ共通）。</summary>
         private void SetMainTargetFromUI(SkinnedMeshRenderer newSmr)
         {
+            _hasManuallyCleared = false;
             _listUI.StopThrottle();
             _model.SetTarget(newSmr);
             vertexPickMode = false;
@@ -470,6 +471,7 @@ namespace DenEmo
 
         private void ClearMainTargetFromUI()
         {
+            _hasManuallyCleared = true;
             _listUI.StopThrottle();
             _model.SetTarget(null);
             ClampMeshFilterIndex();
