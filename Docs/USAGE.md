@@ -135,6 +135,9 @@ Clicking the `✓▼` button in the toolbar opens a menu to perform bulk operati
   * **Single Frame Mode (Pose)**: Unchecks shape keys whose current slider value is `0`.
   * **Multi Frame Mode (Animation)**: Unchecks shape keys that are constant at `0` throughout the entire animation clip (i.e. have no keyframes, or all of their keyframes have a value of `0`).
 * **Check Favorites Only**: Checks only the starred (favorite) shape keys among those currently visible, and unchecks the rest.
+* **Check Only Keys Differing from Reference Animation**: Compares the current slider values against the clip loaded in ANIMATION SOURCE, checks only the shape keys that differ, and unchecks the rest (applies to visible keys). Shape keys not contained in the clip are compared against the default value `0`, so changes outside the reference clip are also picked up as differences. This item is grayed out when no clip is set.
+  > Example: Load an existing expression animation as a base, tweak it, then use this to include only your adjustments in the export.
+* **Check Only Keys Differing from Snapshot**: Compares the current slider values against the Snapshot, checks only the shape keys that differ, and unchecks the rest (applies to visible keys). This item is grayed out when no Snapshot has been taken.
 
 ---
 

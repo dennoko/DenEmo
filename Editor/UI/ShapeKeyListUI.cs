@@ -29,6 +29,10 @@ namespace DenEmo.UI
         public Action                  OnSnapshotRestore;
         public Func<ShapeKeyItem, bool> IsUnchanged;
 
+        // 差分チェック用の判定関数を返す（比較元が未用意なら null → メニュー無効化）
+        public Func<Func<ShapeKeyItem, bool>> GetClipDiffChecker;
+        public Func<Func<ShapeKeyItem, bool>> GetSnapshotDiffChecker;
+
         // ─── Bind state ───────────────────────────────────────────────────────
 
         private ShapeKeyModel        _model;
@@ -205,7 +209,33 @@ namespace DenEmo.UI
             menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.uncheckAll")), false, BulkUncheckAll);
             menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.uncheckUnchanged")), false, BulkUncheckUnchanged);
             menu.AddItem(new GUIContent(DenEmoLoc.T("ui.bulk.checkFavorites")), false, BulkCheckFavorites);
+
+            var clipDiff = GetClipDiffChecker?.Invoke();
+            var snapDiff = GetSnapshotDiffChecker?.Invoke();
+            var clipDiffLabel = new GUIContent(DenEmoLoc.T("ui.bulk.checkDiffFromClip"));
+            var snapDiffLabel = new GUIContent(DenEmoLoc.T("ui.bulk.checkDiffFromSnapshot"));
+            if (clipDiff != null) menu.AddItem(clipDiffLabel, false, () => BulkCheckWhere(clipDiff));
+            else                  menu.AddDisabledItem(clipDiffLabel);
+            if (snapDiff != null) menu.AddItem(snapDiffLabel, false, () => BulkCheckWhere(snapDiff));
+            else                  menu.AddDisabledItem(snapDiffLabel);
+
             menu.ShowAsContext();
+        }
+
+        /// <summary>表示中の各キーのチェック状態を shouldCheck の判定結果で置き換える。</summary>
+        private void BulkCheckWhere(Func<ShapeKeyItem, bool> shouldCheck)
+        {
+            if (_model == null) return;
+            foreach (var item in _model.Items)
+            {
+                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
+                if (item.IsVisible)
+                {
+                    item.IsIncluded = shouldCheck(item);
+                }
+            }
+            OnIncludeFlagsChanged?.Invoke();
+            SyncDynamicState();
         }
 
         private void BulkCheckAll()

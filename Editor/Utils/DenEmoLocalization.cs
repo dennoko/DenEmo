@@ -90,6 +90,8 @@ public static class DenEmoLoc
         ["ui.bulk.uncheckAll"] = "表示中のチェックをすべて外す",
         ["ui.bulk.uncheckUnchanged"] = "変更のないチェックを外す (値が0)",
         ["ui.bulk.checkFavorites"] = "表示中のお気に入りのみチェック",
+        ["ui.bulk.checkDiffFromClip"] = "アニメーション参照と差分のあるキーのみチェック",
+        ["ui.bulk.checkDiffFromSnapshot"] = "スナップショットと差分のあるキーのみチェック",
 
         // Search
         ["ui.search.title"] = "シェイプキー検索",
@@ -395,6 +397,8 @@ public static class DenEmoLoc
         ["ui.bulk.uncheckAll"] = "Uncheck All Visible",
         ["ui.bulk.uncheckUnchanged"] = "Uncheck Unchanged (Value is 0)",
         ["ui.bulk.checkFavorites"] = "Check Favorites Only",
+        ["ui.bulk.checkDiffFromClip"] = "Check Only Keys Differing from Reference Animation",
+        ["ui.bulk.checkDiffFromSnapshot"] = "Check Only Keys Differing from Snapshot",
 
         // Search
         ["ui.search.title"] = "Blendshape Search",

@@ -195,22 +195,23 @@ namespace DenEmo
             }
         }
 
+        /// <summary>メモリ上にスナップショットが無ければプロジェクト設定から復元する。</summary>
+        private void EnsureSnapshotLoaded()
+        {
+            if (snapshotValues != null && snapshotValues.Count > 0) return;
+            var s = DenEmoProjectPrefs.GetString("DenEmo_Snapshot");
+            if (string.IsNullOrEmpty(s)) return;
+            snapshotValues = new List<float>();
+            foreach (var p in s.Split(','))
+            {
+                snapshotValues.Add(float.TryParse(p, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0f);
+            }
+        }
+
         private void RestoreSnapshot()
         {
-            if (snapshotValues == null || snapshotValues.Count == 0)
-            {
-                var s = DenEmoProjectPrefs.GetString("DenEmo_Snapshot");
-                if (!string.IsNullOrEmpty(s))
-                {
-                    var parts = s.Split(',');
-                    snapshotValues = new List<float>();
-                    foreach (var p in parts)
-                    {
-                        snapshotValues.Add(float.TryParse(p, System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0f);
-                    }
-                }
-            }
+            EnsureSnapshotLoaded();
             if (snapshotValues == null) return;
             int n = Math.Min(snapshotValues.Count, _model.Items.Count);
             for (int i = 0; i < n; i++)
@@ -221,6 +222,27 @@ namespace DenEmo
                 if (smr != null) smr.SetBlendShapeWeight(item.Index, snapshotValues[i]);
             }
             SaveBlendValuesPrefs();
+        }
+
+        /// <summary>
+        /// スナップショットとの差分判定を返す。スナップショットは作成時の Items 順の値列なので、
+        /// 現在の Items と index で突き合わせる。範囲外のシェイプは初期値 0 と比較する。
+        /// スナップショット未作成時は null。
+        /// </summary>
+        private Func<ShapeKeyItem, bool> BuildSnapshotDiffChecker()
+        {
+            EnsureSnapshotLoaded();
+            if (snapshotValues == null || snapshotValues.Count == 0) return null;
+
+            var baseline = new Dictionary<ShapeKeyItem, float>();
+            int n = Math.Min(snapshotValues.Count, _model.Items.Count);
+            for (int i = 0; i < n; i++) baseline[_model.Items[i]] = snapshotValues[i];
+
+            return item =>
+            {
+                baseline.TryGetValue(item, out float baseVal);
+                return !Mathf.Approximately(item.Value, baseVal);
+            };
         }
     }
 }

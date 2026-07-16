@@ -219,6 +219,8 @@ namespace DenEmo
             _listUI.OnSnapshotCreate  = () => CreateSnapshot(false);
             _listUI.OnSnapshotRestore = RestoreSnapshot;
             _listUI.IsUnchanged       = IsShapeKeyUnchanged;
+            _listUI.GetClipDiffChecker     = BuildClipDiffChecker;
+            _listUI.GetSnapshotDiffChecker = BuildSnapshotDiffChecker;
             TryAutoSelectBodyMesh();
         }
 
@@ -881,6 +883,31 @@ namespace DenEmo
                 }
             }
             return Mathf.Approximately(item.Value, 0f);
+        }
+
+        /// <summary>
+        /// アニメーション参照で読み込んだクリップとの差分判定を返す。
+        /// クリップ未収録のシェイプは初期値 0 と比較する。クリップ未設定時は null。
+        /// </summary>
+        private Func<ShapeKeyItem, bool> BuildClipDiffChecker()
+        {
+            if (loadedClip == null) return null;
+
+            var baseline = new Dictionary<string, float>();
+            foreach (var b in AnimationUtility.GetCurveBindings(loadedClip))
+            {
+                if (b.type != typeof(SkinnedMeshRenderer)) continue;
+                if (!b.propertyName.StartsWith("blendShape.")) continue;
+                var curve = AnimationUtility.GetEditorCurve(loadedClip, b);
+                if (curve == null) continue;
+                baseline[b.propertyName.Substring("blendShape.".Length)] = curve.Evaluate(0f);
+            }
+
+            return item =>
+            {
+                baseline.TryGetValue(item.Name, out float baseVal);
+                return !Mathf.Approximately(item.Value, baseVal);
+            };
         }
 
         private void OnHierarchyChanged()
