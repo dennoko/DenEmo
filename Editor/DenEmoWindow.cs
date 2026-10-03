@@ -616,6 +616,9 @@ namespace DenEmo
             // タイムライン: 別窓化中は通知カード、それ以外は UI Toolkit タイムライン（クリップ未設定時は非表示）
             bool detached = DenEmoTimelineWindow.Instance != null;
             bool hasClip  = _animModeUI.ClipModel.Clip != null;
+            _animListHost.style.display = hasTarget && hasClip ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_currentMode == EditorMode.Animation)
+                _searchCard.style.display = hasTarget && hasClip ? DisplayStyle.Flex : DisplayStyle.None;
             bool showInlineTimeline = hasTarget && !detached && hasClip;
             _animTimelineNotice.style.display = (hasTarget && detached) ? DisplayStyle.Flex : DisplayStyle.None;
             _animTimelineHost.style.display   = showInlineTimeline ? DisplayStyle.Flex : DisplayStyle.None;

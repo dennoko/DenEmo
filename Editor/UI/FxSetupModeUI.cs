@@ -61,6 +61,9 @@ namespace DenEmo.UI
         private VisualElement _listCard;
         private TextField     _searchField;
         private Button        _assignedChip;
+        private Button        _clearFiltersButton;
+        private Label         _searchLabel;
+        private Label         _applyHint;
         private VisualElement _gestureFilterRow;
         private Button        _gfLeftChip;
         private Button        _gfRightChip;
@@ -373,6 +376,20 @@ namespace DenEmo.UI
 
             _rescanButton.clicked += () => Refresh(_boundModel);
 
+            _searchLabel = root.Q<Label>("fx-search-label");
+            _applyHint = root.Q<Label>("fx-apply-hint");
+            _clearFiltersButton = root.Q<Button>("fx-clear-filters");
+            _clearFiltersButton.clicked += () =>
+            {
+                _search = string.Empty;
+                _showOnlyAssigned = false;
+                _filterHand = 0;
+                _filterGesture = -1;
+                _searchField.SetValueWithoutNotify(string.Empty);
+                UpdateGestureFilterChips();
+                RebuildEntryList();
+                _searchField.Focus();
+            };
             _searchField.RegisterValueChangedCallback(evt =>
             {
                 _search = evt.newValue ?? string.Empty;
@@ -472,6 +489,8 @@ namespace DenEmo.UI
             _rescanButton.text    = DenEmoLoc.T("ui.fx.rescan");
 
             _listCard.Q<Label>("fx-list-title").text = DenEmoLoc.T("ui.fx.section.list");
+            _searchLabel.text = DenEmoLoc.T("ui.filter.keyword");
+            _clearFiltersButton.text = DenEmoLoc.T("ui.filter.resetAll");
             _assignedChip.text           = DenEmoLoc.T("ui.fx.filter.assignedOnly");
             _gfLeftChip.text             = DenEmoLoc.T("ui.fx.gesture.filter.left");
             _gfRightChip.text            = DenEmoLoc.T("ui.fx.gesture.filter.right");
@@ -568,6 +587,8 @@ namespace DenEmo.UI
             _entryList.Clear();
             _rowElements.Clear();
 
+            _clearFiltersButton.SetEnabled(!string.IsNullOrEmpty(_search) || _showOnlyAssigned
+                || _filterHand != 0 || _filterGesture >= 0);
             SetChipState(_assignedChip, _showOnlyAssigned);
 
             var visible = CollectVisibleEntries();
@@ -961,9 +982,11 @@ namespace DenEmo.UI
         private void UpdateApplyCard()
         {
             if (_applyCard == null) return;
-            var jobs = BuildJobs(out _);
+            var jobs = BuildJobs(out int slotCount);
 
-            _applyCountLabel.text = DenEmoLoc.Tf("ui.fx.apply.count", jobs.Count);
+            _applyCountLabel.text = DenEmoLoc.Tf("ui.fx.apply.summary", jobs.Count, slotCount,
+                _controller != null ? _controller.name : DenEmoLoc.T("ui.fx.apply.noController"));
+            _applyHint.text = DenEmoLoc.T(jobs.Count == 0 ? "ui.fx.apply.assignHint" : "ui.fx.apply.filteredHint");
 
             SetChipState(_modeDuplicateChip, !_applyDirect);
             SetChipState(_modeDirectChip,    _applyDirect);

@@ -46,6 +46,7 @@ namespace DenEmo.Core
                     AssetDatabase.CopyAsset(path, backupPath);
                 }
                 clip = existingClip;
+                Undo.RecordObject(clip, DenEmoLoc.T("ui.save.undo"));
                 if (preserveExtraCurves) ExtraCurveSet.ClearBlendShapeCurves(clip);
                 else                     clip.ClearCurves();
                 clip.frameRate = 60;
@@ -106,6 +107,7 @@ namespace DenEmo.Core
                     AssetDatabase.CopyAsset(path, backupPath);
                 }
                 clip = existingClip;
+                Undo.RecordObject(clip, DenEmoLoc.T("ui.save.undo"));
                 if (preserveExtraCurves) ExtraCurveSet.ClearBlendShapeCurves(clip);
                 else                     clip.ClearCurves();
                 clip.frameRate = 60;

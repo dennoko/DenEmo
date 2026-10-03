@@ -1,6 +1,6 @@
 # DenEmo Usage Guide
 
-DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). It has two modes: **Single Frame** for single-frame expressions, and **Multi Frame** for time-based clips.
+DenEmo is a Unity Editor extension for adjusting shape keys (blendshapes) and exporting facial expression animation files (`.anim`). Use **SINGLE FRAME** for single-frame expressions and **MULTI FRAME** for time-based clips. The **APPLY TO AVATAR** tab assigns expressions to the avatar's FX layer.
 
 Open DenEmo from the Unity menu bar: `dennokoworks > DenEmo`.
 
@@ -9,6 +9,8 @@ Open DenEmo from the Unity menu bar: `dennokoworks > DenEmo`.
 ## Header
 
 The **EN / JA** button in the top-right corner switches the UI language. Your choice is saved automatically.
+
+A guide below the tabs shows the next steps for your current state, including mesh selection, clip creation and recording.
 
 ---
 
@@ -36,7 +38,9 @@ Press **Refresh** after adding blendshapes to a mesh in another tool, or wheneve
 
 Single Frame Mode is for building a single expression frame and exporting it as an `.anim` file. This is the typical workflow for creating gesture animations in VRChat.
 
-### ANIMATION SOURCE
+### Start from an existing clip (optional)
+
+This section starts collapsed. Expand it when you want to reuse an expression. It opens automatically when the UI is rebuilt with a reference clip already selected.
 
 This section lets you pull shape key values or checkbox settings from an existing animation clip - useful for editing or extending animations you already have.
 
@@ -61,6 +65,8 @@ Checks or unchecks the save-target checkboxes based on which shape keys appear i
 ---
 
 ### SEARCH & FILTER
+
+**Clear filters** clears the keyword, favorites-only, included-only, nonzero, vertex and mesh filters. In Multi Frame Mode it also clears the keyed-only filter. Shape values, inclusion checkboxes, symmetry and favorite assignments stay unchanged.
 
 These chips and the search field narrow down the shape key list. Combine multiple filters freely.
 
@@ -95,7 +101,7 @@ Press this button, then click any vertex in the SceneView. The list narrows to s
 > Example: A vertex on the upper lip is deforming in an unexpected way. Click it in the SceneView to find which shape keys affect that specific point.
 
 **Mesh filter (popup)**
-Appears only when two or more meshes are registered. Select **All** to see every shape key together, or pick one mesh name to see only that mesh's shape keys.
+Appears only when two or more meshes are registered. Select **All meshes** to see every shape key together, or pick one mesh name to see only that mesh's shape keys.
 
 ---
 
@@ -140,7 +146,7 @@ Clicking the `✓▼` button in the toolbar opens a menu to perform bulk operati
   * **Single Frame Mode (Pose)**: Unchecks shape keys whose current slider value is `0`.
   * **Multi Frame Mode (Animation)**: Unchecks shape keys that are constant at `0` throughout the entire animation clip (i.e. have no keyframes, or all of their keyframes have a value of `0`).
 * **Check Favorites Only**: Checks only the starred (favorite) shape keys among those currently visible, and unchecks the rest.
-* **Check Only Keys Differing from Reference Animation**: Compares the current slider values against the clip loaded in ANIMATION SOURCE, checks only the shape keys that differ, and unchecks the rest (applies to visible keys). Shape keys not contained in the clip are compared against the default value `0`, so changes outside the reference clip are also picked up as differences. This item is grayed out when no clip is set.
+* **Check Only Keys Differing from Reference Animation**: Compares the current slider values against the clip loaded in the optional source section, checks only the shape keys that differ, and unchecks the rest (applies to visible keys). Shape keys not contained in the clip are compared against the default value `0`, so changes outside the reference clip are also picked up as differences. This item is grayed out when no clip is set.
   > Example: Load an existing expression animation as a base, tweak it, then use this to include only your adjustments in the export.
 * **Check Only Keys Differing from Snapshot**: Compares the current slider values against the Snapshot, checks only the shape keys that differ, and unchecks the rest (applies to visible keys). This item is grayed out when no Snapshot has been taken.
 
@@ -164,8 +170,12 @@ Keeps non-blendshape data already present in the overwrite target - object toggl
 
 > This data is NOT reflected in the DenEmo preview (the scene view). It is included in the saved `.anim`.
 
-**Save Animation**
-Exports all checked shape keys with their current slider values. If Overwrite Save is enabled and a target is set, it overwrites that file. Otherwise it creates a new file in the Save To folder.
+**Save expression as... / Overwrite [clip name]**
+The included shape count appears above the button. Checked shapes are exported with their current values, including checked shapes hidden by keyword filters.
+
+With overwrite off, choose a name in the save dialog. With overwrite on, the selected clip is updated and folder controls are disabled. The target must be a standalone `.anim` file inside `Assets`; embedded model clips cannot be overwritten directly.
+
+If no shapes are included, or the overwrite target is missing or invalid, inline text explains the problem and saving is disabled. A missing overwrite target no longer falls back to creating a new file. Cancelling is reported as cancellation, not success. Overwriting an existing pose clip records the change in Undo.
 
 > Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, enable Overwrite Save pointing at the first file (with Auto Backup on) - the original is preserved in `_backups/` and the file is updated in place.
 
@@ -183,11 +193,13 @@ Select an existing `.anim` file to edit it. The timeline and list update to refl
 **New**
 Opens a save dialog and creates a blank `.anim` file. The new clip is immediately loaded and ready to record into.
 
+Sliders, search and the timeline remain hidden until a clip is selected; saving is disabled without a clip.
+
 When no clip is loaded, the section shows a three-step workflow guide:
 
 1. Drag an existing `.anim` file into the Clip field, or press **New** to create a blank clip.
 2. Check / set **FPS** and **duration** in the Timeline section.
-3. Move the playhead -> enable **REC** -> drag sliders to record keyframes.
+3. Move the playhead -> click **Start recording** -> drag sliders to record keyframes.
 
 > Example: Start a "wink" animation by pressing New, saving the file, then recording keyframes using the timeline.
 
@@ -275,8 +287,16 @@ Copies the first frame's keyframe values to the end of the clip so the animation
 
 > Example: A looping idle expression needs to connect seamlessly at the end. Enable Loop Support so the last frame transitions smoothly back to the first.
 
-**REC**
-Toggles recording mode. When active, dragging any shape key slider automatically stamps a keyframe at the current playhead position. When off, sliders still move the mesh in the preview but do not create keyframes.
+**Start recording / Recording (REC)**
+Click to toggle recording. When on, sliders record keys at the current time. With recording off, moving a shape that already has a key at this time updates that key. Moving a shape without a key creates an unrecorded preview change.
+
+**Unrecorded changes**
+A persistent notice shows the change count and two actions:
+
+- **Record at current time** writes the changes as keys in one Undo operation.
+- **Revert changes** restores existing tracks to their current curve values and untracked shapes to their preview-start values.
+
+Saving is disabled until these changes are resolved. Record them before seeking, playing or switching clips; otherwise they are discarded with a warning. Bulk insertion for visible shapes only clears the pending changes actually inserted.
 
 > Example: Move the playhead to frame 10, enable REC, drag the `mouth_smile` slider to 80. A keyframe is recorded. Move to frame 25, drag it back to 0. The animation now smoothly transitions from smile to neutral between frames 10 and 25.
 
@@ -364,9 +384,9 @@ Hides shape keys that have no keyframes in the current clip. Use this to focus t
 Identical to the Single Frame Mode list with one addition per row:
 
 **◆ / ◇ (Keyframe button)**
-Appears at the far right of each row. ◆ (filled) means a keyframe exists at the current playhead time. ◇ (outline) means no keyframe exists at this time. Clicking the icon toggles it: ◆ stamps a keyframe at the current time; ◇ removes it.
+Appears at the far right of each row. ◆ (filled) means a keyframe exists at the current playhead time. ◇ (outline) means no keyframe exists at this time. Clicking ◇ adds a keyframe; clicking ◆ removes the existing keyframe.
 
-> Example: You want the mouth to be fully closed at frame 0 without using REC. Move to frame 0, set the mouth slider to 0, click ◆ to stamp the keyframe. Done.
+> Example: You want the mouth to be fully closed at frame 0 without using REC. Move to frame 0, set the mouth slider to 0, click ◇ to stamp the keyframe. Done.
 
 ---
 
@@ -386,6 +406,8 @@ This banner makes the recording state unmissable so you always know whether slid
 The top of the Save Animation section shows how many tracks and total keyframes the current clip contains (e.g., *3 tracks / 12 keyframes total*). If no keyframes have been recorded yet, a warning message is displayed instead, reminding you to add keyframes before saving.
 
 **Save Animation**
+Resolve unrecorded changes with Record at current time or Revert changes first.
+
 Writes the current clip's keyframes to the `.anim` file. If the clip was loaded from an existing file, it overwrites that file. If the clip was just created with **New** and has not been saved to disk yet, a file save dialog appears.
 
 > Example: After recording a full wink sequence, press Save Animation to finalize the file and make it available in the Project window.
@@ -411,6 +433,8 @@ The **APPLY TO AVATAR** mode allows you to bulk-replace expression animations (`
 
 ### Expression Mapping List
 
+**Clear filters** clears keyword, assigned-only, hand and gesture filters without clearing clip assignments.
+
 Lists the animation clips within the FX controller that animate the shape keys of your target mesh.
 
 - **Search & Filters**:
@@ -434,12 +458,14 @@ Click the **"None ▾"** button (or the assigned clip name) on the right side of
 
 ### Apply Settings & Execution
 
+The summary shows the target FX controller, number of expressions and affected locations. Assignments hidden by filters are included. When no replacements are assigned, inline text explains how to start. Review the replacements in the confirmation dialog before applying.
+
 Applies the mapping configuration to the FX controller.
 
 - **Duplicate and Apply (Recommended)**:
   Creates a duplicate of the FX controller, modifies only the duplicate, and assigns it to the avatar's FX layer. This keeps your original controller asset safe and untouched.
 - **Direct Modify**:
-  Modifies the existing FX controller asset directly. An automatic backup of the controller is created in a `_backups/` folder to prevent accidental data loss.
+  Modifies the existing FX controller asset directly and records the changes in Undo. This operation does not create an automatic backup. Use Duplicate and Apply to preserve the original controller.
 - **Manual Assignment Note**:
   If no avatar is detected, you will need to manually set the duplicated controller into the avatar's FX layer.
 

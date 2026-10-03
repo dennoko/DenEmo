@@ -87,6 +87,21 @@ namespace DenEmo.Core
             if (sceneView != null) sceneView.Repaint();
         }
 
+        /// <summary>未記録のシェイプを開始時の値へ戻し、既存トラックは現在時刻で再評価する。</summary>
+        public void RevertUnrecordedShapes(IEnumerable<string> shapeNames)
+        {
+            var smr = _shapeModel?.TargetSkinnedMesh;
+            if (!_isActive || smr == null || smr.sharedMesh == null || _savedWeights == null) return;
+            foreach (string name in shapeNames)
+            {
+                int index = smr.sharedMesh.GetBlendShapeIndex(name);
+                if (index >= 0 && index < _savedWeights.Length)
+                    smr.SetBlendShapeWeight(index, _savedWeights[index]);
+            }
+            SampleAt(_clipModel.CurrentTime);
+            _shapeModel.SyncValuesFromMesh();
+        }
+
         private void EnsureSampleTargets(SkinnedMeshRenderer smr)
         {
             var mesh = smr.sharedMesh;

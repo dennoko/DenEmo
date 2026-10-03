@@ -17,6 +17,11 @@
         <ui:Button name="tab-fx" text="FX" class="dennoko-tab" />
     </ui:VisualElement>
 
+    <ui:VisualElement name="workflow-guide" class="dennoko-workflow-guide">
+        <ui:Label name="workflow-title" class="dennoko-section-title" />
+        <ui:Label name="workflow-hint" class="dennoko-wrap" />
+    </ui:VisualElement>
+
     <!-- Pose モード -->
     <ui:ScrollView name="pose-scroll" class="dennoko-scroll" style="display: none;">
         <!-- 対象メッシュカード（モード間で共有。C# がホスト間を移動する） -->
@@ -41,7 +46,7 @@
 
         <!-- アニメーション参照（Pose 専用） -->
         <ui:VisualElement name="pose-source-card" class="dennoko-card" style="display: none;">
-            <ui:Label name="pose-source-title" text="ANIMATION SOURCE" class="dennoko-section-title dennoko-card-header" />
+            <ui:Foldout name="pose-source-title" value="false" class="dennoko-optional-section">
             <ui:VisualElement class="dennoko-hrow">
                 <ui:Label name="pose-source-label" class="dennoko-text-tertiary dennoko-field-label" />
                 <uie:ObjectField name="pose-source-field" class="dennoko-clip-field" />
@@ -49,12 +54,16 @@
             <ui:Toggle name="pose-source-extra-toggle" class="dennoko-save-toggle" />
             <ui:Button name="pose-source-apply" class="dennoko-button-primary dennoko-action-button" />
             <ui:Button name="pose-source-align" class="dennoko-button-secondary dennoko-action-button" />
+            </ui:Foldout>
         </ui:VisualElement>
 
         <!-- 検索・絞り込みカード（Pose / Animation で共有。C# がホスト間を移動する） -->
         <ui:VisualElement name="pose-search-host">
             <ui:VisualElement name="search-card" class="dennoko-card" style="display: none;">
-                <ui:Label name="search-title" text="SEARCH &amp; FILTER" class="dennoko-section-title dennoko-card-header" />
+                <ui:VisualElement class="dennoko-hrow">
+                    <ui:Label name="search-title" class="dennoko-section-title dennoko-col-grow" />
+                    <ui:Button name="search-reset-all" class="dennoko-mini-button dennoko-mini-button--auto" />
+                </ui:VisualElement>
                 <ui:VisualElement class="dennoko-hrow">
                     <ui:Label name="search-keyword-label" class="dennoko-text-tertiary dennoko-search-label" />
                     <ui:TextField name="search-field" class="dennoko-clip-field" />
@@ -96,6 +105,8 @@
                 <ui:Toggle name="pose-preserve-extra-toggle" class="dennoko-save-toggle" />
             </ui:VisualElement>
             <ui:VisualElement class="dennoko-separator" />
+            <ui:Label name="pose-save-summary" class="dennoko-wrap" />
+            <ui:Label name="pose-save-validation" class="dennoko-text-warning dennoko-wrap" />
             <ui:Button name="pose-save-button" class="dennoko-button-primary dennoko-action-button" />
         </ui:VisualElement>
     </ui:ScrollView>
@@ -156,6 +167,13 @@
             <ui:Label name="anim-rec-banner-label" class="dennoko-rec-banner dennoko-wrap" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="anim-pending-card" class="dennoko-card" style="display: none;">
+            <ui:Label name="anim-pending-label" class="dennoko-text-warning dennoko-wrap" />
+            <ui:VisualElement class="dennoko-hrow dennoko-pending-actions">
+                <ui:Button name="anim-pending-record" class="dennoko-button-primary dennoko-notice-button" />
+                <ui:Button name="anim-pending-discard" class="dennoko-button-secondary dennoko-notice-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
         <ui:VisualElement name="anim-search-host" />
         <ui:VisualElement name="anim-list-host" />
 
@@ -202,7 +220,9 @@
         <ui:VisualElement name="fx-list-card" class="dennoko-card" style="display: none;">
             <ui:Label name="fx-list-title" text="REPLACE EXPRESSIONS" class="dennoko-section-title dennoko-card-header" />
             <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="fx-search-label" class="dennoko-text-tertiary dennoko-search-label" />
                 <ui:TextField name="fx-search" class="dennoko-clip-field" />
+                <ui:Button name="fx-clear-filters" class="dennoko-mini-button dennoko-mini-button--auto" />
                 <ui:Button name="fx-chip-assigned" class="dennoko-chip" />
             </ui:VisualElement>
             <ui:VisualElement name="fx-gesture-filter-row" class="dennoko-hrow dennoko-fx-gesture-filter-row" />
@@ -220,7 +240,8 @@
         <!-- 適用 -->
         <ui:VisualElement name="fx-apply-card" class="dennoko-card" style="display: none;">
             <ui:Label name="fx-apply-title" text="APPLY" class="dennoko-section-title dennoko-card-header" />
-            <ui:Label name="fx-apply-count" class="dennoko-text-tertiary" />
+            <ui:Label name="fx-apply-count" class="dennoko-wrap" />
+            <ui:Label name="fx-apply-hint" class="dennoko-text-tertiary dennoko-wrap" />
             <ui:VisualElement class="dennoko-hrow">
                 <ui:Button name="fx-mode-duplicate" class="dennoko-chip" />
                 <ui:Button name="fx-mode-direct" class="dennoko-chip" />

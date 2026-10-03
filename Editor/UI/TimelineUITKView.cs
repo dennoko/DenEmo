@@ -578,6 +578,7 @@ namespace DenEmo.UI
             SetChip(_interpLinear, _mode.CurrentInterp == InterpolationType.Linear);
             SetChip(_interpEase,   _mode.CurrentInterp == InterpolationType.Ease);
             SetChip(_recButton,    _mode.IsRecording);
+            _recButton.text = DenEmoLoc.T(_mode.IsRecording ? "ui.timeline.recordingOn" : "ui.timeline.recordingOff");
 
             _zoomLabel.text = Mathf.RoundToInt(1f / ViewRange * 100f) + "%";
             _zoomReset.style.display = ViewRange < 1f - 0.001f ? DisplayStyle.Flex : DisplayStyle.None;
@@ -1101,6 +1102,7 @@ namespace DenEmo.UI
 
         private void TogglePlay()
         {
+            if (!_mode.Playback.IsPlaying) _mode.NotifyBeforeSeek();
             _mode.Playback.Toggle();
             RefreshValues();
             _window.Repaint();
@@ -1297,7 +1299,7 @@ namespace DenEmo.UI
             if (entries.Count == 0) return;
 
             _mode.Editor.RecordKeys(entries, m.CurrentTime, _mode.CurrentInterp);
-            _mode.ClearUnrecordedTweaks();
+            _mode.ClearUnrecordedTweaks(entries);
             _mode.Preview.SampleAt(m.CurrentTime);
             RefreshStructure();
             _window.Repaint();

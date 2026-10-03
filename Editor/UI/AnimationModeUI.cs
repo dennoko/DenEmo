@@ -86,7 +86,8 @@ namespace DenEmo.UI
         private bool   _externalSliderDrag; // UI Toolkit スライダーのドラッグ中フラグ（hotControl の代替）
 
         // REC オフ・キーなしで動かした（クリップに記録されない）シェイプ。シーク時に警告を出す。
-        private readonly HashSet<string> _unrecordedTweaks = new HashSet<string>();
+        private readonly Dictionary<string, float> _unrecordedTweaks = new Dictionary<string, float>();
+        public int UnrecordedChangeCount => _unrecordedTweaks.Count;
 
         // ── UI Toolkit: クリップ設定カードの要素（BindClipSectionUI で配線） ──
         private ObjectField   _clipField;
@@ -107,7 +108,7 @@ namespace DenEmo.UI
 
         public void OnDisable()
         {
-            FlushPendingRecords(force: true);
+            NotifyBeforeSeek();
             Playback.Stop();
             IsRecording = false;
             Preview.Stop();
@@ -156,7 +157,7 @@ namespace DenEmo.UI
 
         public void StopPreview()
         {
-            FlushPendingRecords(force: true);
+            NotifyBeforeSeek();
             Playback.Stop();
             Preview.Stop();
         }
@@ -202,12 +203,36 @@ namespace DenEmo.UI
             if (_unrecordedTweaks.Count > 0)
             {
                 StatusSink?.Invoke(DenEmoLoc.Tf("status.anim.tweaksDiscarded", _unrecordedTweaks.Count), 2);
+                Preview.RevertUnrecordedShapes(_unrecordedTweaks.Keys);
                 _unrecordedTweaks.Clear();
             }
         }
 
         /// <summary>◆+（全シェイプ挿入）などでまとめてキーが記録されたときに呼ぶ。</summary>
-        public void ClearUnrecordedTweaks() => _unrecordedTweaks.Clear();
+        public void ClearUnrecordedTweaks(IEnumerable<(string shapeName, float value)> entries)
+        {
+            foreach (var entry in entries) _unrecordedTweaks.Remove(entry.shapeName);
+        }
+
+        public void RecordUnrecordedChanges()
+        {
+            if (ClipModel.Clip == null || _unrecordedTweaks.Count == 0) return;
+            Playback.Stop();
+            FlushPendingRecords(force: true);
+            var entries = new List<(string, float)>();
+            foreach (var entry in _unrecordedTweaks) entries.Add((entry.Key, entry.Value));
+            Editor.RecordKeys(entries, ClipModel.CurrentTime, CurrentInterp);
+            _unrecordedTweaks.Clear();
+            Preview.SampleAt(ClipModel.CurrentTime);
+            StatusSink?.Invoke(DenEmoLoc.Tf("status.anim.changesRecorded", entries.Count), 1);
+        }
+
+        public void DiscardUnrecordedChanges()
+        {
+            Playback.Stop();
+            Preview.RevertUnrecordedShapes(_unrecordedTweaks.Keys);
+            _unrecordedTweaks.Clear();
+        }
 
         /// <summary>
         /// UI Toolkit スライダーのドラッグ状態変化を受け取る。終了時は未フラッシュの
@@ -350,7 +375,7 @@ namespace DenEmo.UI
                         else if (ClipModel.Clip != null)
                         {
                             // クリップに記録されない一時変更。シーク時に破棄される旨を警告するため記憶する
-                            _unrecordedTweaks.Add(item.Name);
+                            _unrecordedTweaks[item.Name] = newValue;
                         }
                     },
 
@@ -401,6 +426,11 @@ namespace DenEmo.UI
                 return;
             }
 
+            if (UnrecordedChangeCount > 0)
+            {
+                setStatus(DenEmoLoc.T("ui.anim.pending.saveHint"), 2);
+                return;
+            }
             string existingPath = AssetDatabase.GetAssetPath(ClipModel.Clip);
 
             string path;

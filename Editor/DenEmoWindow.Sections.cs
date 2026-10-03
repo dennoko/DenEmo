@@ -31,7 +31,7 @@ namespace DenEmo
 
         // ─── Animation source card (Pose) ─────────────────────────────────────
         private VisualElement _poseSourceCard;
-        private Label         _poseSourceTitle;
+        private Foldout       _poseSourceTitle;
         private Label         _poseSourceLabel;
         private ObjectField   _poseSourceField;
         private Toggle        _poseSourceExtraToggle;
@@ -44,6 +44,9 @@ namespace DenEmo
         private Label         _searchKeywordLabel;
         private TextField     _searchField;
         private Button        _searchClear;
+        private Button        _searchResetAll;
+        private Label         _workflowTitle;
+        private Label         _workflowHint;
         private Button        _chipFav;
         private Button        _chipEnabled;
         private Button        _chipNonZero;
@@ -69,6 +72,8 @@ namespace DenEmo
         private Toggle        _poseBackupToggle;
         private Toggle        _posePreserveExtraToggle;
         private Button        _poseSaveButton;
+        private Label         _poseSaveSummary;
+        private Label         _poseSaveValidation;
 
         private VisualElement _animSaveCard;
         private Label         _animSaveTitle;
@@ -76,6 +81,9 @@ namespace DenEmo
         private Label         _animSaveNoKeys;
         private Toggle        _animSaveAsNewToggle;
         private Button        _animSaveButton;
+        private VisualElement _animPendingCard;
+        private Label         _animPendingLabel;
+        private Button        _animPendingRecord, _animPendingDiscard;
 
         // ─── Binding ──────────────────────────────────────────────────────────
 
@@ -102,13 +110,14 @@ namespace DenEmo
 
             // アニメーション参照（Pose）
             _poseSourceCard        = root.Q<VisualElement>("pose-source-card");
-            _poseSourceTitle       = root.Q<Label>("pose-source-title");
+            _poseSourceTitle       = root.Q<Foldout>("pose-source-title");
             _poseSourceLabel       = root.Q<Label>("pose-source-label");
             _poseSourceField       = root.Q<ObjectField>("pose-source-field");
             _poseSourceExtraToggle = root.Q<Toggle>("pose-source-extra-toggle");
             _poseSourceApply       = root.Q<Button>("pose-source-apply");
             _poseSourceAlign       = root.Q<Button>("pose-source-align");
 
+            _poseSourceTitle.SetValueWithoutNotify(loadedClip != null);
             _poseSourceField.objectType        = typeof(AnimationClip);
             _poseSourceField.allowSceneObjects = false;
             _poseSourceField.RegisterValueChangedCallback(evt =>
@@ -151,6 +160,10 @@ namespace DenEmo
             };
 
             // 検索・絞り込み
+            _workflowTitle = root.Q<Label>("workflow-title");
+            _workflowHint = root.Q<Label>("workflow-hint");
+            _searchResetAll = root.Q<Button>("search-reset-all");
+            _searchResetAll.clicked += ResetSearchFilters;
             _searchCard           = root.Q<VisualElement>("search-card");
             _searchTitle          = root.Q<Label>("search-title");
             _searchKeywordLabel   = root.Q<Label>("search-keyword-label");
@@ -236,6 +249,8 @@ namespace DenEmo
             _poseBackupToggle        = root.Q<Toggle>("pose-backup-toggle");
             _posePreserveExtraToggle = root.Q<Toggle>("pose-preserve-extra-toggle");
             _poseSaveButton          = root.Q<Button>("pose-save-button");
+            _poseSaveSummary = root.Q<Label>("pose-save-summary");
+            _poseSaveValidation = root.Q<Label>("pose-save-validation");
 
             _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
             _poseSaveFolderField.RegisterValueChangedCallback(evt => saveFolder = evt.newValue);
@@ -273,6 +288,22 @@ namespace DenEmo
             _poseSaveButton.clicked += SavePoseAnimation;
 
             // アニメーション保存（Animation）
+            _animPendingCard = root.Q<VisualElement>("anim-pending-card");
+            _animPendingLabel = root.Q<Label>("anim-pending-label");
+            _animPendingRecord = root.Q<Button>("anim-pending-record");
+            _animPendingDiscard = root.Q<Button>("anim-pending-discard");
+            _animPendingRecord.clicked += () =>
+            {
+                _animModeUI.RecordUnrecordedChanges();
+                UpdateAnimSaveCard();
+                Repaint();
+            };
+            _animPendingDiscard.clicked += () =>
+            {
+                _animModeUI.DiscardUnrecordedChanges();
+                UpdateAnimSaveCard();
+                Repaint();
+            };
             _animSaveCard        = root.Q<VisualElement>("anim-save-card");
             _animSaveTitle       = root.Q<Label>("anim-save-title");
             _animSaveStats       = root.Q<Label>("anim-save-stats");
@@ -304,7 +335,7 @@ namespace DenEmo
             _targetNoShapes.text     = DenEmoLoc.T("ui.mesh.noShapes");
             _targetRefresh.text      = DenEmoLoc.T("ui.footer.refresh");
 
-            _poseSourceTitle.text     = DenEmoLoc.T("ui.section.animSource");
+            _poseSourceTitle.text     = DenEmoLoc.T("ui.source.optional");
             _poseSourceLabel.text     = DenEmoLoc.T("ui.animSource.clip.label");
             _poseSourceField.tooltip  = DenEmoLoc.T("ui.animSource.clip.tip");
             _poseSourceExtraToggle.text    = DenEmoLoc.T("ui.animSource.loadExtra");
@@ -314,6 +345,10 @@ namespace DenEmo
             _poseSourceAlign.text     = DenEmoLoc.T("ui.animSource.alignKeys.button");
             _poseSourceAlign.tooltip  = DenEmoLoc.T("ui.align.apply.tip");
 
+            _searchResetAll.text = DenEmoLoc.T("ui.filter.resetAll");
+            _searchResetAll.tooltip = DenEmoLoc.T("ui.filter.resetAll.tip");
+            _searchClear.tooltip = DenEmoLoc.T("ui.filter.clearSearch");
+            _targetMainClear.tooltip = DenEmoLoc.T("ui.mesh.clear");
             _searchTitle.text           = DenEmoLoc.T("ui.section.searchFilter");
             _searchKeywordLabel.text    = DenEmoLoc.T("ui.filter.keyword");
             _chipFav.text               = DenEmoLoc.T("ui.filter.fav");
@@ -338,6 +373,8 @@ namespace DenEmo
             _posePreserveExtraToggle.tooltip = DenEmoLoc.T("ui.footer.preserveExtra.tip");
             _poseSaveButton.text          = DenEmoLoc.T("ui.footer.saveAnim");
 
+            _animPendingRecord.text = DenEmoLoc.T("ui.anim.pending.record");
+            _animPendingDiscard.text = DenEmoLoc.T("ui.anim.pending.discard");
             _animSaveTitle.text          = DenEmoLoc.T("ui.section.saveAnim");
             _animSaveNoKeys.text         = DenEmoLoc.T("ui.animMode.noKeys.warn");
             _animSaveAsNewToggle.text    = DenEmoLoc.T("ui.animMode.saveAsNew");
@@ -353,10 +390,23 @@ namespace DenEmo
         private void UpdateSectionCards()
         {
             if (_targetCard == null) return;
+            UpdateWorkflowGuide();
             UpdateTargetCard();
             UpdateSearchCard();
             UpdatePoseSourceCard();
+            UpdatePoseSaveCard();
             UpdateAnimSaveCard();
+        }
+
+        private void UpdateWorkflowGuide()
+        {
+            string mode = _currentMode == EditorMode.Pose ? "pose"
+                : _currentMode == EditorMode.Animation ? "anim" : "fx";
+            _workflowTitle.text = DenEmoLoc.T("ui.workflow." + mode + ".title");
+            string hint = !HasUsableTarget() ? "target"
+                : _currentMode == EditorMode.Animation && _animModeUI.ClipModel.Clip == null ? "clip"
+                : _currentMode == EditorMode.Animation && _animModeUI.IsRecording ? "recording" : mode;
+            _workflowHint.text = DenEmoLoc.T("ui.workflow." + hint + ".hint");
         }
 
         private void UpdateTargetCard()
@@ -384,6 +434,11 @@ namespace DenEmo
 
         private void UpdateSearchCard()
         {
+            bool filtered = !string.IsNullOrEmpty(searchText) || showOnlyFavorites
+                || showOnlyIncluded || showOnlyNonZero || vertexFilterActive || vertexPickMode
+                || _meshFilterIndex >= 0
+                || (_currentMode == EditorMode.Animation && _animModeUI.TrackFilterEnabled);
+            _searchResetAll.SetEnabled(filtered);
             if (_searchField.value != searchText)
                 _searchField.SetValueWithoutNotify(searchText);
             _searchClear.style.display = string.IsNullOrEmpty(searchText)
@@ -447,6 +502,12 @@ namespace DenEmo
         private void UpdateAnimSaveCard()
         {
             var clip = _animModeUI.ClipModel.Clip;
+            bool pending = clip != null && _animModeUI.UnrecordedChangeCount > 0;
+            _animPendingCard.style.display = pending && HasUsableTarget() ? DisplayStyle.Flex : DisplayStyle.None;
+            _animPendingLabel.text = DenEmoLoc.Tf("ui.anim.pending.message", _animModeUI.UnrecordedChangeCount);
+            _animSaveButton.SetEnabled(clip != null && !pending);
+            _animSaveButton.tooltip = pending ? DenEmoLoc.T("ui.anim.pending.saveHint") : string.Empty;
+            _animSaveAsNewToggle.SetEnabled(clip != null);
             if (clip == null)
             {
                 _animSaveStats.style.display  = DisplayStyle.None;
@@ -604,6 +665,25 @@ namespace DenEmo
 
         // ─── Filter helpers ───────────────────────────────────────────────────
 
+        private void ResetSearchFilters()
+        {
+            bool meshFilterChanged = _meshFilterIndex >= 0;
+            searchText = string.Empty;
+            showOnlyFavorites = showOnlyIncluded = showOnlyNonZero = false;
+            _meshFilterIndex = -1;
+            if (_currentMode == EditorMode.Animation) _animModeUI.TrackFilterEnabled = false;
+            DenEmoProjectPrefs.SetString("DenEmo_SearchText", searchText);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyFavorites", false);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyIncluded", false);
+            DenEmoProjectPrefs.SetBool("DenEmo_ShowOnlyNonZero", false);
+            DenEmoProjectPrefs.SetInt("DenEmo_MeshFilter", -1);
+            ClearVertexFilter();
+            if (meshFilterChanged) RefreshListAndCache();
+            UpdateSearchCard();
+            _searchField.Focus();
+            Repaint();
+        }
+
         private void ToggleFilterChip(ref bool state, string prefsKey)
         {
             state = !state;
@@ -621,7 +701,7 @@ namespace DenEmo
         private string[] BuildMeshFilterOptions(List<SkinnedMeshRenderer> targets)
         {
             var opts = new string[targets.Count + 1];
-            opts[0] = "All";
+            opts[0] = DenEmoLoc.T("ui.filter.allMeshes");
             for (int i = 0; i < targets.Count; i++)
                 opts[i + 1] = targets[i] != null ? targets[i].name : "?";
             return opts;
@@ -629,32 +709,63 @@ namespace DenEmo
 
         // ─── Save (Pose) ──────────────────────────────────────────────────────
 
+        private int CountIncludedShapeKeys()
+        {
+            int count = 0;
+            foreach (var item in _model.Items)
+                if (item.IsIncluded && !item.IsVrcExcluded(_model.IsAnimationMode) && !item.IsLipSyncShape)
+                    count++;
+            return count;
+        }
+
+        private string GetPoseSaveValidation()
+        {
+            if (!HasUsableTarget()) return DenEmoLoc.T("dlg.apply.noTarget");
+            if (!HasIncludedShapeKeys()) return DenEmoLoc.T("ui.save.selectShapes");
+            if (!overwriteSaveEnabled) return null;
+            if (overwriteTargetClip == null) return DenEmoLoc.T("ui.save.selectOverwrite");
+            string path = AssetDatabase.GetAssetPath(overwriteTargetClip);
+            if (!path.StartsWith("Assets/", System.StringComparison.Ordinal)
+                || !path.EndsWith(".anim", System.StringComparison.OrdinalIgnoreCase)
+                || AssetDatabase.IsSubAsset(overwriteTargetClip))
+                return DenEmoLoc.T("ui.save.editableClip");
+            return null;
+        }
+
+        private void UpdatePoseSaveCard()
+        {
+            string validation = GetPoseSaveValidation();
+            _poseSaveSummary.text = DenEmoLoc.Tf("ui.save.summary", CountIncludedShapeKeys());
+            _poseSaveValidation.text = validation ?? string.Empty;
+            _poseSaveValidation.style.display = validation == null ? DisplayStyle.None : DisplayStyle.Flex;
+            _poseSaveButton.SetEnabled(validation == null);
+            _poseSaveButton.text = overwriteSaveEnabled
+                ? DenEmoLoc.Tf("ui.save.overwriteButton", overwriteTargetClip != null ? overwriteTargetClip.name : "...")
+                : DenEmoLoc.T("ui.save.newButton");
+            _poseSaveButton.tooltip = validation ?? DenEmoLoc.T("ui.save.summary.tip");
+            _poseSaveFolderField.SetEnabled(!overwriteSaveEnabled);
+            _poseSaveBrowse.SetEnabled(!overwriteSaveEnabled);
+        }
+
         private void SavePoseAnimation()
         {
-            if (!HasIncludedShapeKeys())
+            string validation = GetPoseSaveValidation();
+            if (validation != null)
             {
-                EditorUtility.DisplayDialog(
-                    DenEmoLoc.T("dlg.save.noIncluded.title"),
-                    DenEmoLoc.T("dlg.save.noIncluded.msg"),
-                    DenEmoLoc.T("dlg.ok"));
+                SetStatus(validation, 2);
+                UpdatePoseSaveCard();
+                return;
             }
-            else if (overwriteSaveEnabled && overwriteTargetClip != null)
-            {
-                string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
-                SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
-                var err = AnimationExporter.SaveAnimationClipToPath(_model, clipPath, out string path, autoBackup,
-                                                                    preserveExtraCurves, _importedExtraCurves);
-                if (err != null) SetStatus(err, 3);
-                else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
-            }
-            else
-            {
-                SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
-                var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path, autoBackup,
-                                                              preserveExtraCurves, _importedExtraCurves);
-                if (err != null) SetStatus(err, 3);
-                else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
-            }
+            SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
+            string path;
+            string err = overwriteSaveEnabled
+                ? AnimationExporter.SaveAnimationClipToPath(_model, AssetDatabase.GetAssetPath(overwriteTargetClip),
+                    out path, autoBackup, preserveExtraCurves, _importedExtraCurves)
+                : AnimationExporter.SaveAnimationClip(_model, saveFolder, out path, autoBackup,
+                    preserveExtraCurves, _importedExtraCurves);
+            if (err != null) SetStatus(err, 3);
+            else if (string.IsNullOrEmpty(path)) SetStatus(DenEmoLoc.T("status.saveCancelled"), 0);
+            else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
         }
 
         private bool HasIncludedShapeKeys()
