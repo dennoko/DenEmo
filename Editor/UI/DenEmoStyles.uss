@@ -321,8 +321,34 @@
     margin-top: 0;
 }
 
+.dennoko-root .dennoko-tl-tracks > .unity-scroll-view__content-and-vertical-scroll-container,
+.dennoko-root .dennoko-tl-tracks #unity-content-viewport,
+.dennoko-root .dennoko-tl-tracks #unity-content-container {
+    flex-grow: 1;
+}
+
 .dennoko-root .dennoko-tl-tracks #unity-content-container > * {
     flex-shrink: 0;
+}
+
+.dennoko-root .dennoko-tl-tracks #unity-content-container > .dennoko-tl-tracks-filler {
+    flex-shrink: 1;
+    flex-grow: 1;
+}
+
+.dennoko-root .dennoko-tl-tracks-filler {
+    flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.dennoko-root .dennoko-tl-filler-lane {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    margin-right: 16px;
+    background-color: var(--dennoko-surface-0);
 }
 
 /* ルーラーの目盛りラベル（レーン基準の絶対配置） */

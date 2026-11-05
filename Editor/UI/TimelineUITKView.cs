@@ -544,17 +544,19 @@ namespace DenEmo.UI
             _leftPanels.RemoveAll(lp => lp.ClassListContains("dennoko-tl-track-left"));
 
             var tracks = _mode.ClipModel.Tracks;
-            _noTracksLabel.style.display = tracks.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            _tracksScroll.style.display  = tracks.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
 
             if (_isSeparateWindow)
             {
+                _noTracksLabel.style.display = DisplayStyle.None;
+                _tracksScroll.style.display  = DisplayStyle.Flex;
                 _tracksScroll.style.maxHeight = StyleKeyword.Null;
                 _tracksScroll.style.flexGrow = 1f;
                 _tracksScroll.style.flexShrink = 1f;
             }
             else
             {
+                _noTracksLabel.style.display = tracks.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+                _tracksScroll.style.display  = tracks.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
                 float maxH = Mathf.Min(tracks.Count * (TRACK_ROW_HEIGHT + 1f), MAX_TRACKS_HEIGHT);
                 _tracksScroll.style.maxHeight = maxH;
                 _tracksScroll.style.flexGrow = 0f;
@@ -562,6 +564,11 @@ namespace DenEmo.UI
 
             foreach (var track in tracks)
                 _tracksScroll.Add(MakeTrackRow(track));
+
+            if (_isSeparateWindow)
+            {
+                _tracksScroll.Add(MakeFillerRow(showEmptyNotice: tracks.Count == 0));
+            }
 
             LayoutActionRow();
             _lastRevision = _mode.ClipModel.Revision;
@@ -606,6 +613,42 @@ namespace DenEmo.UI
             _lanes.Add(lane);
             row.Add(lane);
 
+            return row;
+        }
+
+        private VisualElement MakeFillerRow(bool showEmptyNotice = false)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("dennoko-tl-strip");
+            row.AddToClassList("dennoko-tl-tracks-filler");
+
+            var left = new VisualElement();
+            left.AddToClassList("dennoko-tl-left");
+            left.AddToClassList("dennoko-tl-track-left");
+            left.style.width = _labelWidth;
+            row.Add(left);
+            _leftPanels.Add(left);
+
+            var lane = new VisualElement();
+            lane.AddToClassList("dennoko-tl-lane");
+            lane.AddToClassList("dennoko-tl-track-lane");
+            lane.AddToClassList("dennoko-tl-filler-lane");
+            lane.generateVisualContent += ctx => DrawFillerLane(ctx);
+            RegisterSeekAndZoom(lane);
+            RegisterContextMenu(lane);
+            _lanes.Add(lane);
+
+            if (showEmptyNotice)
+            {
+                var lbl = new Label(DenEmoLoc.T("ui.timeline.noKeys"));
+                lbl.AddToClassList("dennoko-text-tertiary");
+                lbl.AddToClassList("dennoko-wrap");
+                lbl.style.paddingLeft = 12;
+                lbl.style.paddingTop = 12;
+                lane.Add(lbl);
+            }
+
+            row.Add(lane);
             return row;
         }
 
@@ -873,6 +916,26 @@ namespace DenEmo.UI
                 if (kx < -DIAMOND_SIZE || kx > w + DIAMOND_SIZE) continue;
                 bool current = Mathf.Abs(kt - m.CurrentTime) <= tol;
                 Diamond(p, kx, cy, DIAMOND_SIZE + (current ? 1f : 0f), current ? _cTextPrim : _cTextSecond);
+            }
+        }
+
+        private void DrawFillerLane(MeshGenerationContext ctx)
+        {
+            var lane = ctx.visualElement;
+            float w = lane.contentRect.width, h = lane.contentRect.height;
+            if (w <= 0f || h <= 0f || _mode?.ClipModel?.Clip == null) return;
+            var p = ctx.painter2D;
+            var m = _mode.ClipModel;
+
+            // 現在時刻ライン
+            float sx = TimeToX(m.CurrentTime, w);
+            if (sx >= 0 && sx <= w) Line(p, sx, 0, sx, h, CurrentLine, 2f);
+
+            // ブロックフラッシュ
+            if (_blockFlashFrame >= 0 && EditorApplication.timeSinceStartup < _blockFlashUntil)
+            {
+                float bx = TimeToX(m.FrameToTime(_blockFlashFrame), w);
+                if (bx >= 0 && bx <= w) Line(p, bx, 0, bx, h, _cWarning, 2f);
             }
         }
 
