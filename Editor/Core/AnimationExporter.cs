@@ -285,6 +285,7 @@ namespace DenEmo.Core
 
             var bindings = AnimationUtility.GetCurveBindings(clip);
             bool applied = false;
+            bool undoRecorded = false;
 
             foreach (var b in bindings)
             {
@@ -300,6 +301,11 @@ namespace DenEmo.Core
 
                 if (idx >= 0)
                 {
+                    if (!undoRecorded)
+                    {
+                        Undo.RecordObject(model.TargetSkinnedMesh, "Apply Animation");
+                        undoRecorded = true;
+                    }
                     model.TargetSkinnedMesh.SetBlendShapeWeight(idx, value);
                     applied = true;
                 }

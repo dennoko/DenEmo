@@ -113,6 +113,9 @@ namespace DenEmo.UI
         /// <summary>フィルターや対象メッシュの変更後に呼ぶ。次の同期ティックで行を再構築する。</summary>
         public void MarkStructureDirty() => _structureDirty = true;
 
+        /// <summary>Undo/Redo 直後など、次のポーリングを待たずに UI 表示を即時同期する。</summary>
+        public void SyncNow() => TickStructureAndSync();
+
         /// <summary>言語切替時に呼ぶ。</summary>
         public void RefreshLabels()
         {

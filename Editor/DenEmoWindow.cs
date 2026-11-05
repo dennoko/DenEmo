@@ -85,7 +85,7 @@ namespace DenEmo
 
         private bool   includeFlagsDirty         = false;
         private double lastIncludeFlagsChangeTime = 0;
-        private List<float> snapshotValues        = null;
+        private Dictionary<string, float> snapshotValues = null;
 
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
         private Label  _statusLabel;
@@ -245,7 +245,7 @@ namespace DenEmo
             vertexPickMode = false;
             ClearVertexGuideCache();
 
-            if (includeFlagsDirty) SaveIncludeFlagsPrefsImmediate();
+            if (includeFlagsDirty || _model.Items.Count > 0) SaveIncludeFlagsPrefsImmediate();
 
             if (_model.TargetSkinnedMesh)
                 DenEmoProjectPrefs.SetString("DenEmo_LastTarget", _model.TargetSkinnedMesh.GetInstanceID().ToString());
@@ -294,13 +294,7 @@ namespace DenEmo
                 DenEmoProjectPrefs.SetString("DenEmo_AnimClipGuid", "");
             }
 
-            if (snapshotValues != null && snapshotValues.Count > 0)
-            {
-                var parts = new string[snapshotValues.Count];
-                for (int i = 0; i < snapshotValues.Count; i++)
-                    parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
-                DenEmoProjectPrefs.SetString("DenEmo_Snapshot", string.Join(",", parts));
-            }
+            SaveSnapshotPrefs();
 
             SaveBlendValuesPrefs();
             SaveCollapsedGroupsPrefs();
@@ -330,6 +324,8 @@ namespace DenEmo
         private void OnUndoRedo()
         {
             _model.SyncValuesFromMesh();
+            UpdateVisibility();
+            _listUI.SyncNow();
             if (_currentMode == EditorMode.Animation)
             {
                 _animModeUI.OnUndoRedo();

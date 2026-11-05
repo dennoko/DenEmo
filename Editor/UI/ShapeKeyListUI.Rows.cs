@@ -19,6 +19,8 @@ namespace DenEmo.UI
             public Label  Name;
             public bool   Dragging;
             public bool   DragUndoDone;
+            public float  DragStartLeft;
+            public float  DragStartRight;
         }
 
         private class GroupBinding
@@ -220,6 +222,15 @@ namespace DenEmo.UI
         {
             b.Dragging     = true;
             b.DragUndoDone = false;
+            var smr        = b.Left.OwnerSmr ?? _model.TargetSkinnedMesh;
+            b.DragStartLeft = (smr != null && smr.sharedMesh != null && b.Left.Index >= 0 && b.Left.Index < smr.sharedMesh.blendShapeCount)
+                ? smr.GetBlendShapeWeight(b.Left.Index)
+                : b.Left.Value;
+            b.DragStartRight = b.Right != null
+                ? ((smr != null && smr.sharedMesh != null && b.Right.Index >= 0 && b.Right.Index < smr.sharedMesh.blendShapeCount)
+                    ? smr.GetBlendShapeWeight(b.Right.Index)
+                    : b.Right.Value)
+                : 0f;
             _anyDragging   = true;
             _animContext?.OnSliderDragStateChanged?.Invoke(true);
         }
@@ -239,14 +250,23 @@ namespace DenEmo.UI
                 return;
             }
 
-            // ドラッグ終了時にスロットルを破棄し、最終値を確定反映する
+            // ドラッグ終了時にスロットルを破棄し、変更前→最終値の差分を 1 回の Undo として確定反映する。
+            // ドラッグ中は Undo.RecordObject を呼ばず、ここで一時的に開始値を戻してから RecordObject → 最終値適用
+            // とすることで、同一イベント内で確実に PropertyModification を記録させつつドラッグ中の負荷をゼロに保つ。
             StopThrottle();
             var smr = b.Left.OwnerSmr ?? _model.TargetSkinnedMesh;
             if (smr != null)
             {
+                if (b.DragUndoDone)
+                {
+                    smr.SetBlendShapeWeight(b.Left.Index, b.DragStartLeft);
+                    if (b.Right != null) smr.SetBlendShapeWeight(b.Right.Index, b.DragStartRight);
+                    Undo.RecordObject(smr, "Change Shape Key");
+                }
                 smr.SetBlendShapeWeight(b.Left.Index, b.Left.Value);
                 if (b.Right != null) smr.SetBlendShapeWeight(b.Right.Index, b.Right.Value);
             }
+            b.DragUndoDone = false;
         }
 
         private void OnRowSliderChanged(RowBinding b, float newValue)
@@ -262,11 +282,7 @@ namespace DenEmo.UI
 
             if (b.Dragging)
             {
-                if (!b.DragUndoDone)
-                {
-                    if (smr != null) Undo.RecordObject(smr, "Change Shape Key");
-                    b.DragUndoDone = true;
-                }
+                b.DragUndoDone = true;
                 b.Left.Value = newValue;
                 QueuePendingApply(b.Left, newValue);
                 if (b.Right != null)

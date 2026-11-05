@@ -110,9 +110,12 @@ namespace DenEmo
 
         // ─── Include flag prefs ───────────────────────────────────────────────
 
+        private const string IncludeFlagsV2Prefix = "v2\n";
+
         private void LoadIncludeFlagsPrefs()
         {
             var bySmr = BuildItemsBySmr();
+            bool migrated = false;
 
             foreach (var kv in bySmr)
             {
@@ -122,26 +125,56 @@ namespace DenEmo
                 if (!EditorPrefs.HasKey(key)) continue;
                 var s = EditorPrefs.GetString(key);
                 if (string.IsNullOrEmpty(s)) continue;
-                var parts = s.Split(',');
+
                 var items = kv.Value;
-                for (int i = 0; i < parts.Length && i < items.Count; i++)
-                    items[i].IsIncluded = parts[i] == "1" || parts[i].Equals("true", StringComparison.OrdinalIgnoreCase);
+                if (s.StartsWith(IncludeFlagsV2Prefix, StringComparison.Ordinal))
+                {
+                    var body = s.Substring(IncludeFlagsV2Prefix.Length);
+                    var includedNames = new HashSet<string>(
+                        body.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries),
+                        StringComparer.Ordinal);
+                    foreach (var item in items)
+                        item.IsIncluded = includedNames.Contains(item.Name);
+                }
+                else
+                {
+                    // 旧フォーマット ("1,0,1,...") からの移行:
+                    // シェイプキー数が一致する場合のみインデックスで復元し、直ちに v2 形式へ変換保存する。
+                    // FBX 更新等でシェイプキー数が変化している場合は位置ずれを防ぐためインデックス復元を行わない。
+                    var parts = s.Split(',');
+                    if (parts.Length == items.Count)
+                    {
+                        for (int i = 0; i < items.Count; i++)
+                            items[i].IsIncluded = parts[i] == "1" || parts[i].Equals("true", StringComparison.OrdinalIgnoreCase);
+                    }
+                    migrated = true;
+                }
             }
+
+            if (migrated)
+                SaveIncludeFlagsPrefsImmediate();
         }
 
         private void SaveIncludeFlagsPrefsImmediate()
         {
             var bySmr = BuildItemsBySmr();
+            var sb = new System.Text.StringBuilder();
 
             foreach (var kv in bySmr)
             {
                 var key = GetBlendPrefsKeyForSmr(kv.Key);
                 if (string.IsNullOrEmpty(key)) continue;
                 key += "|IncludeFlags";
-                var parts = new string[kv.Value.Count];
-                for (int i = 0; i < kv.Value.Count; i++)
-                    parts[i] = kv.Value[i].IsIncluded ? "1" : "0";
-                EditorPrefs.SetString(key, string.Join(",", parts));
+
+                sb.Clear();
+                sb.Append(IncludeFlagsV2Prefix);
+                var items = kv.Value;
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (items[i].IsIncluded)
+                        sb.Append(items[i].Name).Append('\n');
+                }
+                EditorPrefs.SetString(key, sb.ToString());
             }
             includeFlagsDirty = false;
         }
@@ -181,18 +214,30 @@ namespace DenEmo
 
         // ─── Snapshot ─────────────────────────────────────────────────────────
 
+        private const string SnapshotV2Prefix = "v2\n";
+
+        private static string MakeSnapshotKey(ShapeKeyItem item)
+            => (item.SmrPath ?? "") + "\t" + item.Name;
+
         private void CreateSnapshot(bool loadTime)
         {
             if (_model.Items.Count == 0) return;
-            snapshotValues = new List<float>();
-            foreach (var i in _model.Items) snapshotValues.Add(i.Value);
+            snapshotValues = new Dictionary<string, float>(_model.Items.Count, StringComparer.Ordinal);
+            foreach (var item in _model.Items)
+                snapshotValues[MakeSnapshotKey(item)] = item.Value;
             if (!loadTime)
-            {
-                var parts = new string[snapshotValues.Count];
-                for (int i = 0; i < snapshotValues.Count; i++)
-                    parts[i] = snapshotValues[i].ToString(System.Globalization.CultureInfo.InvariantCulture);
-                DenEmoProjectPrefs.SetString("DenEmo_Snapshot", string.Join(",", parts));
-            }
+                SaveSnapshotPrefs();
+        }
+
+        private void SaveSnapshotPrefs()
+        {
+            if (snapshotValues == null || snapshotValues.Count == 0) return;
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new System.Text.StringBuilder();
+            sb.Append(SnapshotV2Prefix);
+            foreach (var kv in snapshotValues)
+                sb.Append(kv.Key).Append('\t').Append(kv.Value.ToString(ic)).Append('\n');
+            DenEmoProjectPrefs.SetString("DenEmo_Snapshot", sb.ToString());
         }
 
         /// <summary>メモリ上にスナップショットが無ければプロジェクト設定から復元する。</summary>
@@ -201,32 +246,59 @@ namespace DenEmo
             if (snapshotValues != null && snapshotValues.Count > 0) return;
             var s = DenEmoProjectPrefs.GetString("DenEmo_Snapshot");
             if (string.IsNullOrEmpty(s)) return;
-            snapshotValues = new List<float>();
-            foreach (var p in s.Split(','))
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            snapshotValues = new Dictionary<string, float>(StringComparer.Ordinal);
+
+            if (s.StartsWith(SnapshotV2Prefix, StringComparison.Ordinal))
             {
-                snapshotValues.Add(float.TryParse(p, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0f);
+                var body = s.Substring(SnapshotV2Prefix.Length);
+                foreach (var line in body.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int sep = line.LastIndexOf('\t');
+                    if (sep <= 0) continue;
+                    string k = line.Substring(0, sep);
+                    string vStr = line.Substring(sep + 1);
+                    if (float.TryParse(vStr, System.Globalization.NumberStyles.Float, ic, out var f))
+                        snapshotValues[k] = f;
+                }
+            }
+            else
+            {
+                // 旧フォーマット (カンマ区切り数値列) はシェイプキー数が一致する場合のみ復元
+                var parts = s.Split(',');
+                if (parts.Length == _model.Items.Count)
+                {
+                    for (int i = 0; i < parts.Length; i++)
+                    {
+                        float f = float.TryParse(parts[i], System.Globalization.NumberStyles.Float, ic, out var v) ? v : 0f;
+                        snapshotValues[MakeSnapshotKey(_model.Items[i])] = f;
+                    }
+                }
             }
         }
 
         private void RestoreSnapshot()
         {
             EnsureSnapshotLoaded();
-            if (snapshotValues == null) return;
-            int n = Math.Min(snapshotValues.Count, _model.Items.Count);
-            for (int i = 0; i < n; i++)
+            if (snapshotValues == null || snapshotValues.Count == 0) return;
+
+            var recordedSmrs = new HashSet<SkinnedMeshRenderer>();
+            foreach (var item in _model.Items)
             {
-                var item = _model.Items[i];
-                item.Value = snapshotValues[i];
                 var smr = item.OwnerSmr ?? _model.TargetSkinnedMesh;
-                if (smr != null) smr.SetBlendShapeWeight(item.Index, snapshotValues[i]);
+                if (smr != null && recordedSmrs.Add(smr))
+                    Undo.RecordObject(smr, "Restore Snapshot");
+
+                float val = snapshotValues.TryGetValue(MakeSnapshotKey(item), out var v) ? v : 0f;
+                item.Value = val;
+                if (smr != null) smr.SetBlendShapeWeight(item.Index, val);
             }
             SaveBlendValuesPrefs();
         }
 
         /// <summary>
-        /// スナップショットとの差分判定を返す。スナップショットは作成時の Items 順の値列なので、
-        /// 現在の Items と index で突き合わせる。範囲外のシェイプは初期値 0 と比較する。
+        /// スナップショットとの差分判定を返す。シェイプキー名ベースで比較し、
+        /// スナップショット未収録の新規シェイプは初期値 0 と比較する。
         /// スナップショット未作成時は null。
         /// </summary>
         private Func<ShapeKeyItem, bool> BuildSnapshotDiffChecker()
@@ -234,13 +306,9 @@ namespace DenEmo
             EnsureSnapshotLoaded();
             if (snapshotValues == null || snapshotValues.Count == 0) return null;
 
-            var baseline = new Dictionary<ShapeKeyItem, float>();
-            int n = Math.Min(snapshotValues.Count, _model.Items.Count);
-            for (int i = 0; i < n; i++) baseline[_model.Items[i]] = snapshotValues[i];
-
             return item =>
             {
-                baseline.TryGetValue(item, out float baseVal);
+                snapshotValues.TryGetValue(MakeSnapshotKey(item), out float baseVal);
                 return !Mathf.Approximately(item.Value, baseVal);
             };
         }
