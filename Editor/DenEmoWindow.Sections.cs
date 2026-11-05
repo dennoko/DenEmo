@@ -23,7 +23,7 @@ namespace DenEmo
         private ObjectField   _targetMainField;
         private Button        _targetMainClear;
         private Label         _targetMissing;
-        private Label         _targetInactiveWarn;
+        private HelpBox       _targetInactiveWarn;
         private VisualElement _targetAdditionalRows;
         private Label         _targetNoShapes;
         private Button        _targetRefresh;
@@ -73,7 +73,7 @@ namespace DenEmo
         private VisualElement _animSaveCard;
         private Label         _animSaveTitle;
         private Label         _animSaveStats;
-        private Label         _animSaveNoKeys;
+        private HelpBox       _animSaveNoKeys;
         private Toggle        _animSaveAsNewToggle;
         private Button        _animSaveButton;
 
@@ -88,7 +88,7 @@ namespace DenEmo
             _targetMainField      = root.Q<ObjectField>("target-main-field");
             _targetMainClear      = root.Q<Button>("target-main-clear");
             _targetMissing        = root.Q<Label>("target-missing");
-            _targetInactiveWarn   = root.Q<Label>("target-inactive-warn");
+            _targetInactiveWarn   = root.Q<HelpBox>("target-inactive-warn");
             _targetAdditionalRows = root.Q<VisualElement>("target-additional-rows");
             _targetNoShapes       = root.Q<Label>("target-noshapes");
             _targetRefresh        = root.Q<Button>("target-refresh");
@@ -276,7 +276,7 @@ namespace DenEmo
             _animSaveCard        = root.Q<VisualElement>("anim-save-card");
             _animSaveTitle       = root.Q<Label>("anim-save-title");
             _animSaveStats       = root.Q<Label>("anim-save-stats");
-            _animSaveNoKeys      = root.Q<Label>("anim-save-nokeys");
+            _animSaveNoKeys      = root.Q<HelpBox>("anim-save-nokeys");
             _animSaveAsNewToggle = root.Q<Toggle>("anim-save-asnew");
             _animSaveButton      = root.Q<Button>("anim-save-button");
 
@@ -300,7 +300,7 @@ namespace DenEmo
             _targetMainLabel.tooltip = DenEmoLoc.T("ui.mesh.tooltip");
             _targetMainField.tooltip = DenEmoLoc.T("ui.mesh.tooltip");
             _targetMissing.text      = DenEmoLoc.T("ui.mesh.missing");
-            _targetInactiveWarn.text = "⚠ " + DenEmoLoc.T("ui.mesh.inactive.warn");
+            _targetInactiveWarn.text = DenEmoLoc.T("ui.mesh.inactive.warn");
             _targetNoShapes.text     = DenEmoLoc.T("ui.mesh.noShapes");
             _targetRefresh.text      = DenEmoLoc.T("ui.footer.refresh");
 

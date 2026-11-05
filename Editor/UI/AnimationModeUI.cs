@@ -95,7 +95,7 @@ namespace DenEmo.UI
         private Label         _clipFieldLabel;
         private VisualElement _clipGuide;
         private Label         _guide1, _guide2, _guide3;
-        private Label         _conflictWarn;
+        private HelpBox       _conflictWarn;
 
         // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -254,7 +254,7 @@ namespace DenEmo.UI
             _guide1           = card.Q<Label>("anim-guide-1");
             _guide2           = card.Q<Label>("anim-guide-2");
             _guide3           = card.Q<Label>("anim-guide-3");
-            _conflictWarn     = card.Q<Label>("anim-conflict-warn");
+            _conflictWarn     = card.Q<HelpBox>("anim-conflict-warn");
 
             _clipField.objectType = typeof(AnimationClip);
             _clipField.allowSceneObjects = false;

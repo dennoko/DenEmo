@@ -52,10 +52,10 @@ namespace DenEmo.UI
         private Label         _controllerFieldLabel;
         private ObjectField   _controllerField;
         private Label         _statusLabel;
-        private Label         _avatarNotFound;
-        private Label         _readFailedLabel;
-        private Label         _overrideLabel;
-        private Label         _missingLabel;
+        private HelpBox       _avatarNotFound;
+        private HelpBox       _readFailedLabel;
+        private HelpBox       _overrideLabel;
+        private HelpBox       _missingLabel;
         private Button        _rescanButton;
 
         private VisualElement _listCard;
@@ -79,7 +79,7 @@ namespace DenEmo.UI
         private Button        _modeDuplicateChip;
         private Button        _modeDirectChip;
         private Label         _modeDescLabel;
-        private Label         _manualNoteLabel;
+        private HelpBox       _manualNoteLabel;
         private Button        _applyButton;
         private VisualElement _resultBand;
         private Label         _resultSuccessLabel;
@@ -323,10 +323,10 @@ namespace DenEmo.UI
             _controllerFieldLabel = root.Q<Label>("fx-controller-field-label");
             _controllerField      = root.Q<ObjectField>("fx-controller-field");
             _statusLabel          = root.Q<Label>("fx-status-label");
-            _avatarNotFound       = root.Q<Label>("fx-avatar-notfound");
-            _readFailedLabel      = root.Q<Label>("fx-readfailed");
-            _overrideLabel        = root.Q<Label>("fx-override-unsupported");
-            _missingLabel         = root.Q<Label>("fx-missing");
+            _avatarNotFound       = root.Q<HelpBox>("fx-avatar-notfound");
+            _readFailedLabel      = root.Q<HelpBox>("fx-readfailed");
+            _overrideLabel        = root.Q<HelpBox>("fx-override-unsupported");
+            _missingLabel         = root.Q<HelpBox>("fx-missing");
             _rescanButton         = root.Q<Button>("fx-rescan");
 
             _listCard               = root.Q<VisualElement>("fx-list-card");
@@ -347,7 +347,7 @@ namespace DenEmo.UI
             _modeDuplicateChip     = root.Q<Button>("fx-mode-duplicate");
             _modeDirectChip        = root.Q<Button>("fx-mode-direct");
             _modeDescLabel         = root.Q<Label>("fx-mode-desc");
-            _manualNoteLabel       = root.Q<Label>("fx-manual-note");
+            _manualNoteLabel       = root.Q<HelpBox>("fx-manual-note");
             _applyButton           = root.Q<Button>("fx-apply-button");
             _resultBand            = root.Q<VisualElement>("fx-result-band");
             _resultSuccessLabel    = root.Q<Label>("fx-result-success");

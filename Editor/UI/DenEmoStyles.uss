@@ -8,10 +8,9 @@
 
 /* 追加変数（テーマ変数から派生した DenEmo 固有色） */
 .dennoko-root {
-    --dennoko-status-warning-bg: rgba(255, 183, 77, 0.2);
     --dennoko-fav-active: #ffd91a;
-    --dennoko-rec-text: #ff7373;
-    --dennoko-info-band-bg: rgba(100, 181, 246, 0.12);
+    --dennoko-rec-text: var(--dennoko-semantic-error-text);
+    --dennoko-info-band-bg: var(--dennoko-status-info-bg);
 }
 
 /* ─── ウィンドウ骨格の高さ保護 ───────────────────────────────
@@ -49,18 +48,7 @@
     padding: 1px 4px;
 }
 
-/* バージョン再取得ボタン (タイトル横の小さな ↻)。手動でアップデートチェックを再実行する */
-.dennoko-root .dennoko-version-reload-button {
-    width: 18px;
-    height: 18px;
-    margin-left: 4px;
-    padding: 0;
-    font-size: 12px;
-    color: var(--dennoko-text-tertiary);
-}
-.dennoko-root .dennoko-version-reload-button:hover {
-    color: var(--dennoko-text-primary);
-}
+
 
 /* ─── モードタブバー ─────────────────────────────────────── */
 
@@ -91,19 +79,12 @@
 
 /* ─── 汎用レイアウト ─────────────────────────────────────── */
 
-.dennoko-root .dennoko-hrow {
-    flex-direction: row;
-    align-items: center;
-}
-
 .dennoko-root .dennoko-wrap {
     white-space: normal;
 }
 
-.dennoko-root .dennoko-col-grow {
-    flex-grow: 1;
-    flex-shrink: 1;
-    overflow: hidden;
+.dennoko-root .dennoko-hrow--right {
+    justify-content: flex-end;
 }
 
 .dennoko-root .dennoko-col-fixed {
@@ -131,22 +112,6 @@
     margin: 1px 2px;
 }
 
-/* ─── 折りたたみセクションヘッダー（ボタン型） ───────────── */
-
-.dennoko-root .dennoko-fold-header {
-    background-color: transparent;
-    border-width: 0;
-    -unity-text-align: middle-left;
-    -unity-font-style: bold;
-    color: var(--dennoko-text-secondary);
-    padding: 2px 4px;
-    margin: 0;
-}
-
-.dennoko-root .dennoko-fold-header:hover {
-    background-color: var(--dennoko-hover-overlay);
-}
-
 /* ─── シェイプキー値補正カード ───────────────────────────── */
 
 .dennoko-root .dennoko-correction-rows {
@@ -167,7 +132,6 @@
 }
 
 .dennoko-root .dennoko-action-button {
-    height: 24px;
     margin: 4px 6px 6px 6px;
 }
 
@@ -565,15 +529,7 @@
     flex-shrink: 0;
 }
 
-.dennoko-root .dennoko-list-toolbar {
-    flex-direction: row;
-    align-items: center;
-    background-color: var(--dennoko-surface-2);
-    padding: 4px 8px;
-}
-
 .dennoko-root .dennoko-snap-button {
-    height: 18px;
     font-size: 10px;
     padding: 0 6px;
     margin: 1px 2px;
@@ -701,4 +657,33 @@
 .dennoko-root #anim-timeline-host {
     margin-bottom: 8px;
 }
+
+/* ─── 別窓タイムライン通知 ───────────────────────────────── */
+.dennoko-root .dennoko-tlwin-notice {
+    margin: 10px;
+    padding: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.dennoko-root .dennoko-tlwin-notice-label {
+    margin-bottom: 8px;
+}
+
+.dennoko-root .dennoko-tlwin-host {
+    flex-grow: 1;
+}
+
+/* ─── FX モードステータスラベル ─────────────────────────── */
+.dennoko-root .dennoko-fx-status-label {
+    margin-left: 90px;
+    font-size: 11px;
+}
+
+/* ─── ポップアップルート ─────────────────────────────────── */
+.dennoko-root .dennoko-popup-card {
+    margin-top: 8px;
+}
+
 

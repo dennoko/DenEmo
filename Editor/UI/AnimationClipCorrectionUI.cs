@@ -34,8 +34,7 @@ namespace DenEmo.UI
 
         // UI 要素
         private VisualElement _card;
-        private VisualElement _content;
-        private Button        _header;
+        private Foldout       _foldout;
         private Button        _apply;
         private Label         _desc, _empty, _colShape, _colMin, _colMax;
         private ScrollView    _rows;
@@ -63,8 +62,7 @@ namespace DenEmo.UI
             _setStatus = setStatus;
             _window    = window;
 
-            _header   = card.Q<Button>("correction-header");
-            _content  = card.Q<VisualElement>("correction-content");
+            _foldout  = card.Q<Foldout>("correction-foldout");
             _desc     = card.Q<Label>("correction-desc");
             _empty    = card.Q<Label>("correction-empty");
             _colShape = card.Q<Label>("correction-col-shape");
@@ -73,11 +71,11 @@ namespace DenEmo.UI
             _rows     = card.Q<ScrollView>("correction-rows");
             _apply    = card.Q<Button>("correction-apply");
 
-            _header.clicked += () =>
+            _foldout.RegisterValueChangedCallback(evt =>
             {
-                _expanded = !_expanded;
+                _expanded = evt.newValue;
                 Refresh();
-            };
+            });
             _apply.clicked += ApplyCorrection;
 
             // クリップの差し替え・キーフレーム編集・ターゲット変更を反映する
@@ -90,8 +88,8 @@ namespace DenEmo.UI
         /// <summary>言語切替時に呼ぶ。</summary>
         public void RefreshLabels()
         {
-            if (_header == null) return;
-            _header.text     = FoldHeaderText();
+            if (_foldout == null) return;
+            _foldout.text    = DenEmoLoc.T("ui.correction.title");
             _desc.text       = DenEmoLoc.T("ui.correction.desc");
             _empty.text      = DenEmoLoc.T("ui.correction.noTracks");
             _colShape.text   = DenEmoLoc.T("ui.correction.col.shape");
@@ -101,9 +99,6 @@ namespace DenEmo.UI
             _colMax.tooltip  = DenEmoLoc.T("ui.correction.col.max.tip");
             _apply.text      = DenEmoLoc.T("ui.correction.apply");
         }
-
-        private string FoldHeaderText()
-            => (_expanded ? "▼  " : "▶  ") + DenEmoLoc.T("ui.correction.title");
 
         // ─── Refresh ──────────────────────────────────────────────────────────
 
@@ -115,8 +110,7 @@ namespace DenEmo.UI
             _card.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             if (!visible) return;
 
-            _header.text = FoldHeaderText();
-            _content.style.display = _expanded ? DisplayStyle.Flex : DisplayStyle.None;
+            _foldout.SetValueWithoutNotify(_expanded);
             if (!_expanded) return;
 
             if (_rowsRevision != _clipModel.Revision || !ReferenceEquals(_rowsClip, _clipModel.Clip))

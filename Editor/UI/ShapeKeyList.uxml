@@ -1,7 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="True">
     <!-- シェイプキーリストの外枠。行は ShapeKeyRow.uxml から C# で動的生成する -->
     <ui:VisualElement name="shape-list-card" class="dennoko-list-card">
-        <ui:VisualElement name="shape-list-toolbar" class="dennoko-list-toolbar">
+        <ui:VisualElement name="shape-list-toolbar" class="dennoko-toolbar">
             <ui:Label name="shape-list-title" text="SHAPE KEYS" class="dennoko-section-title" />
             <ui:VisualElement class="dennoko-flex-spacer" />
             <ui:Button name="shape-list-bulk-menu" text="✓▼" class="dennoko-snap-button" />
