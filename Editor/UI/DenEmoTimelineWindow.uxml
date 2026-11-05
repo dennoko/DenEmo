@@ -6,7 +6,7 @@
     </ui:VisualElement>
 
     <!-- タイムライン表示領域（C# が TimelineUITKView を構築） -->
-    <ui:ScrollView name="tlwin-scroll" class="dennoko-scroll">
+    <ui:ScrollView name="tlwin-scroll" class="dennoko-scroll dennoko-tlwin-scroll">
         <ui:VisualElement name="tlwin-host" class="dennoko-tlwin-host" />
     </ui:ScrollView>
 </ui:UXML>

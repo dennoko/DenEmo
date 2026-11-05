@@ -120,11 +120,16 @@ namespace DenEmo.UI
         public void RefreshLabels()
         {
             if (_title == null) return;
-            _title.text       = DenEmoLoc.T("ui.list.title");
-            _snapCreate.text  = DenEmoLoc.T("ui.snapshot.create");
-            _snapRestore.text = DenEmoLoc.T("ui.snapshot.restore");
+            _title.text          = DenEmoLoc.T("ui.list.title");
+            _snapCreate.text     = DenEmoLoc.T("ui.snapshot.create");
+            _snapCreate.tooltip  = DenEmoLoc.T("ui.snapshot.create.tip");
+            _snapRestore.text    = DenEmoLoc.T("ui.snapshot.restore");
+            _snapRestore.tooltip = DenEmoLoc.T("ui.snapshot.restore.tip");
             if (_bulkMenu != null)
+            {
+                _bulkMenu.text    = DenEmoLoc.T("ui.list.bulkMenu.text");
                 _bulkMenu.tooltip = DenEmoLoc.T("ui.list.bulkMenu.tip");
+            }
             _emptyLabel.text  = DenEmoLoc.T("ui.mesh.noShapes");
             _noMatchLabel.text = DenEmoLoc.T("ui.list.noMatch");
             _structureDirty = true; // 行内ツールチップの言語を更新するため再構築する

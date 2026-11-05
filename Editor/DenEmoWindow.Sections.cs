@@ -57,6 +57,7 @@ namespace DenEmo
         private string        _meshFilterSignature;
 
         // ─── Save cards ───────────────────────────────────────────────────────
+        private VisualElement _footerContainer;
         private VisualElement _poseSaveCard;
         private Label         _poseSaveTitle;
         private Label         _poseSaveFolderLabel;
@@ -224,6 +225,7 @@ namespace DenEmo
                 UnityEditor.PopupWindow.Show(_previewOptionsButton.worldBound, new VertexPreviewOptionsPopup(this));
 
             // 保存設定（Pose）
+            _footerContainer     = root.Q<VisualElement>("footer-container");
             _poseSaveCard        = root.Q<VisualElement>("pose-save-card");
             _poseSaveTitle       = root.Q<Label>("pose-save-title");
             _poseSaveFolderLabel = root.Q<Label>("pose-save-folder-label");

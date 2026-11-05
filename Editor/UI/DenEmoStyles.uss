@@ -107,6 +107,7 @@
 .dennoko-root .dennoko-mini-button {
     width: 48px;
     height: 18px;
+    min-height: 0;
     font-size: 10px;
     padding: 0 4px;
     margin: 1px 2px;
@@ -166,6 +167,7 @@
 /* ✕ などのアイコン用ミニボタン */
 .dennoko-root .dennoko-icon-mini {
     width: 20px;
+    min-height: 0;
 }
 
 /* 文字幅に合わせるミニボタン（更新・参照など） */
@@ -219,7 +221,19 @@
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
-    margin-top: 6px;
+    margin-top: 4px;
+}
+
+.dennoko-root .dennoko-tl-settings {
+    padding-top: 4px;
+    border-top-width: 1px;
+    border-top-color: var(--dennoko-outline);
+}
+
+.dennoko-root .dennoko-tl-group {
+    flex-direction: row;
+    align-items: center;
+    margin: 2px 4px;
 }
 
 /* タイムラインのタイトル行（右端のボタンまで伸ばす） */
@@ -241,14 +255,21 @@
     flex-shrink: 0;
 }
 
+.dennoko-root .dennoko-tl-num .unity-base-field__input {
+    min-height: 18px;
+    padding: 1px 3px;
+}
+
 .dennoko-root .dennoko-tl-transport-btn {
-    width: 28px;
-    height: 22px;
-    margin: 1px;
+    width: 24px;
+    height: 20px;
+    min-height: 0;
+    margin: 0 1px;
+    padding: 0;
 }
 
 .dennoko-root .dennoko-tl-play {
-    width: 40px;
+    width: 34px;
 }
 
 .dennoko-root .dennoko-tl-area {
@@ -591,7 +612,7 @@
 .dennoko-root .dennoko-shape-row {
     flex-direction: row;
     align-items: center;
-    margin: 0 4px 5px 4px;
+    margin: 0 4px 2px 4px;
 }
 
 .dennoko-root .dennoko-row-indent {
@@ -602,6 +623,7 @@
 .dennoko-root .dennoko-row-icon-button {
     width: 20px;
     height: 18px;
+    min-height: 0;
     padding: 0;
     margin: 0 1px;
     font-size: 12px;
@@ -645,12 +667,35 @@
     flex-grow: 1;
     flex-shrink: 1;
     margin: 0 4px;
+    min-height: 18px;
 }
 
 .dennoko-root .dennoko-row-slider .unity-text-field {
     width: 48px;
     flex-shrink: 0;
     margin-left: 4px;
+    min-height: 18px;
+}
+
+.dennoko-root .dennoko-row-slider .unity-base-field__input {
+    min-height: 18px;
+    padding: 1px 3px;
+}
+
+/* ─── 固定フッター（保存セクション） ──────────────────────── */
+.dennoko-root .dennoko-footer-container {
+    flex-shrink: 0;
+    border-top-width: 1px;
+    border-top-color: var(--dennoko-outline);
+    background-color: var(--dennoko-surface-1);
+}
+
+.dennoko-root .dennoko-footer-card {
+    padding: 8px 12px;
+}
+
+.dennoko-root .dennoko-footer-card .dennoko-section-title {
+    margin-bottom: 6px;
 }
 
 /* ─── タイムライン ───────────────────────────────────────── */
@@ -658,7 +703,7 @@
     margin-bottom: 8px;
 }
 
-/* ─── 別窓タイムライン通知 ───────────────────────────────── */
+/* ─── 別窓タイムライン ───────────────────────────────────── */
 .dennoko-root .dennoko-tlwin-notice {
     margin: 10px;
     padding: 10px;
@@ -671,8 +716,20 @@
     margin-bottom: 8px;
 }
 
+.dennoko-root .dennoko-tlwin-scroll {
+    padding-top: 8px;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.dennoko-root .dennoko-tlwin-scroll > .unity-scroll-view__content-and-vertical-scroll-container,
+.dennoko-root .dennoko-tlwin-scroll #unity-content-container {
+    flex-grow: 1;
+}
+
 .dennoko-root .dennoko-tlwin-host {
     flex-grow: 1;
+    flex-shrink: 1;
 }
 
 /* ─── FX モードステータスラベル ─────────────────────────── */

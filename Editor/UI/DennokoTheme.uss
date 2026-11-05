@@ -209,7 +209,8 @@
     border-width: 1px;
     border-radius: 4px;
     color: var(--dennoko-text-primary);
-    padding: 3px 6px;
+    padding: 2px 4px;
+    min-height: 20px;
 }
 
 /* 内側のテキスト要素には color のみを適用する。

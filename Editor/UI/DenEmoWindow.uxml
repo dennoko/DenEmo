@@ -22,7 +22,10 @@
         <!-- 対象メッシュカード（モード間で共有。C# がホスト間を移動する） -->
         <ui:VisualElement name="pose-target-host">
             <ui:VisualElement name="target-card" class="dennoko-card">
-                <ui:Label name="target-title" text="TARGET MESH" class="dennoko-section-title dennoko-card-header" />
+                <ui:VisualElement class="dennoko-card-header dennoko-toggle-header">
+                    <ui:Label name="target-title" text="TARGET MESH" class="dennoko-section-title" />
+                    <ui:Button name="target-refresh" text="Refresh" class="dennoko-mini-button dennoko-mini-button--auto" />
+                </ui:VisualElement>
                 <ui:VisualElement class="dennoko-hrow">
                     <ui:Label name="target-main-label" text="Mesh" class="dennoko-text-tertiary dennoko-field-label" />
                     <uie:ObjectField name="target-main-field" class="dennoko-clip-field" />
@@ -33,9 +36,6 @@
                 <!-- サブメッシュ行 + 追加用の空行（C# で動的生成） -->
                 <ui:VisualElement name="target-additional-rows" />
                 <ui:Label name="target-noshapes" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
-                <ui:VisualElement class="dennoko-hrow dennoko-hrow--right">
-                    <ui:Button name="target-refresh" text="Refresh" class="dennoko-mini-button dennoko-mini-button--auto" />
-                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -77,27 +77,6 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="pose-list-host" />
-
-        <!-- 保存設定（Pose 専用） -->
-        <ui:VisualElement name="pose-save-card" class="dennoko-card" style="display: none;">
-            <ui:Label name="pose-save-title" text="SAVE SETTINGS" class="dennoko-section-title dennoko-card-header" />
-            <ui:VisualElement class="dennoko-hrow">
-                <ui:Label name="pose-save-folder-label" class="dennoko-text-tertiary dennoko-field-label" />
-                <ui:TextField name="pose-save-folder" class="dennoko-clip-field" />
-                <ui:Button name="pose-save-browse" class="dennoko-mini-button" />
-            </ui:VisualElement>
-            <ui:Toggle name="pose-overwrite-toggle" class="dennoko-save-toggle" />
-            <ui:VisualElement name="pose-overwrite-group" style="display: none;">
-                <ui:VisualElement class="dennoko-hrow">
-                    <ui:Label name="pose-overwrite-label" class="dennoko-text-tertiary dennoko-field-label" />
-                    <uie:ObjectField name="pose-overwrite-field" class="dennoko-clip-field" />
-                </ui:VisualElement>
-                <ui:Toggle name="pose-backup-toggle" class="dennoko-save-toggle" />
-                <ui:Toggle name="pose-preserve-extra-toggle" class="dennoko-save-toggle" />
-            </ui:VisualElement>
-            <ui:VisualElement class="dennoko-separator" />
-            <ui:Button name="pose-save-button" class="dennoko-button-primary" />
-        </ui:VisualElement>
     </ui:ScrollView>
 
     <!-- Animation モード -->
@@ -156,15 +135,6 @@
 
         <ui:VisualElement name="anim-search-host" />
         <ui:VisualElement name="anim-list-host" />
-
-        <!-- アニメーション保存（Animation 専用） -->
-        <ui:VisualElement name="anim-save-card" class="dennoko-card" style="display: none;">
-            <ui:Label name="anim-save-title" text="SAVE ANIMATION" class="dennoko-section-title dennoko-card-header" />
-            <ui:Label name="anim-save-stats" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
-            <ui:HelpBox name="anim-save-nokeys" message-type="Warning" class="dennoko-helpbox--warning" style="display: none;" />
-            <ui:Toggle name="anim-save-asnew" class="dennoko-save-toggle" />
-            <ui:Button name="anim-save-button" class="dennoko-button-primary" />
-        </ui:VisualElement>
     </ui:ScrollView>
 
     <!-- FX モード: 対象メッシュ（共有カード） + アバター検出 / 差し替え一覧 / 適用 -->
@@ -237,6 +207,38 @@
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:ScrollView>
+
+    <!-- フッター（保存セクション固定配置） -->
+    <ui:VisualElement name="footer-container" class="dennoko-footer-container">
+        <!-- 保存設定（Pose 専用） -->
+        <ui:VisualElement name="pose-save-card" class="dennoko-footer-card" style="display: none;">
+            <ui:Label name="pose-save-title" text="SAVE SETTINGS" class="dennoko-section-title" />
+            <ui:VisualElement class="dennoko-hrow">
+                <ui:Label name="pose-save-folder-label" class="dennoko-text-tertiary dennoko-field-label" />
+                <ui:TextField name="pose-save-folder" class="dennoko-clip-field" />
+                <ui:Button name="pose-save-browse" class="dennoko-mini-button" />
+            </ui:VisualElement>
+            <ui:Toggle name="pose-overwrite-toggle" class="dennoko-save-toggle" />
+            <ui:VisualElement name="pose-overwrite-group" style="display: none;">
+                <ui:VisualElement class="dennoko-hrow">
+                    <ui:Label name="pose-overwrite-label" class="dennoko-text-tertiary dennoko-field-label" />
+                    <uie:ObjectField name="pose-overwrite-field" class="dennoko-clip-field" />
+                </ui:VisualElement>
+                <ui:Toggle name="pose-backup-toggle" class="dennoko-save-toggle" />
+                <ui:Toggle name="pose-preserve-extra-toggle" class="dennoko-save-toggle" />
+            </ui:VisualElement>
+            <ui:Button name="pose-save-button" class="dennoko-button-primary" />
+        </ui:VisualElement>
+
+        <!-- アニメーション保存（Animation 専用） -->
+        <ui:VisualElement name="anim-save-card" class="dennoko-footer-card" style="display: none;">
+            <ui:Label name="anim-save-title" text="SAVE ANIMATION" class="dennoko-section-title" />
+            <ui:Label name="anim-save-stats" class="dennoko-text-tertiary dennoko-wrap" style="display: none;" />
+            <ui:HelpBox name="anim-save-nokeys" message-type="Warning" class="dennoko-helpbox--warning" style="display: none;" />
+            <ui:Toggle name="anim-save-asnew" class="dennoko-save-toggle" />
+            <ui:Button name="anim-save-button" class="dennoko-button-primary" />
+        </ui:VisualElement>
+    </ui:VisualElement>
 
     <!-- ステータスバー -->
     <ui:Label name="status-bar" text="" class="dennoko-status" />

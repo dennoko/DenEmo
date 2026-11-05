@@ -186,8 +186,16 @@ namespace DenEmo.UI
             _body = new VisualElement();
             _root.Add(_body);
 
-            BuildSettingsRow();
+            if (_isSeparateWindow)
+            {
+                _root.style.flexGrow = 1f;
+                _root.style.flexShrink = 1f;
+                _body.style.flexGrow = 1f;
+                _body.style.flexShrink = 1f;
+            }
+
             BuildTransportRow();
+            BuildSettingsRow();
             BuildTimelineArea();
 
             _root.RegisterCallback<CustomStyleResolvedEvent>(OnCustomStyleResolved);
@@ -208,10 +216,95 @@ namespace DenEmo.UI
             return r;
         }
 
+        private void BuildTransportRow()
+        {
+            var row = Row();
+            row.AddToClassList("dennoko-tl-transport");
+
+            // 再生・移動ボタン群
+            var btnGroup = new VisualElement();
+            btnGroup.AddToClassList("dennoko-hrow");
+            btnGroup.AddToClassList("dennoko-tl-group");
+
+            _btnStart     = Transport("|<",  () => SeekTo(0f));
+            _btnPrevKey   = Transport("|◆",  GoToPrevKey);
+            _btnPrevFrame = Transport("<",   () => StepFrame(-1));
+            _btnPlay      = Transport("▶",   TogglePlay);
+            _btnPlay.AddToClassList("dennoko-tl-play");
+            _btnNextFrame = Transport(">",   () => StepFrame(+1));
+            _btnNextKey   = Transport("◆|",  GoToNextKey);
+            _btnEnd       = Transport(">|",  () => SeekTo(_mode.ClipModel.ClipLength));
+
+            btnGroup.Add(_btnStart); btnGroup.Add(_btnPrevKey); btnGroup.Add(_btnPrevFrame);
+            btnGroup.Add(_btnPlay);
+            btnGroup.Add(_btnNextFrame); btnGroup.Add(_btnNextKey); btnGroup.Add(_btnEnd);
+            row.Add(btnGroup);
+
+            // フレーム & 速度
+            var timeGroup = new VisualElement();
+            timeGroup.AddToClassList("dennoko-hrow");
+            timeGroup.AddToClassList("dennoko-tl-group");
+
+            _frameLabel = Caption();
+            _frameField = new IntegerField { isDelayed = true };
+            _frameField.AddToClassList("dennoko-tl-num");
+            _frameField.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue != _mode.ClipModel.CurrentFrame)
+                    SeekTo(_mode.ClipModel.FrameToTime(evt.newValue));
+            });
+            timeGroup.Add(_frameLabel); timeGroup.Add(_frameField);
+
+            _speedLabel = Caption();
+            _speedField = new FloatField { isDelayed = true };
+            _speedField.AddToClassList("dennoko-tl-num");
+            _speedField.RegisterValueChangedCallback(evt =>
+            {
+                if (!Mathf.Approximately(evt.newValue, _mode.Playback.Speed))
+                    _mode.Playback.Speed = evt.newValue;
+            });
+            timeGroup.Add(_speedLabel); timeGroup.Add(_speedField);
+            row.Add(timeGroup);
+
+            // ループ & REC
+            var recGroup = new VisualElement();
+            recGroup.AddToClassList("dennoko-hrow");
+            recGroup.AddToClassList("dennoko-tl-group");
+
+            _loopToggle = new Toggle();
+            _loopToggle.AddToClassList("dennoko-save-toggle");
+            _loopToggle.RegisterValueChangedCallback(evt =>
+            {
+                _mode.ClipModel.SmoothLoopEnabled = evt.newValue;
+                _mode.Preview.SampleAt(_mode.ClipModel.CurrentTime);
+                _window.Repaint();
+            });
+            recGroup.Add(_loopToggle);
+
+            _recButton = new Button(() =>
+            {
+                _mode.IsRecording = !_mode.IsRecording;
+                if (_mode.IsRecording && !_mode.Preview.IsActive)
+                    _mode.StartPreview(_model);
+                RefreshValues();
+                _window.Repaint();
+            }) { text = "🔴 REC" };
+            _recButton.AddToClassList("dennoko-chip");
+            recGroup.Add(_recButton);
+            row.Add(recGroup);
+
+            _body.Add(row);
+        }
+
         private void BuildSettingsRow()
         {
             var row = Row();
             row.AddToClassList("dennoko-tl-settings");
+
+            // クリップ設定 (FPS / 長さ)
+            var clipGroup = new VisualElement();
+            clipGroup.AddToClassList("dennoko-hrow");
+            clipGroup.AddToClassList("dennoko-tl-group");
 
             _fpsLabel = Caption();
             _fpsField = new FloatField { isDelayed = true };
@@ -224,6 +317,7 @@ namespace DenEmo.UI
                     RefreshStructure();
                 }
             });
+            clipGroup.Add(_fpsLabel); clipGroup.Add(_fpsField);
 
             _lenLabel = Caption();
             _lenField = new FloatField { isDelayed = true };
@@ -233,6 +327,13 @@ namespace DenEmo.UI
                 if (evt.newValue > 0f && !Mathf.Approximately(evt.newValue, _mode.ClipModel.ClipLength))
                     ApplyLength(evt.newValue);
             });
+            clipGroup.Add(_lenLabel); clipGroup.Add(_lenField);
+            row.Add(clipGroup);
+
+            // 補間設定
+            var interpGroup = new VisualElement();
+            interpGroup.AddToClassList("dennoko-hrow");
+            interpGroup.AddToClassList("dennoko-tl-group");
 
             _interpLabel = Caption();
             _interpStep   = InterpChip(InterpolationType.Step,   "Step");
@@ -242,85 +343,13 @@ namespace DenEmo.UI
             _applyAllButton.AddToClassList("dennoko-mini-button");
             _applyAllButton.AddToClassList("dennoko-mini-button--auto");
 
-            row.Add(_fpsLabel); row.Add(_fpsField);
-            row.Add(Spacer(12));
-            row.Add(_lenLabel); row.Add(_lenField);
-            row.Add(Spacer(12));
-            row.Add(_interpLabel); row.Add(_interpStep); row.Add(_interpLinear); row.Add(_interpEase);
-            row.Add(Spacer(4));
-            row.Add(_applyAllButton);
-            _body.Add(row);
-        }
-
-        private Button InterpChip(InterpolationType type, string label)
-        {
-            var b = new Button(() => { _mode.CurrentInterp = type; RefreshValues(); }) { text = label };
-            b.AddToClassList("dennoko-chip");
-            return b;
-        }
-
-        private void BuildTransportRow()
-        {
-            var row = Row();
-            row.AddToClassList("dennoko-tl-transport");
-
-            _btnStart     = Transport("|<",  () => SeekTo(0f));
-            _btnPrevKey   = Transport("|◆",  GoToPrevKey);
-            _btnPrevFrame = Transport("<",   () => StepFrame(-1));
-            _btnPlay      = Transport("▶",   TogglePlay);
-            _btnPlay.AddToClassList("dennoko-tl-play");
-            _btnNextFrame = Transport(">",   () => StepFrame(+1));
-            _btnNextKey   = Transport("◆|",  GoToNextKey);
-            _btnEnd       = Transport(">|",  () => SeekTo(_mode.ClipModel.ClipLength));
-
-            row.Add(_btnStart); row.Add(_btnPrevKey); row.Add(_btnPrevFrame);
-            row.Add(_btnPlay);
-            row.Add(_btnNextFrame); row.Add(_btnNextKey); row.Add(_btnEnd);
-
-            row.Add(Spacer(16));
-            _frameLabel = Caption();
-            _frameField = new IntegerField { isDelayed = true };
-            _frameField.AddToClassList("dennoko-tl-num");
-            _frameField.RegisterValueChangedCallback(evt =>
-            {
-                if (evt.newValue != _mode.ClipModel.CurrentFrame)
-                    SeekTo(_mode.ClipModel.FrameToTime(evt.newValue));
-            });
-            row.Add(_frameLabel); row.Add(_frameField);
-
-            row.Add(Spacer(12));
-            _speedLabel = Caption();
-            _speedField = new FloatField { isDelayed = true };
-            _speedField.AddToClassList("dennoko-tl-num");
-            _speedField.RegisterValueChangedCallback(evt =>
-            {
-                if (!Mathf.Approximately(evt.newValue, _mode.Playback.Speed))
-                    _mode.Playback.Speed = evt.newValue;
-            });
-            row.Add(_speedLabel); row.Add(_speedField);
-
-            row.Add(Spacer(12));
-            _loopToggle = new Toggle();
-            _loopToggle.AddToClassList("dennoko-save-toggle");
-            _loopToggle.RegisterValueChangedCallback(evt =>
-            {
-                _mode.ClipModel.SmoothLoopEnabled = evt.newValue;
-                _mode.Preview.SampleAt(_mode.ClipModel.CurrentTime);
-                _window.Repaint();
-            });
-            row.Add(_loopToggle);
-
-            row.Add(Spacer(12));
-            _recButton = new Button(() =>
-            {
-                _mode.IsRecording = !_mode.IsRecording;
-                if (_mode.IsRecording && !_mode.Preview.IsActive)
-                    _mode.StartPreview(_model);
-                RefreshValues();
-                _window.Repaint();
-            }) { text = "🔴 REC" };
-            _recButton.AddToClassList("dennoko-chip");
-            row.Add(_recButton);
+            interpGroup.Add(_interpLabel);
+            interpGroup.Add(_interpStep);
+            interpGroup.Add(_interpLinear);
+            interpGroup.Add(_interpEase);
+            interpGroup.Add(Spacer(4));
+            interpGroup.Add(_applyAllButton);
+            row.Add(interpGroup);
 
             _body.Add(row);
         }
@@ -338,6 +367,11 @@ namespace DenEmo.UI
             var area = new VisualElement();
             area.AddToClassList("dennoko-card-outer");
             area.AddToClassList("dennoko-tl-area");
+            if (_isSeparateWindow)
+            {
+                area.style.flexGrow = 1f;
+                area.style.flexShrink = 1f;
+            }
 
             // ── ルーラー行 ──
             var rulerRow = Strip(out var rulerLeft);
@@ -453,7 +487,8 @@ namespace DenEmo.UI
             _detachButton.tooltip = DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach.tip" : "ui.timeline.detach.tip");
             _fpsLabel.text    = DenEmoLoc.T("ui.timeline.fps");
             _lenLabel.text    = DenEmoLoc.T("ui.timeline.length");
-            _interpLabel.text = DenEmoLoc.T("ui.timeline.interp");
+            _interpLabel.text    = DenEmoLoc.T("ui.timeline.interp");
+            _interpLabel.tooltip = DenEmoLoc.T("ui.timeline.interp.tip");
             _applyAllButton.text = DenEmoLoc.T("ui.timeline.applyInterpAll");
             _applyAllButton.tooltip = DenEmoLoc.T("ui.timeline.applyInterpAll.tip");
             _frameLabel.text  = DenEmoLoc.T("ui.timeline.frame");
@@ -505,8 +540,18 @@ namespace DenEmo.UI
             _noTracksLabel.style.display = tracks.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
             _tracksScroll.style.display  = tracks.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
 
-            float maxH = Mathf.Min(tracks.Count * (TRACK_ROW_HEIGHT + 1f), MAX_TRACKS_HEIGHT);
-            _tracksScroll.style.maxHeight = maxH;
+            if (_isSeparateWindow)
+            {
+                _tracksScroll.style.maxHeight = StyleKeyword.Null;
+                _tracksScroll.style.flexGrow = 1f;
+                _tracksScroll.style.flexShrink = 1f;
+            }
+            else
+            {
+                float maxH = Mathf.Min(tracks.Count * (TRACK_ROW_HEIGHT + 1f), MAX_TRACKS_HEIGHT);
+                _tracksScroll.style.maxHeight = maxH;
+                _tracksScroll.style.flexGrow = 0f;
+            }
 
             foreach (var track in tracks)
                 _tracksScroll.Add(MakeTrackRow(track));

@@ -603,7 +603,8 @@ namespace DenEmo
             var display = hasTarget ? DisplayStyle.Flex : DisplayStyle.None;
             _animClipCard.style.display = display;
             _animListHost.style.display = display;
-            _animSaveCard.style.display = display;
+            _animSaveCard.style.display = (_currentMode == EditorMode.Animation && hasTarget) ? DisplayStyle.Flex : DisplayStyle.None;
+            UpdateFooterVisibility();
             // 検索カードは共有のため、現在モードの側だけが表示を制御する
             if (_currentMode == EditorMode.Animation)
                 _searchCard.style.display = display;
@@ -631,10 +632,20 @@ namespace DenEmo
             var display = HasUsableTarget() ? DisplayStyle.Flex : DisplayStyle.None;
             _poseSourceCard.style.display = display;
             _poseListHost.style.display   = display;
-            _poseSaveCard.style.display   = display;
+            _poseSaveCard.style.display   = (_currentMode == EditorMode.Pose && HasUsableTarget()) ? DisplayStyle.Flex : DisplayStyle.None;
+            UpdateFooterVisibility();
             // 検索カードは共有のため、現在モードの側だけが表示を制御する
             if (_currentMode == EditorMode.Pose)
                 _searchCard.style.display = display;
+        }
+
+        /// <summary>固定フッターの表示を更新する（いずれかの保存カードが表示されている場合のみ表示）。</summary>
+        private void UpdateFooterVisibility()
+        {
+            if (_footerContainer == null) return;
+            bool showPose = _poseSaveCard != null && _poseSaveCard.style.display == DisplayStyle.Flex;
+            bool showAnim = _animSaveCard != null && _animSaveCard.style.display == DisplayStyle.Flex;
+            _footerContainer.style.display = (showPose || showAnim) ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         /// <summary>
