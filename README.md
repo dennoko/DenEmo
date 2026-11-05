@@ -21,8 +21,8 @@ DenEmoは、Unity上でSkinnedMeshRendererのシェイプキー（ブレンド�
 ## 使い方
 
 詳細なユーザーガイドは以下のドキュメントを参照してください:
-- [日本語ユーザーガイド](Docs/USAGE_ja.md)
-- [English User Guide](Docs/USAGE.md)
+- [日本語ユーザーガイド](Docs/user_manual_ja.md)
+- [English User Guide](Docs/user_manual_en.md)
 
 ### 基本的な流れ
 
@@ -136,8 +136,8 @@ DenEmo is a Unity Editor extension for efficiently editing and animating blendsh
 ## Usage
 
 For detailed instructions, see:
-- [Japanese User Guide](Docs/USAGE_ja.md)
-- [English User Guide](Docs/USAGE.md)
+- [Japanese User Guide](Docs/user_manual_ja.md)
+- [English User Guide](Docs/user_manual_en.md)
 
 ### Quick Start
 

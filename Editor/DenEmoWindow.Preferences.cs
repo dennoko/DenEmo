@@ -110,7 +110,16 @@ namespace DenEmo
 
         // ─── Include flag prefs ───────────────────────────────────────────────
 
+        // v3: チェックを外したシェイプキー名の改行区切りリスト。
+        //     リストに無いキー（FBX 更新で追加されたキー等）は ShapeKeyItem の既定値（チェックあり）に従う。
+        // v2: チェックありのシェイプキー名リスト（開発版のみ。読み込み時に v3 へ移行）。
+        private const string IncludeFlagsV3Prefix = "v3\n";
         private const string IncludeFlagsV2Prefix = "v2\n";
+
+        private static HashSet<string> ParseNameList(string s, string prefix)
+            => new HashSet<string>(
+                s.Substring(prefix.Length).Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.Ordinal);
 
         private void LoadIncludeFlagsPrefs()
         {
@@ -127,19 +136,23 @@ namespace DenEmo
                 if (string.IsNullOrEmpty(s)) continue;
 
                 var items = kv.Value;
-                if (s.StartsWith(IncludeFlagsV2Prefix, StringComparison.Ordinal))
+                if (s.StartsWith(IncludeFlagsV3Prefix, StringComparison.Ordinal))
                 {
-                    var body = s.Substring(IncludeFlagsV2Prefix.Length);
-                    var includedNames = new HashSet<string>(
-                        body.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries),
-                        StringComparer.Ordinal);
+                    var excludedNames = ParseNameList(s, IncludeFlagsV3Prefix);
+                    foreach (var item in items)
+                        item.IsIncluded = !excludedNames.Contains(item.Name);
+                }
+                else if (s.StartsWith(IncludeFlagsV2Prefix, StringComparison.Ordinal))
+                {
+                    var includedNames = ParseNameList(s, IncludeFlagsV2Prefix);
                     foreach (var item in items)
                         item.IsIncluded = includedNames.Contains(item.Name);
+                    migrated = true;
                 }
                 else
                 {
                     // 旧フォーマット ("1,0,1,...") からの移行:
-                    // シェイプキー数が一致する場合のみインデックスで復元し、直ちに v2 形式へ変換保存する。
+                    // シェイプキー数が一致する場合のみインデックスで復元し、直ちに v3 形式へ変換保存する。
                     // FBX 更新等でシェイプキー数が変化している場合は位置ずれを防ぐためインデックス復元を行わない。
                     var parts = s.Split(',');
                     if (parts.Length == items.Count)
@@ -167,11 +180,11 @@ namespace DenEmo
                 key += "|IncludeFlags";
 
                 sb.Clear();
-                sb.Append(IncludeFlagsV2Prefix);
+                sb.Append(IncludeFlagsV3Prefix);
                 var items = kv.Value;
                 for (int i = 0; i < items.Count; i++)
                 {
-                    if (items[i].IsIncluded)
+                    if (!items[i].IsIncluded)
                         sb.Append(items[i].Name).Append('\n');
                 }
                 EditorPrefs.SetString(key, sb.ToString());

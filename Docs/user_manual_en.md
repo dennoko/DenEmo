@@ -109,6 +109,8 @@ Toggles the favorite flag for that shape key.
 **Checkbox**
 Determines whether this shape key is included in the exported `.anim` file. Checked keys are written; unchecked keys are ignored on save even if their value is non-zero.
 
+Checkbox states are remembered per mesh **by shape key name**. When you update the FBX and shape keys are added or reordered, existing keys keep their checkbox state without shifting. Newly added keys start in the default state (checked). A renamed key is treated as a different key, so its checkbox state is not carried over.
+
 **Name**
 The shape key name as defined in the mesh. Checked items appear in a brighter style to distinguish them at a glance.
 
