@@ -354,6 +354,13 @@ namespace DenEmo.UI
             _body.Add(row);
         }
 
+        private Button InterpChip(InterpolationType type, string label)
+        {
+            var b = new Button(() => { _mode.CurrentInterp = type; RefreshValues(); }) { text = label };
+            b.AddToClassList("dennoko-chip");
+            return b;
+        }
+
         private Button Transport(string label, System.Action action)
         {
             var b = new Button(action) { text = label };
