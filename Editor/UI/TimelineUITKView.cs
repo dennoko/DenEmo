@@ -148,18 +148,20 @@ namespace DenEmo.UI
             _root.AddToClassList("dennoko-card");
             _root.AddToClassList("dennoko-tl-root");
 
-            // ── ヘッダ: タイトル + 別窓化/結合ボタン ──
-            var headerRow = Row();
-            headerRow.AddToClassList("dennoko-tl-header");
+            // ── ヘッダ: タイトル + 別窓化/結合ボタン（メッシュ指定と同じ形式） ──
+            var headerRow = new VisualElement();
+            headerRow.AddToClassList("dennoko-card-header");
+            headerRow.AddToClassList("dennoko-toggle-header");
+
             _titleLabel = new Label();
             _titleLabel.AddToClassList("dennoko-section-title");
-            _titleLabel.AddToClassList("dennoko-card-header");
-            _titleLabel.AddToClassList("dennoko-tl-title");
             headerRow.Add(_titleLabel);
+
             _detachButton = new Button(OnDetachAttach);
             _detachButton.AddToClassList("dennoko-mini-button");
             _detachButton.AddToClassList("dennoko-mini-button--auto");
             headerRow.Add(_detachButton);
+
             _root.Add(headerRow);
 
             // ── クリップ選択（任意） ──

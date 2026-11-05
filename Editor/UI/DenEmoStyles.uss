@@ -236,13 +236,6 @@
     margin: 2px 4px;
 }
 
-/* タイムラインのタイトル行（右端のボタンまで伸ばす） */
-.dennoko-root .dennoko-tl-title {
-    flex-grow: 1;
-    flex-shrink: 1;
-    overflow: hidden;
-}
-
 .dennoko-root .dennoko-tl-caption {
     -unity-text-align: middle-left;
     margin: 0 2px;
