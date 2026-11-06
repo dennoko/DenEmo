@@ -127,6 +127,9 @@ namespace DenEmo.UI
             if (field == null) return;
             var placeholder = new Label(text) { pickingMode = PickingMode.Ignore };
             placeholder.AddToClassList("dennoko-searchbar__placeholder");
+            // Label.text の変更は ChangeEvent<string> を発行し、親の TextField の値変更コールバックまで
+            // バブリングする（言語切替で案内文を書き換えると、それが検索文字列として扱われてしまう）。ここで止める
+            placeholder.RegisterCallback<ChangeEvent<string>>(e => e.StopPropagation());
             field.Add(placeholder);
             void Refresh() => Show(placeholder, string.IsNullOrEmpty(field.value));
             field.RegisterValueChangedCallback(_ => Refresh());
