@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <ui:VisualElement name="popup-root" class="dennoko-card dennoko-popup-card">
-        <ui:Label name="title-label" text="Vertex Preview Settings" class="dennoko-section-title dennoko-card-header" />
+        <ui:Label name="title-label" text="Vertex Preview Settings" class="dennoko-section-title dennoko-card-header dennoko-card-header--row" />
         <uie:ColorField name="normal-color-field" label="Normal Color" show-alpha="false" class="dennoko-popup-field" />
         <uie:ColorField name="selected-color-field" label="Selected Color" show-alpha="false" class="dennoko-popup-field" />
         <ui:Slider name="size-slider" label="Size" low-value="0.1" high-value="5" show-input-field="true" class="dennoko-popup-field" />

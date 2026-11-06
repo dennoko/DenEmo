@@ -92,10 +92,10 @@ namespace DenEmo.UI
         private ObjectField   _clipField;
         private Button        _clipNewButton;
         private Label         _clipSectionTitle;
-        private Label         _clipFieldLabel;
         private VisualElement _clipGuide;
         private Label         _guide1, _guide2, _guide3;
-        private HelpBox       _conflictWarn;
+        private VisualElement _conflictWarn;   // .dennoko-inline-warning
+        private Label         _conflictText;
 
         // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -247,14 +247,14 @@ namespace DenEmo.UI
             VisualElement card, ShapeKeyModel shapeModel, Func<string> getSaveFolder, EditorWindow window)
         {
             _clipSectionTitle = card.Q<Label>("anim-clip-title");
-            _clipFieldLabel   = card.Q<Label>("anim-clip-label");
             _clipField        = card.Q<ObjectField>("anim-clip-field");
             _clipNewButton    = card.Q<Button>("anim-clip-new");
             _clipGuide        = card.Q<VisualElement>("anim-clip-guide");
             _guide1           = card.Q<Label>("anim-guide-1");
             _guide2           = card.Q<Label>("anim-guide-2");
             _guide3           = card.Q<Label>("anim-guide-3");
-            _conflictWarn     = card.Q<HelpBox>("anim-conflict-warn");
+            _conflictWarn     = card.Q<VisualElement>("anim-conflict-warn");
+            _conflictText     = card.Q<Label>("anim-conflict-text");
 
             _clipField.objectType = typeof(AnimationClip);
             _clipField.allowSceneObjects = false;
@@ -290,12 +290,12 @@ namespace DenEmo.UI
         {
             if (_clipField == null) return;
             _clipSectionTitle.text = DenEmoLoc.T("ui.animMode.clip.section");
-            _clipFieldLabel.text   = DenEmoLoc.T("ui.animMode.clip.label");
+            _clipField.tooltip     = DenEmoLoc.T("ui.animMode.clip.hint");
             _clipNewButton.text    = DenEmoLoc.T("ui.animMode.clip.new");
             _guide1.text           = DenEmoLoc.T("ui.animMode.guide.step1");
             _guide2.text           = DenEmoLoc.T("ui.animMode.guide.step2");
             _guide3.text           = DenEmoLoc.T("ui.animMode.guide.step3");
-            _conflictWarn.text     = DenEmoLoc.T("ui.animMode.animWindowConflict");
+            _conflictText.text     = DenEmoLoc.T("ui.animMode.animWindowConflict");
             CorrectionUI.RefreshLabels();
         }
 

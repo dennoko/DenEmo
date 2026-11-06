@@ -1,16 +1,47 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="True">
-    <!-- シェイプキーリストの外枠。他のセクションカードとデザインを統一 -->
-    <ui:VisualElement name="shape-list-card" class="dennoko-card">
-        <ui:VisualElement class="dennoko-card-header dennoko-toggle-header">
-            <ui:Label name="shape-list-title" text="SHAPE KEYS" class="dennoko-section-title" />
-            <ui:VisualElement class="dennoko-hrow">
-                <ui:Button name="shape-list-bulk-menu" class="dennoko-mini-button dennoko-mini-button--auto" />
-                <ui:Button name="shape-list-snap-create" class="dennoko-mini-button dennoko-mini-button--auto" />
-                <ui:Button name="shape-list-snap-restore" class="dennoko-mini-button dennoko-mini-button--auto" />
+    <!-- B4 リストカード: 見出し + 検索行 + 絞り込みチップ + 一覧 (ここだけが伸びる)。
+         検索・絞り込みの状態は DenEmoWindow が持ち、要素はこのカードの中から探して配線する -->
+    <ui:VisualElement name="shape-list-card" class="dennoko-card dennoko-list-card">
+        <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
+            <ui:Label name="shape-list-title" text="SHAPE KEYS" class="dennoko-section-title dennoko-card-header__title" />
+            <ui:Button name="shape-list-snap-create" class="dennoko-card-header__action" />
+            <ui:Button name="shape-list-snap-restore" class="dennoko-card-header__action" />
+            <ui:Button name="shape-list-bulk-menu" class="dennoko-icon-button" />
+        </ui:VisualElement>
+
+        <!-- 検索行 (固定)。右端の数字は「表示中 / 全体」 -->
+        <ui:VisualElement class="dennoko-searchbar">
+            <ui:TextField name="search-field" class="dennoko-searchbar__field" />
+            <ui:Button name="search-clear" class="dennoko-icon-button" style="display: none;" />
+            <ui:Label name="search-count" text="0 / 0" class="dennoko-searchbar__count" />
+        </ui:VisualElement>
+
+        <!-- 絞り込みチップ (ON は選択中の青) + メッシュ絞り込み + 頂点プレビュー設定 -->
+        <ui:VisualElement name="search-filter-row" class="dennoko-filter-row">
+            <ui:Button name="chip-fav" class="dennoko-chip" />
+            <ui:Button name="chip-enabled" class="dennoko-chip" />
+            <ui:Button name="chip-nonzero" class="dennoko-chip" />
+            <ui:Button name="chip-symmetry" class="dennoko-chip" />
+            <ui:Button name="chip-keyed" class="dennoko-chip" style="display: none;" />
+            <ui:Button name="chip-vertex" class="dennoko-chip" />
+            <ui:Button name="chip-vertex-clear" class="dennoko-icon-button" style="display: none;" />
+            <ui:Button name="search-preview-options" class="dennoko-icon-button" />
+            <ui:VisualElement class="dennoko-spacer" />
+            <ui:DropdownField name="mesh-filter-dropdown" class="dennoko-mesh-filter" style="display: none;" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="dennoko-list-card__body">
+            <ui:ScrollView name="shape-list-scroll" class="dennoko-list-scroll" />
+            <!-- 空の状態: 対象が無い / シェイプキーが無い -->
+            <ui:VisualElement name="shape-list-empty" class="dennoko-empty-state dennoko-empty-state--overlay" style="display: none;">
+                <ui:Label name="shape-list-empty-message" class="dennoko-empty-state__message" />
+                <ui:Button name="shape-list-empty-action" class="dennoko-button-secondary" />
+            </ui:VisualElement>
+            <!-- 空の状態: 絞り込みで 0 件 -->
+            <ui:VisualElement name="shape-list-nomatch" class="dennoko-empty-state dennoko-empty-state--overlay" style="display: none;">
+                <ui:Label name="shape-list-nomatch-message" class="dennoko-empty-state__message" />
+                <ui:Button name="shape-list-nomatch-clear" class="dennoko-button-secondary" />
             </ui:VisualElement>
         </ui:VisualElement>
-        <ui:Label name="shape-list-empty" class="dennoko-text-tertiary dennoko-wrap dennoko-list-message" style="display: none;" />
-        <ui:Label name="shape-list-nomatch" class="dennoko-text-tertiary dennoko-wrap dennoko-list-message" style="display: none;" />
-        <ui:ScrollView name="shape-list-scroll" class="dennoko-list-scroll" />
     </ui:VisualElement>
 </ui:UXML>

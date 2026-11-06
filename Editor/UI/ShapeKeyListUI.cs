@@ -28,6 +28,10 @@ namespace DenEmo.UI
         public Action                  OnSnapshotCreate;
         public Action                  OnSnapshotRestore;
         public Func<ShapeKeyItem, bool> IsUnchanged;
+        /// <summary>空の状態（対象なし）の「選択から」ボタン。</summary>
+        public Action                  OnPickFromSelection;
+        /// <summary>絞り込みで 0 件のときの「絞り込みを解除」ボタン。</summary>
+        public Action                  OnClearFilters;
 
         // 差分チェック用の判定関数を返す（比較元が未用意なら null → メニュー無効化）
         public Func<Func<ShapeKeyItem, bool>> GetClipDiffChecker;
@@ -45,7 +49,9 @@ namespace DenEmo.UI
         private Label           _title;
         private Button          _bulkMenu;
         private Button          _snapCreate, _snapRestore;
-        private Label           _emptyLabel, _noMatchLabel;
+        private VisualElement   _emptyBox, _noMatchBox;
+        private Label           _emptyMessage, _noMatchMessage, _searchCount;
+        private Button          _emptyAction, _noMatchClear;
         private ScrollView      _rowsScroll;
         private VisualTreeAsset _rowTemplate;
 
@@ -80,15 +86,23 @@ namespace DenEmo.UI
             _bulkMenu     = Root.Q<Button>("shape-list-bulk-menu");
             _snapCreate   = Root.Q<Button>("shape-list-snap-create");
             _snapRestore  = Root.Q<Button>("shape-list-snap-restore");
-            _emptyLabel   = Root.Q<Label>("shape-list-empty");
-            _noMatchLabel = Root.Q<Label>("shape-list-nomatch");
-            _rowsScroll   = Root.Q<ScrollView>("shape-list-scroll");
+            _emptyBox       = Root.Q<VisualElement>("shape-list-empty");
+            _emptyMessage   = Root.Q<Label>("shape-list-empty-message");
+            _emptyAction    = Root.Q<Button>("shape-list-empty-action");
+            _noMatchBox     = Root.Q<VisualElement>("shape-list-nomatch");
+            _noMatchMessage = Root.Q<Label>("shape-list-nomatch-message");
+            _noMatchClear   = Root.Q<Button>("shape-list-nomatch-clear");
+            _searchCount    = Root.Q<Label>("search-count");
+            _rowsScroll     = Root.Q<ScrollView>("shape-list-scroll");
 
-            if (_rowsScroll == null) return Root; // UXML ロード失敗時は空のまま返す
+            if (_rowsScroll == null || _emptyBox == null || _noMatchBox == null)
+                return Root; // UXML ロード失敗時は空のまま返す
 
             if (_bulkMenu != null) _bulkMenu.clicked += ShowBulkMenu;
-            _snapCreate.clicked  += () => OnSnapshotCreate?.Invoke();
-            _snapRestore.clicked += () => OnSnapshotRestore?.Invoke();
+            _snapCreate.clicked   += () => OnSnapshotCreate?.Invoke();
+            _snapRestore.clicked  += () => OnSnapshotRestore?.Invoke();
+            _emptyAction.clicked  += () => OnPickFromSelection?.Invoke();
+            _noMatchClear.clicked += () => OnClearFilters?.Invoke();
 
             // スライダードラッグ中の SMR 反映スロットルと、構造/動的状態の同期
             Root.schedule.Execute(ApplyPending).Every(50);
@@ -125,13 +139,16 @@ namespace DenEmo.UI
             _snapCreate.tooltip  = DenEmoLoc.T("ui.snapshot.create.tip");
             _snapRestore.text    = DenEmoLoc.T("ui.snapshot.restore");
             _snapRestore.tooltip = DenEmoLoc.T("ui.snapshot.restore.tip");
-            if (_bulkMenu != null)
+            DennokoIcons.Apply(_bulkMenu, DennokoIcons.Menu, "⋮", DenEmoLoc.T("ui.list.bulkMenu.tip"));
+            if (_emptyAction != null)
             {
-                _bulkMenu.text    = DenEmoLoc.T("ui.list.bulkMenu.text");
-                _bulkMenu.tooltip = DenEmoLoc.T("ui.list.bulkMenu.tip");
+                _emptyAction.text    = DenEmoLoc.T("ui.list.empty.fromSelection");
+                _emptyAction.tooltip = DenEmoLoc.T("ui.list.empty.fromSelection.tip");
             }
-            _emptyLabel.text  = DenEmoLoc.T("ui.mesh.noShapes");
-            _noMatchLabel.text = DenEmoLoc.T("ui.list.noMatch");
+            if (_noMatchMessage != null) _noMatchMessage.text = DenEmoLoc.T("ui.list.noMatch");
+            if (_noMatchClear != null)   _noMatchClear.text   = DenEmoLoc.T("ui.list.clearFilter");
+            if (_searchCount != null)    _searchCount.tooltip = DenEmoLoc.T("ui.search.count.tip");
+            _emptyStateKey = -1; // 空の状態の文言を次のティックで更新する
             _structureDirty = true; // 行内ツールチップの言語を更新するため再構築する
         }
 
@@ -176,7 +193,7 @@ namespace DenEmo.UI
             // リストが非表示（FxSetup モード等）またはパネル未接続なら、全アイテム走査を伴う
             // 行プラン構築・シグネチャ計算をスキップする。_structureDirty は保持されるため、
             // 再表示された最初のティックで確実に再構築される。
-            if (Root.panel == null || Root.resolvedStyle.display == DisplayStyle.None) return;
+            if (Root.panel == null || !IsDisplayedInHierarchy()) return;
 
             BuildRowPlan(_plan);
             int sig = ComputePlanSignature(_plan);
@@ -190,6 +207,61 @@ namespace DenEmo.UI
             }
 
             SyncDynamicState();
+            UpdateEmptyStateAndCount();
+        }
+
+        // ─── 空の状態 / 件数 ──────────────────────────────────────────────────
+
+        private int    _emptyStateKey = -1;
+        private string _countText;
+
+        /// <summary>
+        /// B4 の空の状態 2 種（対象なし・シェイプキーなし / 絞り込みで 0 件）と、検索行の「表示中 / 全体」を更新する。
+        /// 行プランのシグネチャが変わらなくても対象の有無は変わり得るため、毎ティック評価する。
+        /// </summary>
+        private void UpdateEmptyStateAndCount()
+        {
+            bool hasTarget = _model.TargetSkinnedMesh != null;
+            bool hasItems  = _model.Items.Count > 0;
+            bool noMatch   = hasItems && _plan.Count == 0;
+
+            // 0 = 一覧あり, 1 = 対象なし, 2 = シェイプキーなし, 3 = 絞り込みで 0 件
+            int key = !hasItems ? (hasTarget ? 2 : 1) : noMatch ? 3 : 0;
+            if (key != _emptyStateKey)
+            {
+                _emptyStateKey = key;
+                DennokoBlockUI.Show(_emptyBox, key == 1 || key == 2);
+                DennokoBlockUI.Show(_noMatchBox, key == 3);
+                DennokoBlockUI.Show(_emptyAction, key == 1);
+                if (key == 1 || key == 2)
+                    _emptyMessage.text = DenEmoLoc.T(key == 1 ? "ui.mesh.missing" : "ui.mesh.noShapes");
+            }
+
+            if (_searchCount == null) return;
+            var trackNames = _animContext?.TrackShapeNames;
+            int total = 0, shown = 0;
+            foreach (var it in _model.Items)
+            {
+                if (it.IsLipSyncShape) continue;
+                total++;
+                if (!it.IsVisible) continue;
+                if (trackNames != null && !trackNames.Contains(it.Name)) continue;
+                shown++;
+            }
+            string text = shown + " / " + total;
+            if (text != _countText)
+            {
+                _countText = text;
+                _searchCount.text = text;
+            }
+        }
+
+        /// <summary>自身か祖先のどれかが display: none（非表示のモードのページなど）なら false。</summary>
+        private bool IsDisplayedInHierarchy()
+        {
+            for (var e = Root; e != null; e = e.parent)
+                if (e.resolvedStyle.display == DisplayStyle.None) return false;
+            return true;
         }
 
         private static int ComputePlanSignature(List<RowEntry> plan)
@@ -228,7 +300,8 @@ namespace DenEmo.UI
             if (snapDiff != null) menu.AddItem(snapDiffLabel, false, () => BulkCheckWhere(snapDiff));
             else                  menu.AddDisabledItem(snapDiffLabel);
 
-            menu.ShowAsContext();
+            if (_bulkMenu != null) menu.DropDown(_bulkMenu.worldBound);
+            else                   menu.ShowAsContext();
         }
 
         /// <summary>表示中の各キーのチェック状態を shouldCheck の判定結果で置き換える。</summary>

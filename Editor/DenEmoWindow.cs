@@ -88,28 +88,30 @@ namespace DenEmo
         private Dictionary<string, float> snapshotValues = null;
 
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
-        private Label  _statusLabel;
+        private const string ToolName          = "DenEmo";
+        private const string DenEmoManualUrl   = "https://github.com/dennoko/DenEmo";
+        private const string DefaultReleaseUrl = "https://github.com/dennoko/DenEmo/releases";
+
+        private DennokoStatus _status;
+        private DennokoAppBar _appBar;
         private Label  _versionLabel;
-        private Button _versionReloadButton;
         // LocalVersion は OnEnable で設定する（コンストラクタ／フィールド初期化子から
         // AssetDatabase.GUIDToAssetPath を呼ぶと Unity が例外を投げるため）。
         private Dennoko.DennokoVersionChecker.Result _versionResult =
             new Dennoko.DennokoVersionChecker.Result { State = Dennoko.DennokoVersionChecker.State.Checking };
-        private Button _langButton;
         private Button _tabPose;
         private Button _tabAnim;
         private Button _tabFx;
 
-        // Pose モード用コンテンツ（pose-scroll 配下）
+        // Pose モード用コンテンツ（pose-page 配下: 上部スクロール + リストの置き場所）
+        private VisualElement  _posePage;
         private ScrollView     _poseScroll;
         private VisualElement  _poseTargetHost;
-        private VisualElement  _poseSearchHost;
         private VisualElement  _poseListHost;
 
-        // Animation モード用コンテンツ（anim-scroll 配下）
-        private ScrollView     _animScroll;
+        // Animation モード用コンテンツ（anim-page 配下）
+        private VisualElement  _animPage;
         private VisualElement  _animTargetHost;
-        private VisualElement  _animSearchHost;
         private VisualElement    _animTimelineHost;
         private TimelineUITKView _animTimelineView;
         private VisualElement  _animListHost;
@@ -118,11 +120,14 @@ namespace DenEmo
         private Label          _animTimelineNoticeLabel;
         private Button         _animTimelineFocus;
         private Button         _animTimelineClose;
+        // 録画中バナー（タブの直下に固定）
         private VisualElement  _animRecBanner;
+        private Label          _animRecBannerState;
         private Label          _animRecBannerLabel;
+        private Button         _animRecStop;
 
-        // FX モード用コンテンツ（fx-scroll 配下。カード内容は FxSetupModeUI がバインド）
-        private ScrollView     _fxScroll;
+        // FX モード用コンテンツ（fx-page 配下: 上部スクロール + 差し替え一覧。カード内容は FxSetupModeUI がバインド）
+        private VisualElement  _fxPage;
         private VisualElement  _fxTargetHost;
 
         // ─── Lifecycle ───────────────────────────────────────────────────────
@@ -230,6 +235,8 @@ namespace DenEmo
             _listUI.IsUnchanged       = IsShapeKeyUnchanged;
             _listUI.GetClipDiffChecker     = BuildClipDiffChecker;
             _listUI.GetSnapshotDiffChecker = BuildSnapshotDiffChecker;
+            _listUI.OnPickFromSelection    = PickTargetFromSelection;
+            _listUI.OnClearFilters         = ClearAllFilters;
             TryAutoSelectBodyMesh();
         }
 
@@ -348,22 +355,20 @@ namespace DenEmo
             if (tree == null) return;
             tree.CloneTree(root);
 
-            _langButton  = root.Q<Button>("lang-button");
             _tabPose     = root.Q<Button>("tab-pose");
             _tabAnim     = root.Q<Button>("tab-anim");
             _tabFx       = root.Q<Button>("tab-fx");
-            _statusLabel = root.Q<Label>("status-bar");
             _versionLabel = root.Q<Label>("version-label");
-            _versionReloadButton = root.Q<Button>("version-reload-button");
+            // Ready への自動復帰は TickStatusAutoClear が現在の言語で行うため、DennokoStatus 側の自動復帰は使わない
+            _status = new DennokoStatus(root.Q<Label>("status-label"), DenEmoLoc.T("status.ready"), int.MaxValue);
 
+            _posePage       = root.Q<VisualElement>("pose-page");
             _poseScroll     = root.Q<ScrollView>("pose-scroll");
             _poseTargetHost = root.Q<VisualElement>("pose-target-host");
-            _poseSearchHost = root.Q<VisualElement>("pose-search-host");
             _poseListHost   = root.Q<VisualElement>("pose-list-host");
 
-            _animScroll     = root.Q<ScrollView>("anim-scroll");
+            _animPage       = root.Q<VisualElement>("anim-page");
             _animTargetHost = root.Q<VisualElement>("anim-target-host");
-            _animSearchHost = root.Q<VisualElement>("anim-search-host");
             _animTimelineHost = root.Q<VisualElement>("anim-timeline-host");
             _animListHost   = root.Q<VisualElement>("anim-list-host");
             _animClipCard   = root.Q<VisualElement>("anim-clip-card");
@@ -373,13 +378,20 @@ namespace DenEmo
             _animTimelineFocus       = root.Q<Button>("anim-timeline-focus");
             _animTimelineClose       = root.Q<Button>("anim-timeline-close");
             _animRecBanner           = root.Q<VisualElement>("anim-rec-banner");
+            _animRecBannerState      = root.Q<Label>("anim-rec-banner-state");
             _animRecBannerLabel      = root.Q<Label>("anim-rec-banner-label");
+            _animRecStop             = root.Q<Button>("anim-rec-stop");
 
-            _fxScroll     = root.Q<ScrollView>("fx-scroll");
+            _fxPage       = root.Q<VisualElement>("fx-page");
             _fxTargetHost = root.Q<VisualElement>("fx-target-host");
 
-            // セクションカード（対象メッシュ / 参照 / 検索 / 保存）の配線
-            BindSectionCards(root);
+            // シェイプキーリスト（B4 リストカード。検索行・絞り込みチップを含む）。モード切替時にホスト間を移動する
+            var listRoot = _listUI.Bind(_model, collapsedGroups, () => symmetryMode);
+            _poseListHost.Add(listRoot);
+
+            // セクションカード（対象メッシュ / 参照 / 検索 / 保存）と標準フッターの配線
+            BindSectionCards(root, listRoot);
+            BindFooter(root);
             _fxSetupUI.BindUI(root, _model, () => saveFolder, this);
             RegisterRootDragAndDrop(root);
 
@@ -389,10 +401,12 @@ namespace DenEmo
                 if (HasOpenInstances<DenEmoTimelineWindow>())
                     GetWindow<DenEmoTimelineWindow>().Close();
             };
-
-            // シェイプキーリスト（UI Toolkit）。モード切替時にホスト間を移動する
-            var listRoot = _listUI.Bind(_model, collapsedGroups, () => symmetryMode);
-            _poseListHost.Add(listRoot);
+            _animRecStop.clicked += () =>
+            {
+                _animModeUI.IsRecording = false;
+                UpdateAnimSectionsVisibility();
+                Repaint();
+            };
 
             // Animation モードのタイムライン（UI Toolkit）。クリップカードがあるためクリップ欄は非表示
             _animTimelineView = new TimelineUITKView();
@@ -409,24 +423,7 @@ namespace DenEmo
             // 対象メッシュの有無・IMGUI / SceneView 側で変わる状態はポーリングで表示に反映する
             root.schedule.Execute(OnUiPoll).Every(250);
 
-            _langButton.clicked += () =>
-            {
-                DenEmoLoc.EnglishMode = !DenEmoLoc.EnglishMode;
-                RefreshChromeLabels();
-                Repaint();
-            };
-
-            if (_versionReloadButton != null)
-            {
-                _versionReloadButton.tooltip = DenEmoLoc.T("ui.version.reload.tooltip");
-                _versionReloadButton.clicked += () =>
-                {
-                    // 明示的に再取得する。前回の結果（成功/失敗）を破棄して再チェックし、
-                    // 即座に「確認中...」表示へ切り替える。完了時に OnVersionChecked から再描画される。
-                    DenEmoVersion.ForceRecheck();
-                    LoadVersionResultFromSessionState();
-                };
-            }
+            BindAppBar(root);
             _tabPose.clicked += () => SwitchMode(EditorMode.Pose);
             _tabAnim.clicked += () => SwitchMode(EditorMode.Animation);
             _tabFx.clicked   += () => SwitchMode(EditorMode.FxSetup);
@@ -438,6 +435,30 @@ namespace DenEmo
 
             StartVersionCheck();
             TryAutoSelectBodyMesh();
+        }
+
+        /// <summary>標準ヘッダー（トップバー）を配線する。言語・マニュアル・⋮ メニュー・↻ は DennokoAppBar が扱う。</summary>
+        private void BindAppBar(VisualElement root)
+        {
+            _appBar = new DennokoAppBar(root, ToolName, DenEmoLoc.EnglishMode)
+            {
+                ManualUrl  = DenEmoManualUrl,
+                ReleaseUrl = DefaultReleaseUrl,
+                // 全設定のリセット機能は DenEmo に無いため ResetAll は付けない（⋮ に項目を出さない）
+            };
+            _appBar.LanguageChanged += english =>
+            {
+                DenEmoLoc.EnglishMode = english;
+                RefreshChromeLabels();
+                Repaint();
+            };
+            _appBar.CheckUpdateRequested += () =>
+            {
+                // 明示的に再取得する。前回の結果（成功/失敗）を破棄して再チェックし、
+                // 即座に「確認中...」表示へ切り替える。完了時に OnVersionChecked から再描画される。
+                DenEmoVersion.ForceRecheck();
+                LoadVersionResultFromSessionState();
+            };
         }
 
         // ─── バージョン表記 / アップデートチェック ───────────────────────────
@@ -512,15 +533,30 @@ namespace DenEmo
             _versionLabel.text = text;
             _versionLabel.EnableInClassList("dennoko-version-label--update", update);
             _versionLabel.EnableInClassList("dennoko-version-label--error", error);
+            _versionLabel.EnableInClassList("dennoko-version-label--checking",
+                r.State == Dennoko.DennokoVersionChecker.State.Checking);
+
+            if (_appBar != null)
+            {
+                // 更新ありのときだけラベルのクリックで配布ページを開く（version.json の url を優先）
+                _appBar.ReleaseUrl = !string.IsNullOrEmpty(r.Url) ? r.Url : DefaultReleaseUrl;
+                _appBar.SetVersionClickable(update, update ? DenEmoLoc.T("ui.version.clickable.tip") : null);
+            }
         }
 
         /// <summary>言語設定に依存するウィンドウ外枠のラベルを更新する。</summary>
         private void RefreshChromeLabels()
         {
-            if (_langButton == null) return;
-            _langButton.text = DenEmoLoc.EnglishMode ? "JA" : "EN";
-            if (_versionReloadButton != null)
-                _versionReloadButton.tooltip = DenEmoLoc.T("ui.version.reload.tooltip");
+            if (_appBar == null) return;
+            _appBar.TextResetAll     = DenEmoLoc.T("ui.appbar.resetAll");
+            _appBar.TextResetConfirm = DenEmoLoc.T("ui.appbar.resetConfirm");
+            _appBar.TextResetOk      = DenEmoLoc.T("ui.appbar.resetOk");
+            _appBar.TextCancel       = DenEmoLoc.T("dlg.cancel");
+            _appBar.TextCheckUpdate  = DenEmoLoc.T("ui.appbar.checkUpdate");
+            _appBar.TextOpenRelease  = DenEmoLoc.T("ui.appbar.openRelease");
+            _appBar.TextManual       = DenEmoLoc.T("ui.appbar.manual");
+            _appBar.TextSettings     = DenEmoLoc.T("ui.appbar.settings");
+            _appBar.RefreshTexts(DenEmoLoc.EnglishMode);
             ApplyVersionLabel();
             _tabPose.text    = DenEmoLoc.T("ui.animMode.tab.pose");
             _tabAnim.text    = DenEmoLoc.T("ui.animMode.tab.anim");
@@ -533,7 +569,11 @@ namespace DenEmo
             _animTimelineNoticeLabel.text = DenEmoLoc.T("ui.timeline.separate.notice");
             _animTimelineFocus.text       = DenEmoLoc.T("ui.timeline.separate.focus");
             _animTimelineClose.text       = DenEmoLoc.T("ui.timeline.separate.close");
-            _animRecBannerLabel.text      = DenEmoLoc.T("ui.animMode.rec.banner");
+            _animRecBannerState.text      = DenEmoLoc.T("ui.animMode.rec.state");
+            _animRecBannerLabel.text      = DenEmoLoc.T("ui.animMode.rec.hint");
+            _animRecBannerLabel.tooltip   = DenEmoLoc.T("ui.animMode.rec.hint");
+            _animRecStop.text             = DenEmoLoc.T("ui.animMode.rec.stop");
+            _animRecStop.tooltip          = DenEmoLoc.T("ui.animMode.rec.stop.tip");
             UpdateStatusBar();
         }
 
@@ -549,15 +589,15 @@ namespace DenEmo
         /// <summary>モードに応じて Pose / Animation / FX 用コンテンツの表示を切り替える。</summary>
         private void UpdateModeContentVisibility()
         {
-            if (_fxScroll == null || _animScroll == null || _poseScroll == null) return;
+            if (_fxPage == null || _animPage == null || _posePage == null) return;
             bool pose = _currentMode == EditorMode.Pose;
             bool anim = _currentMode == EditorMode.Animation;
             bool fx   = _currentMode == EditorMode.FxSetup;
-            _poseScroll.style.display = pose ? DisplayStyle.Flex : DisplayStyle.None;
-            _animScroll.style.display = anim ? DisplayStyle.Flex : DisplayStyle.None;
-            _fxScroll.style.display   = fx   ? DisplayStyle.Flex : DisplayStyle.None;
+            DennokoBlockUI.Show(_posePage, pose);
+            DennokoBlockUI.Show(_animPage, anim);
+            DennokoBlockUI.Show(_fxPage, fx);
 
-            // モード間で共有する要素を現在モードのホストへ移動する
+            // モード間で共有する要素を現在モードのホストへ移動する（リストカードは検索行ごと移動する）
             var listRoot = _listUI.Root;
             if (listRoot != null)
             {
@@ -566,14 +606,12 @@ namespace DenEmo
             }
             var targetHost = pose ? _poseTargetHost : anim ? _animTargetHost : _fxTargetHost;
             if (_targetCard.parent != targetHost) targetHost.Add(_targetCard);
-            var searchHost = anim ? _animSearchHost : _poseSearchHost;
-            if (_searchCard.parent != searchHost) searchHost.Add(_searchCard);
-            if (fx) _searchCard.style.display = DisplayStyle.None;
 
             UpdateAnimSectionsVisibility();
             UpdatePoseSectionsVisibility();
             UpdateSectionCards();
-            _fxSetupUI.PollUI(fx && HasUsableTarget());
+            UpdateFooter();
+            _fxSetupUI.PollUI(fx, HasUsableTarget());
         }
 
         /// <summary>IMGUI / SceneView 側の操作で変わる状態を UI Toolkit 表示へ反映する（250ms ごと）。</summary>
@@ -582,7 +620,8 @@ namespace DenEmo
             UpdateAnimSectionsVisibility();
             UpdatePoseSectionsVisibility();
             UpdateSectionCards();
-            _fxSetupUI.PollUI(_currentMode == EditorMode.FxSetup && HasUsableTarget());
+            UpdateFooter();
+            _fxSetupUI.PollUI(_currentMode == EditorMode.FxSetup, HasUsableTarget());
         }
 
         /// <summary>ブレンドシェイプを持つ対象メッシュが指定されているか（対象メッシュカードと同条件）。</summary>
@@ -600,27 +639,21 @@ namespace DenEmo
         {
             if (_animClipCard == null) return;
             bool hasTarget = HasUsableTarget();
-            var display = hasTarget ? DisplayStyle.Flex : DisplayStyle.None;
-            _animClipCard.style.display = display;
-            _animListHost.style.display = display;
-            _animSaveCard.style.display = (_currentMode == EditorMode.Animation && hasTarget) ? DisplayStyle.Flex : DisplayStyle.None;
-            UpdateFooterVisibility();
-            // 検索カードは共有のため、現在モードの側だけが表示を制御する
-            if (_currentMode == EditorMode.Animation)
-                _searchCard.style.display = display;
+            DennokoBlockUI.Show(_animClipCard, hasTarget);
+            // リストカードは対象が無くても表示し、空の状態（「選択から」）を出す
             // 補正カードの表示は CorrectionUI.Refresh がクリップの有無も見て決める
 
             // タイムライン: 別窓化中は通知カード、それ以外は UI Toolkit タイムライン（クリップ未設定時は非表示）
             bool detached = DenEmoTimelineWindow.Instance != null;
             bool hasClip  = _animModeUI.ClipModel.Clip != null;
             bool showInlineTimeline = hasTarget && !detached && hasClip;
-            _animTimelineNotice.style.display = (hasTarget && detached) ? DisplayStyle.Flex : DisplayStyle.None;
-            _animTimelineHost.style.display   = showInlineTimeline ? DisplayStyle.Flex : DisplayStyle.None;
+            DennokoBlockUI.Show(_animTimelineNotice, hasTarget && detached);
+            DennokoBlockUI.Show(_animTimelineHost, showInlineTimeline);
             _animTimelineView?.SetActive(_currentMode == EditorMode.Animation && showInlineTimeline);
 
-            // REC 中バナー（録画状態はタイムライン内の操作で変わるためポーリングで反映）
-            bool showRecBanner = hasTarget && _animModeUI.IsRecording && hasClip;
-            _animRecBanner.style.display = showRecBanner ? DisplayStyle.Flex : DisplayStyle.None;
+            // 録画中バナー（タブの直下に固定。録画状態はタイムライン内の操作で変わるためポーリングで反映）
+            bool showRecBanner = _currentMode == EditorMode.Animation && hasTarget && _animModeUI.IsRecording && hasClip;
+            DennokoBlockUI.Show(_animRecBanner, showRecBanner);
 
             UpdateListAnimContext();
         }
@@ -628,24 +661,9 @@ namespace DenEmo
         /// <summary>対象メッシュの有無で Pose モード内のセクション表示を切り替える。</summary>
         private void UpdatePoseSectionsVisibility()
         {
-            if (_poseListHost == null) return;
-            var display = HasUsableTarget() ? DisplayStyle.Flex : DisplayStyle.None;
-            _poseSourceCard.style.display = display;
-            _poseListHost.style.display   = display;
-            _poseSaveCard.style.display   = (_currentMode == EditorMode.Pose && HasUsableTarget()) ? DisplayStyle.Flex : DisplayStyle.None;
-            UpdateFooterVisibility();
-            // 検索カードは共有のため、現在モードの側だけが表示を制御する
-            if (_currentMode == EditorMode.Pose)
-                _searchCard.style.display = display;
-        }
-
-        /// <summary>固定フッターの表示を更新する（いずれかの保存カードが表示されている場合のみ表示）。</summary>
-        private void UpdateFooterVisibility()
-        {
-            if (_footerContainer == null) return;
-            bool showPose = _poseSaveCard != null && _poseSaveCard.style.display == DisplayStyle.Flex;
-            bool showAnim = _animSaveCard != null && _animSaveCard.style.display == DisplayStyle.Flex;
-            _footerContainer.style.display = (showPose || showAnim) ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_poseSourceCard == null) return;
+            // 保存設定カードは対象が無くても表示する（先に保存先だけ決めたい場合がある）
+            DennokoBlockUI.Show(_poseSourceCard, HasUsableTarget());
         }
 
         /// <summary>
@@ -658,23 +676,21 @@ namespace DenEmo
             _listUI.SetAnimContext(animWithClip ? _animModeUI.BuildDrawContext(_model) : null);
         }
 
+        /// <summary>ステータスバー（DennokoStatus）へ現在のメッセージを反映する。空なら現在の言語の Ready。</summary>
         private void UpdateStatusBar()
         {
-            if (_statusLabel == null) return;
-            string icon = statusLevel switch
-            {
-                1 => "✓ ",
-                2 => "⚠ ",
-                3 => "✕ ",
-                _ => "",
-            };
+            if (_status == null) return;
             string text = string.IsNullOrEmpty(statusMessage)
                 ? DenEmoLoc.T("status.ready")
                 : statusMessage;
-            _statusLabel.text = icon + text;
-            _statusLabel.EnableInClassList("dennoko-status--success", statusLevel == 1);
-            _statusLabel.EnableInClassList("dennoko-status--warning", statusLevel == 2);
-            _statusLabel.EnableInClassList("dennoko-status--error",   statusLevel == 3);
+            var type = statusLevel switch
+            {
+                1 => DennokoStatusType.Success,
+                2 => DennokoStatusType.Warning,
+                3 => DennokoStatusType.Error,
+                _ => DennokoStatusType.Info,
+            };
+            _status.Set(text, type);
         }
 
         // 別ウィンドウ（DenEmoTimelineWindow）が共有する Animation 状態
@@ -835,6 +851,8 @@ namespace DenEmo
         private void SetStatus(string msg, int level, double autoClearSec = 3.0)
         {
             if (level != 0 && autoClearSec == 3.0) autoClearSec = 6.0;
+            // Ready は言語切替に追従させるため、文言ではなく「メッセージなし」として持つ
+            if (level == 0 && msg == DenEmoLoc.T("status.ready")) msg = null;
             statusMessage      = msg;
             statusLevel        = level;
             statusSetAt        = EditorApplication.timeSinceStartup;

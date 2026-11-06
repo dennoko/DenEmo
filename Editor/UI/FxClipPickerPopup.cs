@@ -47,13 +47,14 @@ namespace DenEmo.UI
             root.Q<Label>("picker-title").text = DenEmoLoc.T("ui.fx.picker.title");
 
             var folderButton = root.Q<Button>("picker-folder-button");
-            folderButton.tooltip = DenEmoLoc.T("ui.fx.picker.folder.tip");
+            DennokoIcons.Apply(folderButton, DennokoIcons.Folder, "…", DenEmoLoc.T("ui.fx.picker.folder.tip"));
             folderButton.clicked += OnFolderButton;
 
             _folderLabel = root.Q<Label>("picker-folder-label");
             _folderLabel.text = _owner.PickerFolder;
 
             var searchField = root.Q<TextField>("picker-search");
+            DennokoBlockUI.AddPlaceholder(searchField, DenEmoLoc.T("ui.fx.picker.search"));
             searchField.RegisterValueChangedCallback(evt =>
             {
                 _search = evt.newValue ?? string.Empty;

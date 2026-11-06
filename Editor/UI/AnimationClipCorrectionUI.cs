@@ -11,6 +11,7 @@ namespace DenEmo.UI
 {
     /// <summary>
     /// クリップ内の各シェイプキー値レンジを再マップする折りたたみセクション（UI Toolkit）。
+    /// カード全体を .dennoko-details（DennokoBlockUI.BindDetails）にし、閉じている間は補正中の件数を要約チップで出す。
     ///
     /// 各キーフレーム値 v に対して: new_v = v * (max - min) / 100 + min
     ///
@@ -34,8 +35,11 @@ namespace DenEmo.UI
 
         // UI 要素
         private VisualElement _card;
-        private Foldout       _foldout;
+        private VisualElement _details;
+        private VisualElement _chips;
+        private Label         _title;
         private Button        _apply;
+        private int           _chipCount = -1;
         private Label         _desc, _empty, _colShape, _colMin, _colMax;
         private ScrollView    _rows;
 
@@ -62,7 +66,9 @@ namespace DenEmo.UI
             _setStatus = setStatus;
             _window    = window;
 
-            _foldout  = card.Q<Foldout>("correction-foldout");
+            _details  = card.Q<VisualElement>("correction-details");
+            _title    = card.Q<Label>("correction-title");
+            _chips    = card.Q<VisualElement>("correction-chips");
             _desc     = card.Q<Label>("correction-desc");
             _empty    = card.Q<Label>("correction-empty");
             _colShape = card.Q<Label>("correction-col-shape");
@@ -71,12 +77,13 @@ namespace DenEmo.UI
             _rows     = card.Q<ScrollView>("correction-rows");
             _apply    = card.Q<Button>("correction-apply");
 
-            _foldout.RegisterValueChangedCallback(evt =>
+            _apply.clicked += ApplyCorrection;
+            DennokoBlockUI.BindDetails(_details, _expanded, open =>
             {
-                _expanded = evt.newValue;
+                if (_expanded == open) return;
+                _expanded = open;
                 Refresh();
             });
-            _apply.clicked += ApplyCorrection;
 
             // クリップの差し替え・キーフレーム編集・ターゲット変更を反映する
             card.schedule.Execute(Refresh).Every(250);
@@ -88,8 +95,8 @@ namespace DenEmo.UI
         /// <summary>言語切替時に呼ぶ。</summary>
         public void RefreshLabels()
         {
-            if (_foldout == null) return;
-            _foldout.text    = DenEmoLoc.T("ui.correction.title");
+            if (_title == null) return;
+            _title.text      = DenEmoLoc.T("ui.correction.title");
             _desc.text       = DenEmoLoc.T("ui.correction.desc");
             _empty.text      = DenEmoLoc.T("ui.correction.noTracks");
             _colShape.text   = DenEmoLoc.T("ui.correction.col.shape");
@@ -98,6 +105,7 @@ namespace DenEmo.UI
             _colMin.tooltip  = DenEmoLoc.T("ui.correction.col.min.tip");
             _colMax.tooltip  = DenEmoLoc.T("ui.correction.col.max.tip");
             _apply.text      = DenEmoLoc.T("ui.correction.apply");
+            _chipCount       = -1; // チップの文言を次の Refresh で更新する
         }
 
         // ─── Refresh ──────────────────────────────────────────────────────────
@@ -110,7 +118,7 @@ namespace DenEmo.UI
             _card.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             if (!visible) return;
 
-            _foldout.SetValueWithoutNotify(_expanded);
+            UpdateChips();
             if (!_expanded) return;
 
             if (_rowsRevision != _clipModel.Revision || !ReferenceEquals(_rowsClip, _clipModel.Clip))
@@ -148,6 +156,24 @@ namespace DenEmo.UI
 
                 _rows.Add(row);
             }
+        }
+
+        /// <summary>既定値（min 0 / max 100）から変えたシェイプの件数を要約チップで出す。0 件ならチップを出さない。</summary>
+        private void UpdateChips()
+        {
+            if (_chips == null) return;
+            int count = 0;
+            foreach (var track in _clipModel.Tracks)
+            {
+                bool minChanged = _minValues.TryGetValue(track.ShapeName, out float min) && !Mathf.Approximately(min, 0f);
+                bool maxChanged = _maxValues.TryGetValue(track.ShapeName, out float max) && !Mathf.Approximately(max, 100f);
+                if (minChanged || maxChanged) count++;
+            }
+            if (count == _chipCount) return;
+            _chipCount = count;
+            _chips.Clear();
+            if (count > 0)
+                _chips.Add(DennokoBlockUI.Chip(null, DenEmoLoc.Tf("ui.correction.chip", count)));
         }
 
         private FloatField MakeRangeField(string shapeName, float initial, Dictionary<string, float> store)

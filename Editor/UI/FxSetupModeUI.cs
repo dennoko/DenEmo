@@ -13,7 +13,9 @@ namespace DenEmo.UI
     /// 「アバターへ適用」モードのオーケストレータ。
     /// アバター/FX レイヤーの自動検出 → 表情アニメーション一覧 → 差し替え先の割当て（マッピング）→
     /// 一括差し替え、までを 1 画面で行う。マッピングはセッション限定で永続化しない。
-    /// UI は DenEmoWindow.uxml の fx-avatar-card / fx-list-card / fx-apply-card へバインドする。
+    /// 画面は P3（一覧編集）: DenEmoWindow.uxml の fx-page（上部 = 対象メッシュ + fx-avatar-card、
+    /// 伸びる領域 = fx-list-card、その下 = fx-apply-card）へバインドし、主ボタン（差し替え）は
+    /// DenEmoWindow.FxFooter で標準フッターに出す。
     /// </summary>
     public class FxSetupModeUI
     {
@@ -44,44 +46,21 @@ namespace DenEmo.UI
         private bool            _applyDirect;     // false = 複製モード（推奨）
         private FxReplaceResult _lastResult;
         private string          _pickerFolder;
+        private bool            _hasTarget;       // 対象メッシュ（シェイプキーあり）が指定されているか（ポーリングで更新）
+        private string          _footerSignature;
 
         // ─── UI Toolkit 要素 ─────────────────────────────────────────────────
+        // 上部: アバター / FX カード（B1 相当）
+        private ScrollView    _upperScroll;
         private VisualElement _avatarCard;
-        private Label         _avatarFieldLabel;
+        private Label         _avatarTitle;
         private ObjectField   _avatarField;
-        private Label         _controllerFieldLabel;
         private ObjectField   _controllerField;
-        private Label         _statusLabel;
-        private HelpBox       _avatarNotFound;
-        private HelpBox       _readFailedLabel;
-        private HelpBox       _overrideLabel;
-        private HelpBox       _missingLabel;
         private Button        _rescanButton;
-
-        private VisualElement _listCard;
-        private TextField     _searchField;
-        private Button        _assignedChip;
-        private VisualElement _gestureFilterRow;
-        private Button        _gfLeftChip;
-        private Button        _gfRightChip;
-        private readonly Button[] _gfGestureChips = new Button[8];
-        private Label         _listEmptyLabel;
-        private Button        _showAllButton;
-        private Label         _listEmptyFilteredLabel;
-        private ScrollView    _entryList;
-        private VisualElement _hoverBand;
-        private Label         _hoverPlayingLabel;
-        private Button        _hoverStopButton;
-        private Label         _hoverHintLabel;
-
-        private VisualElement _applyCard;
-        private Label         _applyCountLabel;
-        private Button        _modeDuplicateChip;
-        private Button        _modeDirectChip;
-        private Label         _modeDescLabel;
-        private HelpBox       _manualNoteLabel;
-        private Button        _applyButton;
-        private VisualElement _resultBand;
+        private VisualElement _infoRow;
+        private Label         _statusLabel;
+        private HelpBox       _problemBox;
+        private VisualElement _resultBox;
         private Label         _resultSuccessLabel;
         private VisualElement _resultControllerRow;
         private Label         _resultControllerLabel;
@@ -89,8 +68,42 @@ namespace DenEmo.UI
         private Label         _resultNoteLabel;
         private Label         _resultBackupLabel;
 
+        // 伸びる領域: 差し替え一覧（B4 リストカード）
+        private VisualElement _listSlot;
+        private Label         _listTitle;
+        private Button        _assignedChip;
+        private TextField     _searchField;
+        private Label         _searchPlaceholder;
+        private Button        _searchClear;
+        private Label         _searchCount;
+        private VisualElement _gestureFilterRow;
+        private Button        _gfLeftChip;
+        private Button        _gfRightChip;
+        private readonly Button[] _gfGestureChips = new Button[8];
+        private ScrollView    _entryList;
+        private VisualElement _emptyBox;
+        private Label         _emptyMessage;
+        private Button        _emptyAction;
+        private VisualElement _noMatchBox;
+        private Label         _noMatchMessage;
+        private Button        _noMatchClear;
+        private Label         _hoverHintLabel;
+        private Label         _hoverPlayingLabel;
+        private Button        _hoverStopButton;
+
+        // 一覧の下: 適用方法（B2 設定カード）
+        private VisualElement _applyCard;
+        private Label         _modeLabel;
+        private Button        _modeDuplicateChip;
+        private Button        _modeDirectChip;
+        private System.Action<int> _selectMode;
+        private Label         _modeDescLabel;
+        private VisualElement _manualNote;
+        private Label         _manualNoteText;
+
         private ShapeKeyModel        _boundModel;
         private EditorWindow         _window;
+        private DenEmoWindow         _denWindow;      // 標準フッター（FxFooter）の持ち主
         private System.Func<string>  _getSaveFolder;
 
         // ホバープレビューの解決用（行/スロットのどちらに乗っているか）
@@ -308,54 +321,65 @@ namespace DenEmo.UI
             return string.Join("/", parts.ToArray());
         }
 
+
         // ─── UI バインド ──────────────────────────────────────────────────────
 
-        /// <summary>DenEmoWindow.uxml 内の FX カード群へバインドする。CreateGUI から一度だけ呼ぶ。</summary>
+        /// <summary>DenEmoWindow.uxml の fx-page 内の要素へバインドする。CreateGUI から一度だけ呼ぶ。</summary>
         public void BindUI(VisualElement root, ShapeKeyModel model, System.Func<string> getSaveFolder, EditorWindow window)
         {
             _boundModel    = model;
             _getSaveFolder = getSaveFolder;
             _window        = window;
+            _denWindow     = window as DenEmoWindow;
 
-            _avatarCard           = root.Q<VisualElement>("fx-avatar-card");
-            _avatarFieldLabel     = root.Q<Label>("fx-avatar-field-label");
-            _avatarField          = root.Q<ObjectField>("fx-avatar-field");
-            _controllerFieldLabel = root.Q<Label>("fx-controller-field-label");
-            _controllerField      = root.Q<ObjectField>("fx-controller-field");
-            _statusLabel          = root.Q<Label>("fx-status-label");
-            _avatarNotFound       = root.Q<HelpBox>("fx-avatar-notfound");
-            _readFailedLabel      = root.Q<HelpBox>("fx-readfailed");
-            _overrideLabel        = root.Q<HelpBox>("fx-override-unsupported");
-            _missingLabel         = root.Q<HelpBox>("fx-missing");
-            _rescanButton         = root.Q<Button>("fx-rescan");
-
-            _listCard               = root.Q<VisualElement>("fx-list-card");
-            _searchField            = root.Q<TextField>("fx-search");
-            _assignedChip           = root.Q<Button>("fx-chip-assigned");
-            _gestureFilterRow       = root.Q<VisualElement>("fx-gesture-filter-row");
-            _listEmptyLabel         = root.Q<Label>("fx-list-empty");
-            _showAllButton          = root.Q<Button>("fx-show-all");
-            _listEmptyFilteredLabel = root.Q<Label>("fx-list-empty-filtered");
-            _entryList              = root.Q<ScrollView>("fx-entry-list");
-            _hoverBand              = root.Q<VisualElement>("fx-hover-band");
-            _hoverPlayingLabel      = root.Q<Label>("fx-hover-playing");
-            _hoverStopButton        = root.Q<Button>("fx-hover-stop");
-            _hoverHintLabel         = root.Q<Label>("fx-hover-hint");
-
-            _applyCard             = root.Q<VisualElement>("fx-apply-card");
-            _applyCountLabel       = root.Q<Label>("fx-apply-count");
-            _modeDuplicateChip     = root.Q<Button>("fx-mode-duplicate");
-            _modeDirectChip        = root.Q<Button>("fx-mode-direct");
-            _modeDescLabel         = root.Q<Label>("fx-mode-desc");
-            _manualNoteLabel       = root.Q<HelpBox>("fx-manual-note");
-            _applyButton           = root.Q<Button>("fx-apply-button");
-            _resultBand            = root.Q<VisualElement>("fx-result-band");
+            _upperScroll           = root.Q<ScrollView>("fx-scroll");
+            _avatarCard            = root.Q<VisualElement>("fx-avatar-card");
+            _avatarTitle           = root.Q<Label>("fx-avatar-title");
+            _avatarField           = root.Q<ObjectField>("fx-avatar-field");
+            _controllerField       = root.Q<ObjectField>("fx-controller-field");
+            _rescanButton          = root.Q<Button>("fx-rescan");
+            _infoRow               = root.Q<VisualElement>("fx-info-row");
+            _statusLabel           = root.Q<Label>("fx-status-label");
+            _problemBox            = root.Q<HelpBox>("fx-problem");
+            _resultBox             = root.Q<VisualElement>("fx-result");
             _resultSuccessLabel    = root.Q<Label>("fx-result-success");
             _resultControllerRow   = root.Q<VisualElement>("fx-result-controller-row");
             _resultControllerLabel = root.Q<Label>("fx-result-controller");
             _resultPingButton      = root.Q<Button>("fx-result-ping");
             _resultNoteLabel       = root.Q<Label>("fx-result-note");
             _resultBackupLabel     = root.Q<Label>("fx-result-backup");
+
+            _listSlot          = root.Q<VisualElement>("fx-list-slot");
+            _listTitle         = root.Q<Label>("fx-list-title");
+            _assignedChip      = root.Q<Button>("fx-chip-assigned");
+            _searchField       = root.Q<TextField>("fx-search");
+            _searchClear       = root.Q<Button>("fx-search-clear");
+            _searchCount       = root.Q<Label>("fx-search-count");
+            _gestureFilterRow  = root.Q<VisualElement>("fx-gesture-filter-row");
+            _entryList         = root.Q<ScrollView>("fx-entry-list");
+            _emptyBox          = root.Q<VisualElement>("fx-list-empty");
+            _emptyMessage      = root.Q<Label>("fx-list-empty-message");
+            _emptyAction       = root.Q<Button>("fx-list-empty-action");
+            _noMatchBox        = root.Q<VisualElement>("fx-list-nomatch");
+            _noMatchMessage    = root.Q<Label>("fx-list-nomatch-message");
+            _noMatchClear      = root.Q<Button>("fx-list-nomatch-clear");
+            _hoverHintLabel    = root.Q<Label>("fx-hover-hint");
+            _hoverPlayingLabel = root.Q<Label>("fx-hover-playing");
+            _hoverStopButton   = root.Q<Button>("fx-hover-stop");
+
+            _applyCard         = root.Q<VisualElement>("fx-apply-card");
+            _modeLabel         = root.Q<Label>("fx-mode-label");
+            _modeDuplicateChip = root.Q<Button>("fx-mode-duplicate");
+            _modeDirectChip    = root.Q<Button>("fx-mode-direct");
+            _modeDescLabel     = root.Q<Label>("fx-mode-desc");
+            _manualNote        = root.Q<VisualElement>("fx-manual-note");
+            _manualNoteText    = root.Q<Label>("fx-manual-note-text");
+
+            if (_avatarCard == null || _entryList == null || _applyCard == null)
+            {
+                _avatarCard = null; // UXML の読み込み失敗時は何もしない（各所の null ガードで止まる）
+                return;
+            }
 
             _avatarField.objectType = typeof(GameObject);
             _avatarField.allowSceneObjects = true;
@@ -373,32 +397,51 @@ namespace DenEmo.UI
 
             _rescanButton.clicked += () => Refresh(_boundModel);
 
+            DennokoBlockUI.AddPlaceholder(_searchField, DenEmoLoc.T("ui.fx.search.placeholder"));
+            _searchPlaceholder = _searchField.Q<Label>(className: "dennoko-searchbar__placeholder");
             _searchField.RegisterValueChangedCallback(evt =>
             {
                 _search = evt.newValue ?? string.Empty;
                 RebuildEntryList();
             });
+            _searchClear.clicked += () =>
+            {
+                _search = string.Empty;
+                _searchField.SetValueWithoutNotify(string.Empty);
+                DennokoBlockUI.Show(_searchPlaceholder, true);
+                RebuildEntryList();
+            };
             _assignedChip.clicked += () =>
             {
                 _showOnlyAssigned = !_showOnlyAssigned;
                 RebuildEntryList();
             };
             BuildGestureFilterChips();
-            _showAllButton.clicked += () =>
+
+            // 空の状態の操作: 一致なし → すべて表示 / 表情アニメーションなし → 再スキャン
+            _emptyAction.clicked += () =>
             {
-                _showAllClips = true;
-                RebuildEntryList();
+                if (HasNoMeshMatch())
+                {
+                    _showAllClips = true;
+                    RebuildEntryList();
+                }
+                else
+                {
+                    Refresh(_boundModel);
+                }
             };
+            _noMatchClear.clicked += ClearFilters;
             _hoverStopButton.clicked += () => _hover.Stop();
 
-            _modeDuplicateChip.clicked += () => { _applyDirect = false; UpdateApplyCard(); };
-            _modeDirectChip.clicked    += () => { _applyDirect = true;  UpdateApplyCard(); };
-            _applyButton.clicked += () =>
-            {
-                var jobs = BuildJobs(out int slotCount);
-                if (jobs.Count > 0 && _controller != null)
-                    ExecuteApply(_boundModel, _window, jobs, slotCount);
-            };
+            _selectMode = DennokoBlockUI.BindChoice(
+                _applyCard.Q<VisualElement>("fx-mode-choice"), _applyDirect ? 1 : 0, index =>
+                {
+                    _applyDirect = index == 1;
+                    DenEmoProjectPrefs.SetBool("DenEmo_Fx_ApplyMode_Direct", _applyDirect);
+                    UpdateApplyCard();
+                });
+
             _resultPingButton.clicked += () =>
             {
                 if (_lastResult == null || string.IsNullOrEmpty(_lastResult.NewControllerPath)) return;
@@ -432,6 +475,11 @@ namespace DenEmo.UI
             _gfRightChip.AddToClassList("dennoko-chip");
             _gestureFilterRow.Add(_gfRightChip);
 
+            // 手の指定とジェスチャーの指定の区切り
+            var sep = new VisualElement { pickingMode = PickingMode.Ignore };
+            sep.AddToClassList("dennoko-fx-filter-sep");
+            _gestureFilterRow.Add(sep);
+
             for (int i = 0; i < _gfGestureChips.Length; i++)
             {
                 int gesture = i; // クロージャ用にコピー
@@ -458,35 +506,48 @@ namespace DenEmo.UI
                 SetChipState(_gfGestureChips[i], _filterGesture == i);
         }
 
+        /// <summary>検索・割当て済み・ジェスチャーの絞り込みをすべて解除する（メッシュパスの「すべて表示」は残す）。</summary>
+        private void ClearFilters()
+        {
+            _search = string.Empty;
+            _searchField?.SetValueWithoutNotify(string.Empty);
+            DennokoBlockUI.Show(_searchPlaceholder, true);
+            _showOnlyAssigned = false;
+            _filterHand    = 0;
+            _filterGesture = -1;
+            UpdateGestureFilterChips();
+            RebuildEntryList();
+        }
+
         /// <summary>言語設定に依存するラベルを更新し、動的テキストも作り直す。</summary>
         public void RefreshLabels()
         {
             if (_avatarCard == null) return;
-            _avatarCard.Q<Label>("fx-avatar-title").text = DenEmoLoc.T("ui.fx.section.avatar");
-            _avatarFieldLabel.text = DenEmoLoc.T("ui.fx.avatar.fieldLabel");
-            _controllerFieldLabel.text = DenEmoLoc.T("ui.fx.fx.fieldLabel");
-            _avatarNotFound.text  = DenEmoLoc.T("ui.fx.avatar.notFound");
-            _readFailedLabel.text = DenEmoLoc.T("ui.fx.fx.readFailed");
-            _overrideLabel.text   = DenEmoLoc.T("ui.fx.fx.overrideUnsupported");
-            _missingLabel.text    = DenEmoLoc.T("ui.fx.fx.missing");
-            _rescanButton.text    = DenEmoLoc.T("ui.fx.rescan");
+            _avatarTitle.text      = DenEmoLoc.T("ui.fx.section.avatar");
+            _avatarField.label     = DenEmoLoc.T("ui.fx.avatar.fieldLabel");
+            _controllerField.label = DenEmoLoc.T("ui.fx.fx.fieldLabel");
+            DennokoIcons.Apply(_rescanButton, DennokoIcons.Refresh, "↻", DenEmoLoc.T("ui.fx.rescan"));
+            DennokoIcons.Apply(_resultPingButton, DennokoIcons.Search, "→", DenEmoLoc.T("ui.fx.result.ping.tip"));
 
-            _listCard.Q<Label>("fx-list-title").text = DenEmoLoc.T("ui.fx.section.list");
-            _assignedChip.text           = DenEmoLoc.T("ui.fx.filter.assignedOnly");
-            _gfLeftChip.text             = DenEmoLoc.T("ui.fx.gesture.filter.left");
-            _gfRightChip.text            = DenEmoLoc.T("ui.fx.gesture.filter.right");
-            _showAllButton.text          = DenEmoLoc.T("ui.fx.filter.showAll");
-            _listEmptyLabel.text         = DenEmoLoc.T("ui.fx.list.empty");
-            _listEmptyFilteredLabel.text = DenEmoLoc.T("ui.fx.list.emptyFiltered");
-            _hoverStopButton.text        = DenEmoLoc.T("ui.fx.hover.stop");
-            _hoverHintLabel.text         = DenEmoLoc.T("ui.fx.hover.hint");
+            _listTitle.text       = DenEmoLoc.T("ui.fx.section.list");
+            _assignedChip.tooltip = DenEmoLoc.T("ui.fx.filter.assigned.tip");
+            _gfLeftChip.text      = DenEmoLoc.T("ui.fx.gesture.filter.left");
+            _gfRightChip.text     = DenEmoLoc.T("ui.fx.gesture.filter.right");
+            if (_searchPlaceholder != null) _searchPlaceholder.text = DenEmoLoc.T("ui.fx.search.placeholder");
+            DennokoIcons.Apply(_searchClear, DennokoIcons.Close, "✕", DenEmoLoc.T("ui.search.clear"));
+            _searchCount.tooltip  = DenEmoLoc.T("ui.search.count.tip");
+            _noMatchMessage.text  = DenEmoLoc.T("ui.fx.list.emptyFiltered");
+            _noMatchClear.text    = DenEmoLoc.T("ui.list.clearFilter");
+            _hoverHintLabel.text    = DenEmoLoc.T("ui.fx.hover.hint");
+            _hoverHintLabel.tooltip = DenEmoLoc.T("ui.fx.hover.hint");
+            DennokoIcons.Apply(_hoverStopButton, DennokoIcons.Close, "✕", DenEmoLoc.T("ui.fx.hover.stop.tip"));
 
-            _applyCard.Q<Label>("fx-apply-title").text = DenEmoLoc.T("ui.fx.section.apply");
-            _modeDuplicateChip.text = DenEmoLoc.T("ui.fx.mode.duplicate");
-            _modeDirectChip.text    = DenEmoLoc.T("ui.fx.mode.direct");
-            _manualNoteLabel.text   = DenEmoLoc.T("ui.fx.mode.manualNote");
-            _resultPingButton.text  = DenEmoLoc.T("ui.fx.result.ping");
+            _modeLabel.text           = DenEmoLoc.T("ui.fx.mode.label");
+            _modeDuplicateChip.text   = DenEmoLoc.T("ui.fx.mode.duplicate");
+            _modeDirectChip.text      = DenEmoLoc.T("ui.fx.mode.direct");
+            _manualNoteText.text      = DenEmoLoc.T("ui.fx.mode.manualNote");
 
+            _footerSignature = null; // フッターの文言も言語に合わせて作り直す
             UpdateUI();
         }
 
@@ -501,60 +562,121 @@ namespace DenEmo.UI
 
         /// <summary>
         /// カードの表示切替と、ホバー再生状態などポーリングでしか拾えない表示の反映。
-        /// DenEmoWindow の 250ms ポーリングから呼ばれる。
+        /// DenEmoWindow の 250ms ポーリング（とモード切替時）から呼ばれる。
+        /// active = FX モード表示中、hasTarget = シェイプキーを持つ対象メッシュが指定されているか。
         /// </summary>
-        public void PollUI(bool visible)
+        public void PollUI(bool active, bool hasTarget)
         {
             if (_avatarCard == null) return;
-            _avatarCard.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _hasTarget = hasTarget;
+            bool visible = active && hasTarget;
+            DennokoBlockUI.Show(_avatarCard, visible);
             bool showContent = visible && _controller != null;
-            var contentDisplay = showContent ? DisplayStyle.Flex : DisplayStyle.None;
-            _listCard.style.display  = contentDisplay;
-            _applyCard.style.display = contentDisplay;
+            DennokoBlockUI.Show(_listSlot,  showContent);
+            DennokoBlockUI.Show(_applyCard, showContent);
+            // 一覧を出さないときは上部だけになるので、上部の高さの上限 (60%) を外す
+            _upperScroll?.EnableInClassList("dennoko-upper-scroll--full", !showContent);
+            if (!active) return;
+
+            UpdateFooter();
             if (!visible) return;
 
-            // プレビュー状態バー
+            // プレビュー状態の 1 行（案内 ⇔ 再生中 + 停止）
             bool playing = _hover.IsActive && _hover.ActiveClip != null;
-            _hoverBand.style.display         = DisplayStyle.Flex;
-            _hoverPlayingLabel.style.display = playing ? DisplayStyle.Flex : DisplayStyle.None;
-            _hoverHintLabel.style.display    = playing ? DisplayStyle.None : DisplayStyle.Flex;
-            _hoverStopButton.style.display   = playing ? DisplayStyle.Flex : DisplayStyle.None;
+            DennokoBlockUI.Show(_hoverHintLabel,    !playing);
+            DennokoBlockUI.Show(_hoverPlayingLabel, playing);
+            DennokoBlockUI.Show(_hoverStopButton,   playing);
             if (playing)
-                _hoverPlayingLabel.text = DenEmoLoc.Tf("ui.fx.hover.playing", _hover.ActiveClip.name);
+            {
+                string text = DenEmoLoc.Tf("ui.fx.hover.playing", _hover.ActiveClip.name);
+                if (_hoverPlayingLabel.text != text)
+                {
+                    _hoverPlayingLabel.text    = text;
+                    _hoverPlayingLabel.tooltip = text;
+                }
+            }
 
             // 再生中クリップに対応する行のハイライト
-            var active = _hover.ActiveClip;
+            var active2 = _hover.ActiveClip;
             foreach (var (entry, row) in _rowElements)
             {
                 _mappings.TryGetValue(entry.Clip, out var mapping);
-                bool hit = active != null &&
-                           (active == entry.Clip || (mapping != null && active == mapping.NewClip));
+                bool hit = active2 != null &&
+                           (active2 == entry.Clip || (mapping != null && active2 == mapping.NewClip));
                 row.EnableInClassList("dennoko-fx-row--playing", hit);
             }
         }
 
-        // ─── アバター / FX セクション ─────────────────────────────────────────
+        // ─── アバター / FX カード ─────────────────────────────────────────────
 
         private void UpdateAvatarCard()
         {
+            // OnEnter が BindUI より先に走った場合も欄を検出結果に合わせる
+            var avatarGo = _avatarRoot != null ? _avatarRoot.gameObject : null;
+            if (_avatarField.value != avatarGo) _avatarField.SetValueWithoutNotify(avatarGo);
+            if (_controllerField.value != _controller) _controllerField.SetValueWithoutNotify(_controller);
+
+            // 問題（直す操作が 1 つに決まらないので HelpBox）。同時に出るのは 1 つだけ
             bool found = _descriptor != null;
-            _avatarNotFound.style.display = found ? DisplayStyle.None : DisplayStyle.Flex;
+            string problem = null;
+            if (!found)                      problem = DenEmoLoc.T("ui.fx.avatar.notFound");
+            else if (_fxReadFailed)          problem = DenEmoLoc.T("ui.fx.fx.readFailed");
+            else if (_fxOverrideUnsupported) problem = DenEmoLoc.T("ui.fx.fx.overrideUnsupported");
+            else if (_fxMissing && _controller == null) problem = DenEmoLoc.T("ui.fx.fx.missing");
+            _problemBox.text = problem ?? string.Empty;
+            DennokoBlockUI.Show(_problemBox, problem != null);
 
-            _readFailedLabel.style.display = (found && _fxReadFailed) ? DisplayStyle.Flex : DisplayStyle.None;
-            _overrideLabel.style.display   = (found && !_fxReadFailed && _fxOverrideUnsupported)
-                ? DisplayStyle.Flex : DisplayStyle.None;
-            _missingLabel.style.display    = (found && !_fxReadFailed && !_fxOverrideUnsupported
-                                              && _fxMissing && _controller == null)
-                ? DisplayStyle.Flex : DisplayStyle.None;
-
+            // 情報行（コントローラーがあるとき）
             bool hasController = _controller != null;
-            if (hasController)
-                _statusLabel.text = DenEmoLoc.Tf("ui.fx.fx.stats", _entries.Count);
-            else
-                _statusLabel.text = string.Empty;
+            DennokoBlockUI.Show(_infoRow, hasController);
+            _statusLabel.text = hasController ? DenEmoLoc.Tf("ui.fx.fx.stats", _entries.Count) : string.Empty;
+
+            UpdateResult();
+        }
+
+        /// <summary>最後の適用結果（新しいコントローラー・FX レイヤーへのセット・バックアップ）。</summary>
+        private void UpdateResult()
+        {
+            bool show = _lastResult != null && _lastResult.Success;
+            DennokoBlockUI.Show(_resultBox, show);
+            if (!show) return;
+
+            _resultSuccessLabel.text = DenEmoLoc.Tf("ui.fx.result.success", _lastResult.ReplacedCount);
+
+            bool hasNewController = !string.IsNullOrEmpty(_lastResult.NewControllerPath);
+            DennokoBlockUI.Show(_resultControllerRow, hasNewController);
+            DennokoBlockUI.Show(_resultNoteLabel,     hasNewController);
+            if (hasNewController)
+            {
+                _resultControllerLabel.text = DenEmoLoc.Tf("ui.fx.result.newController",
+                    EllipsizedPath(_lastResult.NewControllerPath));
+                _resultControllerLabel.tooltip = _lastResult.NewControllerPath;
+
+                _resultNoteLabel.text = _lastResult.DescriptorUpdated
+                    ? DenEmoLoc.T("ui.fx.result.descriptorSet")
+                    : DenEmoLoc.T("ui.fx.result.manualSet");
+                _resultNoteLabel.EnableInClassList("dennoko-hint--warning", !_lastResult.DescriptorUpdated);
+            }
+
+            bool hasBackup = !string.IsNullOrEmpty(_lastResult.BackupPath);
+            DennokoBlockUI.Show(_resultBackupLabel, hasBackup);
+            if (hasBackup)
+            {
+                _resultBackupLabel.text    = DenEmoLoc.Tf("ui.fx.result.backup", EllipsizedPath(_lastResult.BackupPath));
+                _resultBackupLabel.tooltip = _lastResult.BackupPath;
+            }
         }
 
         // ─── 差し替えマッピング一覧 ───────────────────────────────────────────
+
+        /// <summary>表情アニメーションはあるが、対象メッシュのパスに一致するものが 1 つも無い（すべて表示で救済）。</summary>
+        private bool HasNoMeshMatch()
+        {
+            if (_entries.Count == 0 || _showAllClips) return false;
+            foreach (var entry in _entries)
+                if (entry.MatchesTargetMesh) return false;
+            return true;
+        }
 
         private void RebuildEntryList()
         {
@@ -569,34 +691,42 @@ namespace DenEmo.UI
             _rowElements.Clear();
 
             SetChipState(_assignedChip, _showOnlyAssigned);
+            _assignedChip.text = DenEmoLoc.Tf("ui.fx.filter.assigned", _mappings.Count);
+            DennokoBlockUI.Show(_searchClear, !string.IsNullOrEmpty(_search));
 
-            var visible = CollectVisibleEntries();
+            var visible = CollectVisibleEntries(out int total);
 
-            int matchCount = 0;
-            foreach (var entry in _entries)
-                if (entry.MatchesTargetMesh) matchCount++;
-
-            bool noMatch  = matchCount == 0 && _entries.Count > 0 && !_showAllClips;
             bool noEntry  = _entries.Count == 0;
+            bool noMatch  = HasNoMeshMatch();
             bool filtered = !noMatch && !noEntry && visible.Count == 0;
 
-            _listEmptyLabel.style.display         = (noMatch || noEntry) ? DisplayStyle.Flex : DisplayStyle.None;
-            _showAllButton.style.display          = noMatch  ? DisplayStyle.Flex : DisplayStyle.None;
-            _listEmptyFilteredLabel.style.display = filtered ? DisplayStyle.Flex : DisplayStyle.None;
-            _entryList.style.display              = visible.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            // 空の状態: 対象が無い（表情アニメーションなし / メッシュ不一致）と、絞り込みで 0 件を区別する
+            DennokoBlockUI.Show(_emptyBox,   noEntry || noMatch);
+            DennokoBlockUI.Show(_noMatchBox, filtered);
+            if (noEntry || noMatch)
+            {
+                _emptyMessage.text   = DenEmoLoc.T(noMatch ? "ui.fx.list.empty" : "ui.fx.list.empty.none");
+                _emptyAction.text    = DenEmoLoc.T(noMatch ? "ui.fx.list.showAll" : "ui.fx.rescan");
+                _emptyAction.tooltip = noMatch ? DenEmoLoc.T("ui.fx.filter.showAll") : null;
+            }
+
+            _searchCount.text = visible.Count + " / " + total;
 
             foreach (var entry in visible)
                 _entryList.Add(MakeEntryRow(entry));
         }
 
-        private List<FxExpressionEntry> CollectVisibleEntries()
+        /// <summary>表示する行を集める。total = 絞り込み前の件数（メッシュパスの条件だけを掛けたもの）。</summary>
+        private List<FxExpressionEntry> CollectVisibleEntries(out int total)
         {
             var tokens = ShapeKeyModel.BuildSearchTokens(_search);
             var list = new List<FxExpressionEntry>();
+            total = 0;
             foreach (var entry in _entries)
             {
                 if (entry.Clip == null) continue;
                 if (!_showAllClips && !entry.MatchesTargetMesh) continue;
+                total++;
                 if (_showOnlyAssigned && !_mappings.ContainsKey(entry.Clip)) continue;
                 if (tokens.Length > 0)
                 {
@@ -639,21 +769,23 @@ namespace DenEmo.UI
             return false;
         }
 
-        /// <summary>1 エントリぶんの行（＋不一致注記・展開スロット）を生成する。</summary>
+        /// <summary>1 エントリぶんの行（＋不一致注記・展開スロット）を生成する（B4 の .dennoko-list-row）。</summary>
         private VisualElement MakeEntryRow(FxExpressionEntry entry)
         {
             _mappings.TryGetValue(entry.Clip, out var mapping);
             bool multi    = entry.Slots.Count > 1;
             bool expanded = multi && _expanded.Contains(entry.Clip);
+            bool assigned = mapping != null && mapping.NewClip != null;
 
             var container = new VisualElement();
+            container.AddToClassList("dennoko-fx-entry");
 
             var row = new VisualElement();
+            row.AddToClassList("dennoko-list-row");
             row.AddToClassList("dennoko-fx-row");
-            if (mapping != null && mapping.NewClip != null)
-                row.AddToClassList("dennoko-fx-row--assigned");
+            row.EnableInClassList("dennoko-fx-row--assigned", assigned);
 
-            // 複数参照の展開トグル（単一参照は目立たせない）
+            // 複数参照の展開トグル（単一参照は同じ幅の空きで位置を揃える）
             if (multi)
             {
                 var fold = new Button(() =>
@@ -661,24 +793,28 @@ namespace DenEmo.UI
                     if (_expanded.Contains(entry.Clip)) _expanded.Remove(entry.Clip);
                     else                                _expanded.Add(entry.Clip);
                     RebuildEntryList();
-                }) { text = expanded ? "▾" : "▸" };
-                fold.AddToClassList("dennoko-mini-button");
+                })
+                {
+                    text    = expanded ? "▼" : "▶",
+                    tooltip = DenEmoLoc.T("ui.fx.row.fold.tip"),
+                };
+                fold.AddToClassList("dennoko-icon-button");
                 fold.AddToClassList("dennoko-fx-fold");
                 row.Add(fold);
             }
             else
             {
-                var spacer = new VisualElement();
-                spacer.AddToClassList("dennoko-fx-fold-spacer");
-                row.Add(spacer);
+                row.Add(MakeSpacer());
             }
 
-            // クリップ名（ホバーでシーンプレビュー）
+            // クリップ名（クリックで Ping、ホバーでシーンプレビュー）
             string label = entry.Clip.name;
             if (multi) label += " " + DenEmoLoc.Tf("ui.fx.row.usage", entry.Slots.Count);
             if (!entry.MatchesTargetMesh) label = "⚠ " + label;
             var name = new Label(label) { tooltip = BuildSlotTooltip(entry) };
+            name.AddToClassList("dennoko-list-row__name");
             name.AddToClassList("dennoko-fx-name");
+            name.EnableInClassList("dennoko-fx-name--mismatch", !entry.MatchesTargetMesh);
             name.RegisterCallback<ClickEvent>(evt =>
             {
                 if (entry.Clip != null)
@@ -712,20 +848,21 @@ namespace DenEmo.UI
                 }
             }
 
-            var arrow = new Label("→");
-            arrow.AddToClassList("dennoko-fx-arrow");
+            var arrow = new Label("→") { pickingMode = PickingMode.Ignore };
+            arrow.AddToClassList("dennoko-list-row__arrow");
             row.Add(arrow);
 
             // 差し替え先スロット（クリックでピッカー、D&D 受付、ホバーで新クリップをプレビュー）
             var slot = new Button
             {
-                text = mapping != null && mapping.NewClip != null
-                    ? mapping.NewClip.name
-                    : DenEmoLoc.T("ui.fx.slot.none"),
+                text    = assigned ? mapping.NewClip.name : DenEmoLoc.T("ui.fx.slot.none"),
+                tooltip = assigned
+                    ? mapping.NewClip.name + "\n" + DenEmoLoc.T("ui.fx.slot.tip")
+                    : DenEmoLoc.T("ui.fx.slot.tip"),
             };
             slot.clicked += () => OpenPicker(entry, slot);
-            slot.AddToClassList("dennoko-mini-button");
             slot.AddToClassList("dennoko-fx-slot");
+            slot.EnableInClassList("dennoko-fx-slot--empty", !assigned);
             slot.RegisterCallback<DragUpdatedEvent>(evt =>
             {
                 if (FindDraggedClip() == null) return;
@@ -742,23 +879,22 @@ namespace DenEmo.UI
             });
             row.Add(slot);
 
-            // 割当て解除
+            // 割当て解除（無いときは同じ幅の空きで位置を揃える）
             if (mapping != null)
             {
                 var clear = new Button(() =>
                 {
                     _mappings.Remove(entry.Clip);
                     UpdateUI();
-                }) { text = "✕", tooltip = DenEmoLoc.T("ui.fx.slot.clear.tip") };
-                clear.AddToClassList("dennoko-mini-button");
-                clear.AddToClassList("dennoko-icon-mini");
+                });
+                clear.AddToClassList("dennoko-icon-button");
+                clear.AddToClassList("dennoko-fx-clear");
+                DennokoIcons.Apply(clear, DennokoIcons.Close, "✕", DenEmoLoc.T("ui.fx.slot.clear.tip"));
                 row.Add(clear);
             }
             else
             {
-                var spacer = new VisualElement();
-                spacer.AddToClassList("dennoko-fx-fold-spacer");
-                row.Add(spacer);
+                row.Add(MakeSpacer());
             }
 
             // ホバープレビュー: 行 = 差し替え元、スロット上 = 差し替え先
@@ -782,21 +918,22 @@ namespace DenEmo.UI
             if (!entry.MatchesTargetMesh)
             {
                 var note = new Label(DenEmoLoc.Tf("ui.fx.row.pathMismatch", entry.FirstBindingPath ?? ""));
-                note.AddToClassList("dennoko-text-warning");
-                note.AddToClassList("dennoko-wrap");
-                note.AddToClassList("dennoko-fx-indent");
+                note.AddToClassList("dennoko-fx-note");
                 container.Add(note);
             }
 
-            // 参照箇所ごとの対象チェック（展開時のみ）
+            // 参照箇所ごとの対象チェック（展開時のみ。割当て前は選べない）
             if (expanded)
             {
+                var slots = new VisualElement();
+                slots.AddToClassList("dennoko-fx-slots");
                 foreach (var slotInfo in entry.Slots)
                 {
                     var s = slotInfo;
                     bool enabled = mapping == null || !mapping.DisabledSlotKeys.Contains(s.SlotKey);
-                    var toggle = new Toggle(s.DisplayPath + SlotHintSuffix(s)) { value = enabled };
+                    var toggle = new Toggle { text = s.DisplayPath + SlotHintSuffix(s), value = enabled };
                     toggle.AddToClassList("dennoko-fx-slot-toggle");
+                    toggle.SetEnabled(mapping != null);
                     toggle.RegisterValueChangedCallback(evt =>
                     {
                         if (!_mappings.TryGetValue(entry.Clip, out var m)) return;
@@ -804,11 +941,19 @@ namespace DenEmo.UI
                         else              m.DisabledSlotKeys.Add(s.SlotKey);
                         UpdateApplyCard();
                     });
-                    container.Add(toggle);
+                    slots.Add(toggle);
                 }
+                container.Add(slots);
             }
 
             return container;
+        }
+
+        private static VisualElement MakeSpacer()
+        {
+            var spacer = new VisualElement { pickingMode = PickingMode.Ignore };
+            spacer.AddToClassList("dennoko-fx-spacer");
+            return spacer;
         }
 
         private void OpenPicker(FxExpressionEntry entry, VisualElement anchor)
@@ -922,7 +1067,7 @@ namespace DenEmo.UI
 
         private static void SetChipState(Button chip, bool on)
         {
-            chip.EnableInClassList("dennoko-button-active", on);
+            chip?.EnableInClassList(DennokoBlockUI.ActiveClass, on);
         }
 
         /// <summary>差し替え先クリップの割当て（検証込み）。ピッカー / D&D の両方から呼ばれる。</summary>
@@ -956,64 +1101,73 @@ namespace DenEmo.UI
             window?.Repaint();
         }
 
-        // ─── 適用セクション ───────────────────────────────────────────────────
+        // ─── 適用方法（B2）と標準フッター ─────────────────────────────────────
 
         private void UpdateApplyCard()
         {
             if (_applyCard == null) return;
-            var jobs = BuildJobs(out _);
 
-            _applyCountLabel.text = DenEmoLoc.Tf("ui.fx.apply.count", jobs.Count);
-
-            SetChipState(_modeDuplicateChip, !_applyDirect);
-            SetChipState(_modeDirectChip,    _applyDirect);
+            _selectMode?.Invoke(_applyDirect ? 1 : 0);
 
             _modeDescLabel.text = _applyDirect
                 ? DenEmoLoc.T("ui.fx.mode.direct.desc")
                 : DenEmoLoc.T("ui.fx.mode.duplicate.desc");
-            _modeDescLabel.EnableInClassList("dennoko-text-warning",  _applyDirect);
-            _modeDescLabel.EnableInClassList("dennoko-text-tertiary", !_applyDirect);
+            _modeDescLabel.EnableInClassList("dennoko-hint--warning", _applyDirect);
 
-            _manualNoteLabel.style.display = (!_applyDirect && _descriptor == null)
-                ? DisplayStyle.Flex : DisplayStyle.None;
+            DennokoBlockUI.Show(_manualNote, !_applyDirect && _descriptor == null);
 
-            _applyButton.text = DenEmoLoc.Tf("ui.fx.apply.button", jobs.Count);
-            _applyButton.SetEnabled(jobs.Count > 0 && _controller != null);
-
-            UpdateResultBand();
+            UpdateFooter();
         }
 
-        private void UpdateResultBand()
+        /// <summary>
+        /// 主ボタン（差し替え）・情報欄を DenEmoWindow.FxFooter に書き、変わったときだけ即時反映する。
+        /// 割当てが無い・コントローラーが無いなどの間は主ボタンを無効にし、ツールチップに理由を出す。
+        /// </summary>
+        private void UpdateFooter()
         {
-            bool show = _lastResult != null && _lastResult.Success;
-            _resultBand.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
-            if (!show) return;
+            if (_denWindow == null) return;
+            var f = _denWindow.FxFooter;
+            var jobs = BuildJobs(out int slotCount);
 
-            _resultSuccessLabel.text = DenEmoLoc.Tf("ui.fx.result.success", _lastResult.ReplacedCount);
+            string reason = !_hasTarget         ? DenEmoLoc.T("ui.footer.primary.needTarget")
+                          : _controller == null ? DenEmoLoc.T("ui.fx.footer.needController")
+                          : jobs.Count == 0     ? DenEmoLoc.T("ui.fx.footer.needAssign")
+                          : null;
 
-            bool hasNewController = !string.IsNullOrEmpty(_lastResult.NewControllerPath);
-            _resultControllerRow.style.display = hasNewController ? DisplayStyle.Flex : DisplayStyle.None;
-            _resultNoteLabel.style.display     = hasNewController ? DisplayStyle.Flex : DisplayStyle.None;
-            if (hasNewController)
+            f.Visible        = true;
+            f.OnPrimary      = OnApplyClicked;
+            f.PrimaryText    = DenEmoLoc.T("ui.fx.footer.primary");
+            f.PrimaryEnabled = reason == null;
+            f.PrimaryTooltip = reason ?? DenEmoLoc.Tf("ui.fx.apply.button", jobs.Count);
+            f.SecondaryText  = null;
+            f.OnSecondary    = null;
+            if (reason != null)
             {
-                _resultControllerLabel.text = DenEmoLoc.Tf("ui.fx.result.newController",
-                    EllipsizedPath(_lastResult.NewControllerPath));
-                _resultControllerLabel.tooltip = _lastResult.NewControllerPath;
-
-                _resultNoteLabel.text = _lastResult.DescriptorUpdated
-                    ? DenEmoLoc.T("ui.fx.result.descriptorSet")
-                    : DenEmoLoc.T("ui.fx.result.manualSet");
-                _resultNoteLabel.EnableInClassList("dennoko-text-warning",  !_lastResult.DescriptorUpdated);
-                _resultNoteLabel.EnableInClassList("dennoko-text-tertiary", _lastResult.DescriptorUpdated);
+                f.InfoText    = null;
+                f.InfoTooltip = null;
+                f.InfoWarning = false;
+            }
+            else
+            {
+                f.InfoText = DenEmoLoc.Tf("ui.fx.footer.info", jobs.Count, slotCount)
+                             + (_applyDirect ? DenEmoLoc.T("ui.fx.footer.info.direct") : string.Empty);
+                f.InfoTooltip = _applyDirect
+                    ? DenEmoLoc.T("ui.fx.mode.direct.desc")
+                    : DenEmoLoc.T("ui.fx.mode.duplicate.desc");
+                f.InfoWarning = _applyDirect;
             }
 
-            bool hasBackup = !string.IsNullOrEmpty(_lastResult.BackupPath);
-            _resultBackupLabel.style.display = hasBackup ? DisplayStyle.Flex : DisplayStyle.None;
-            if (hasBackup)
-            {
-                _resultBackupLabel.text    = DenEmoLoc.Tf("ui.fx.result.backup", EllipsizedPath(_lastResult.BackupPath));
-                _resultBackupLabel.tooltip = _lastResult.BackupPath;
-            }
+            string signature = f.PrimaryText + "|" + f.PrimaryEnabled + "|" + f.PrimaryTooltip + "|" + f.InfoText + "|" + f.InfoWarning;
+            if (signature == _footerSignature) return;
+            _footerSignature = signature;
+            _denWindow.RefreshFooter();
+        }
+
+        private void OnApplyClicked()
+        {
+            var jobs = BuildJobs(out int slotCount);
+            if (jobs.Count > 0 && _controller != null)
+                ExecuteApply(_boundModel, _window, jobs, slotCount);
         }
 
         private List<(FxExpressionEntry entry, FxMapping mapping)> BuildJobs(out int slotCount)
@@ -1086,16 +1240,16 @@ namespace DenEmo.UI
                 }
 
                 ScanAndRebuild(model);
-                StatusSink?.Invoke(DenEmoLoc.T("status.fx.applied"), 1);
+                StatusSink?.Invoke(DenEmoLoc.Tf("status.fx.appliedCount", result.ReplacedCount), 1);
             }
             else
             {
                 StatusSink?.Invoke(result.Error ?? "error", 3);
             }
-            window.Repaint();
+            window?.Repaint();
         }
 
-        private static string EllipsizedPath(string path, int maxLen = 35)
+        private static string EllipsizedPath(string path, int maxLen = 48)
         {
             if (string.IsNullOrEmpty(path) || path.Length <= maxLen) return path;
             return "..." + path.Substring(path.Length - (maxLen - 3));

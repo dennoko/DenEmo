@@ -1,8 +1,8 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
     <!-- メインウィンドウが閉じていてタイムラインが開けない時の通知 -->
-    <ui:VisualElement name="tlwin-notice" class="dennoko-card dennoko-tlwin-notice">
-        <ui:Label name="tlwin-notice-label" text="DenEmo Window is not open." class="dennoko-text-tertiary dennoko-wrap dennoko-tlwin-notice-label" />
-        <ui:Button name="tlwin-open-main" text="Open DenEmo Window" class="dennoko-button-primary" />
+    <ui:VisualElement name="tlwin-notice" class="dennoko-card dennoko-empty-state dennoko-tlwin-notice">
+        <ui:Label name="tlwin-notice-label" text="DenEmo Window is not open." class="dennoko-empty-state__message" />
+        <ui:Button name="tlwin-open-main" text="Open DenEmo Window" class="dennoko-button-secondary" />
     </ui:VisualElement>
 
     <!-- タイムライン表示領域（C# が TimelineUITKView を構築） -->

@@ -12,6 +12,7 @@ namespace DenEmo.UI
     internal static class DenEmoUiAssets
     {
         internal const string ThemeUssGuid = "3a5c5d4f18364fe28d1e746b348409f8";
+        internal const string BlocksUssGuid = "366acbd939f74615ac4912252bb80211";
         internal const string StylesUssGuid = "e1295b68ce4c4cceae516e15953273cf";
         internal const string VertexPreviewPopupUxmlGuid = "8f78837df0074f47b2c0b3c8e34c99f0";
         internal const string MainWindowUxmlGuid = "e7410dd244164667b31e714b0148c3e6";
@@ -22,11 +23,14 @@ namespace DenEmo.UI
 
         internal static StyleSheet LoadTheme() => Load<StyleSheet>(ThemeUssGuid);
 
+        /// <summary>大きい単位 (画面パターン・ブロック) のクラス定義。テーマの後・DenEmo 固有 USS の前に追加する。</summary>
+        internal static StyleSheet LoadBlocks() => Load<StyleSheet>(BlocksUssGuid);
+
         /// <summary>DenEmo 固有クラス定義。テーマの後に styleSheets へ追加すること。</summary>
         internal static StyleSheet LoadStyles() => Load<StyleSheet>(StylesUssGuid);
 
         /// <summary>
-        /// ルート要素に dennoko-root と保険背景色を設定し、テーマ + DenEmo 固有 USS と
+        /// ルート要素に dennoko-root と保険背景色を設定し、テーマ → ブロック → DenEmo 固有 USS の順で USS と
         /// 標準フォントを適用する。すべての EditorWindow / PopupWindowContent はここを通す。
         /// </summary>
         internal static void SetupRoot(VisualElement root)
@@ -36,6 +40,8 @@ namespace DenEmo.UI
             root.style.backgroundColor = (Color)new Color32(0x12, 0x12, 0x12, 0xFF);
             var theme = LoadTheme();
             if (theme != null) root.styleSheets.Add(theme);
+            var blocks = LoadBlocks();
+            if (blocks != null) root.styleSheets.Add(blocks);
             var styles = LoadStyles();
             if (styles != null) root.styleSheets.Add(styles);
             DennokoUIFont.Apply(root);

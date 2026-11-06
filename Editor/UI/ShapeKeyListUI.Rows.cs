@@ -40,11 +40,7 @@ namespace DenEmo.UI
             _groupBindings.Clear();
             _anyDragging = false;
             _rowsScroll.Clear();
-
-            bool hasItems = _model.Items.Count > 0;
-            bool anyRows  = _plan.Count > 0;
-            _emptyLabel.style.display   = hasItems ? DisplayStyle.None : DisplayStyle.Flex;
-            _noMatchLabel.style.display = (hasItems && !anyRows) ? DisplayStyle.Flex : DisplayStyle.None;
+            // 空の状態（対象なし / 0 件）の出し分けは UpdateEmptyStateAndCount が毎ティック行う
 
             if (_rowTemplate == null) return;
 
@@ -82,6 +78,7 @@ namespace DenEmo.UI
             header.AddToClassList("dennoko-list-group-header");
 
             var fold = new Button();
+            fold.AddToClassList("dennoko-icon-button");
             fold.AddToClassList("dennoko-group-fold");
             var label = new Label(entry.Text);
             label.AddToClassList("dennoko-group-label");

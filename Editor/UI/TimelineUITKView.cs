@@ -151,15 +151,15 @@ namespace DenEmo.UI
             // ── ヘッダ: タイトル + 別窓化/結合ボタン（メッシュ指定と同じ形式） ──
             var headerRow = new VisualElement();
             headerRow.AddToClassList("dennoko-card-header");
-            headerRow.AddToClassList("dennoko-toggle-header");
+            headerRow.AddToClassList("dennoko-card-header--row");
 
             _titleLabel = new Label();
             _titleLabel.AddToClassList("dennoko-section-title");
+            _titleLabel.AddToClassList("dennoko-card-header__title");
             headerRow.Add(_titleLabel);
 
             _detachButton = new Button(OnDetachAttach);
-            _detachButton.AddToClassList("dennoko-mini-button");
-            _detachButton.AddToClassList("dennoko-mini-button--auto");
+            _detachButton.AddToClassList("dennoko-icon-button");
             headerRow.Add(_detachButton);
 
             _root.Add(headerRow);
@@ -169,7 +169,7 @@ namespace DenEmo.UI
             {
                 var clipRow = Row();
                 _clipField = new ObjectField { objectType = typeof(AnimationClip), allowSceneObjects = false };
-                _clipField.AddToClassList("dennoko-clip-field");
+                _clipField.AddToClassList("dennoko-tl-clip-field");
                 _clipField.RegisterValueChangedCallback(evt =>
                 {
                     _mode.ApplyClipSelection(evt.newValue as AnimationClip, _model, _window);
@@ -180,8 +180,7 @@ namespace DenEmo.UI
             }
 
             _noClipLabel = new Label();
-            _noClipLabel.AddToClassList("dennoko-text-tertiary");
-            _noClipLabel.AddToClassList("dennoko-wrap");
+            _noClipLabel.AddToClassList("dennoko-hint");
             _root.Add(_noClipLabel);
 
             // ── body（クリップがあるときのみ表示） ──
@@ -274,7 +273,7 @@ namespace DenEmo.UI
             recGroup.AddToClassList("dennoko-tl-group");
 
             _loopToggle = new Toggle();
-            _loopToggle.AddToClassList("dennoko-save-toggle");
+            _loopToggle.AddToClassList("dennoko-tl-loop-toggle");
             _loopToggle.RegisterValueChangedCallback(evt =>
             {
                 _mode.ClipModel.SmoothLoopEnabled = evt.newValue;
@@ -342,13 +341,18 @@ namespace DenEmo.UI
             _interpLinear = InterpChip(InterpolationType.Linear, "Linear");
             _interpEase   = InterpChip(InterpolationType.Ease,   "Ease");
             _applyAllButton = new Button(ApplyInterpAll);
-            _applyAllButton.AddToClassList("dennoko-mini-button");
-            _applyAllButton.AddToClassList("dennoko-mini-button--auto");
+            _applyAllButton.AddToClassList("dennoko-button-secondary");
+            _applyAllButton.AddToClassList("dennoko-tl-apply-all");
+
+            var interpSeg = new VisualElement();
+            interpSeg.AddToClassList("dennoko-segmented");
+            interpSeg.AddToClassList("dennoko-tl-interp");
+            interpSeg.Add(_interpStep);
+            interpSeg.Add(_interpLinear);
+            interpSeg.Add(_interpEase);
 
             interpGroup.Add(_interpLabel);
-            interpGroup.Add(_interpStep);
-            interpGroup.Add(_interpLinear);
-            interpGroup.Add(_interpEase);
+            interpGroup.Add(interpSeg);
             interpGroup.Add(Spacer(4));
             interpGroup.Add(_applyAllButton);
             row.Add(interpGroup);
@@ -359,14 +363,13 @@ namespace DenEmo.UI
         private Button InterpChip(InterpolationType type, string label)
         {
             var b = new Button(() => { _mode.CurrentInterp = type; RefreshValues(); }) { text = label };
-            b.AddToClassList("dennoko-chip");
             return b;
         }
 
         private Button Transport(string label, System.Action action)
         {
             var b = new Button(action) { text = label };
-            b.AddToClassList("dennoko-mini-button");
+            b.AddToClassList("dennoko-icon-button");
             b.AddToClassList("dennoko-tl-transport-btn");
             return b;
         }
@@ -387,7 +390,7 @@ namespace DenEmo.UI
             var zoomBox = new VisualElement(); zoomBox.AddToClassList("dennoko-tl-zoombox");
             _zoomLabel = new Label("100%"); _zoomLabel.AddToClassList("dennoko-tl-zoom-pct");
             _zoomReset = new Button(() => { _viewStart = 0f; _viewEnd = 1f; MarkAllDirty(); }) { };
-            _zoomReset.AddToClassList("dennoko-mini-button");
+            _zoomReset.AddToClassList("dennoko-icon-button");
             _zoomReset.AddToClassList("dennoko-tl-zoom-reset");
             zoomBox.Add(_zoomLabel); zoomBox.Add(_zoomReset);
             rulerLeft.Add(zoomBox);
@@ -424,8 +427,7 @@ namespace DenEmo.UI
             area.Add(_tracksScroll);
 
             _noTracksLabel = new Label();
-            _noTracksLabel.AddToClassList("dennoko-text-tertiary");
-            _noTracksLabel.AddToClassList("dennoko-wrap");
+            _noTracksLabel.AddToClassList("dennoko-hint");
             area.Add(_noTracksLabel);
 
             // ── フレーム移動ハンドル行（トラック下部） ──
@@ -492,8 +494,10 @@ namespace DenEmo.UI
             if (_root == null) return;
             _titleLabel.text  = DenEmoLoc.T("ui.timeline.title");
             _noClipLabel.text = DenEmoLoc.T("ui.timeline.noClip");
-            _detachButton.text    = DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach" : "ui.timeline.detach");
-            _detachButton.tooltip = DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach.tip" : "ui.timeline.detach.tip");
+            DennokoIcons.Apply(_detachButton,
+                _isSeparateWindow ? "d_winbtn_win_restore|winbtn_win_restore" : DennokoIcons.Popout,
+                DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach" : "ui.timeline.detach"),
+                DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach.tip" : "ui.timeline.detach.tip"));
             _fpsLabel.text    = DenEmoLoc.T("ui.timeline.fps");
             _lenLabel.text    = DenEmoLoc.T("ui.timeline.length");
             _interpLabel.text    = DenEmoLoc.T("ui.timeline.interp");
@@ -594,13 +598,12 @@ namespace DenEmo.UI
             left.Add(nameLabel);
 
             var addBtn = new Button(() => AddOrUpdateKey(shapeName)) { text = "◆", tooltip = DenEmoLoc.T("ui.timeline.addKey.tip") };
-            addBtn.AddToClassList("dennoko-mini-button");
+            addBtn.AddToClassList("dennoko-icon-button");
             addBtn.AddToClassList("dennoko-tl-key-btn");
             left.Add(addBtn);
 
             var delBtn = new Button(() => DeleteTrack(shapeName)) { text = "✕", tooltip = DenEmoLoc.T("ui.timeline.deleteTrack.tip") };
-            delBtn.AddToClassList("dennoko-mini-button");
-            delBtn.AddToClassList("dennoko-icon-mini");
+            delBtn.AddToClassList("dennoko-icon-button");
             left.Add(delBtn);
 
             row.Add(left);
@@ -643,10 +646,8 @@ namespace DenEmo.UI
             if (showEmptyNotice)
             {
                 var lbl = new Label(DenEmoLoc.T("ui.timeline.noKeys"));
-                lbl.AddToClassList("dennoko-text-tertiary");
-                lbl.AddToClassList("dennoko-wrap");
-                lbl.style.paddingLeft = 12;
-                lbl.style.paddingTop = 12;
+                lbl.AddToClassList("dennoko-hint");
+                lbl.AddToClassList("dennoko-tl-lane-notice");
                 lane.Add(lbl);
             }
 

@@ -44,11 +44,12 @@ ShapeKeyModel                 ← All blendshapes on active SMR(s); search/filte
 
 ## Design system
 
-Colors and styles live in USS: theme tokens in `UI/DennokoTheme.uss` (the `dennokoworks_color_schema` skill's floating dark theme), project-specific classes/variables in `UI/DenEmoStyles.uss`. Full spec: `dennokoworks_color_schema/forUnity/`. Key conventions:
+Colors and styles live in USS, loaded in this order by `DenEmoUiAssets.SetupRoot()`: `UI/DennokoTheme.uss` (skill theme, parts L0/L1) → `UI/DennokoBlocks.uss` (skill blocks/patterns, L2/L3) → `UI/DenEmoStyles.uss` (DenEmo-only classes). The theme and blocks files are verbatim copies of the skill's `assets/` — don't edit them; override in `DenEmoStyles.uss`. Shared C# helpers copied from the skill live in `Utils/` (`DennokoAppBar`, `DennokoStatus`, `DennokoIcons`, `DennokoBlockUI`, `DennokoUIFont`). Full spec: `.claude/skills/dennokoworks_color_schema/` (start at `blocks/README.md`). Key conventions:
 
+- Window layout = skill pattern P3 (一覧編集): standard appbar → mode tabbar → per-mode `.dennoko-page` (`.dennoko-upper-scroll` that scrolls only when short + `.dennoko-list-slot` holding the growing B4 list card with its searchbar) → output dock → footer (one `.dennoko-button-primary`, switched per mode; FX uses `DenEmoWindow.FxFooter`) → `.dennoko-status` via `DennokoStatus`. Don't wrap the whole page in a ScrollView.
 - Every root gets `dennoko-root` (theme entry point); C# fallback bg is `new Color32(0x12,0x12,0x12,0xFF)`.
 - Colors go through USS variables (`var(--dennoko-*)`) only — never hardcode except in the theme's variable definitions.
-- `--dennoko-surface-0/1/2` = background elevation layers (darkest → lightest); `.dennoko-card` / `.dennoko-card-outer` = bordered containers; `.dennoko-mini-button` = small inline button; `.dennoko-chip` (+ `dennoko-button-active`) = toggle chip.
+- `--dennoko-surface-0/1/2/3` = background elevation layers (darkest → lightest); `--dennoko-outline-subtle` = static structure lines, `--dennoko-outline` = interactive element borders. `.dennoko-card` (+ block marker such as `dennoko-target-card` / `dennoko-list-card`) = bordered containers; `.dennoko-icon-button` (icon via `DennokoIcons.Apply`) = small inline action; `.dennoko-chip` (+ `dennoko-button-active`) = toggle chip; `.dennoko-segmented.dennoko-choice-group` = enum choice of ≤4 items.
 - Semantic: `--dennoko-semantic-info/warning/success/error` (and `.dennoko-text-*` helpers).
 - Custom canvas drawing (`TimelineUITKView` Painter2D) reads theme colors via `CustomStyleProperty<Color>` on a `CustomStyleResolvedEvent`, not hardcoded values.
 - UXML/USS are loaded by GUID via `UI/DenEmoUiAssets.cs`; `.meta` files carry those GUIDs.
