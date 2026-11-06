@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -20,6 +22,23 @@ namespace DenEmo.UI
         internal const string ShapeKeyRowUxmlGuid = "a95cf17e30b24bd3a7c81f4e6209d5c8";
         internal const string TimelineWindowUxmlGuid = "6c8d2ab54e7f4c31a2d9b0e87f5c1364";
         internal const string FxClipPickerUxmlGuid = "c4e8f2a71d9b4b6e8f3a5c0d7b21e94a";
+        internal const string ManualJaPdfGuid = "86edaf1e56d859d42b4aa5eff2e6ef99";
+        internal const string ManualEnPdfGuid = "0e86d56c44f127f468d0a3df70365613";
+
+        /// <summary>
+        /// 表示言語に合わせた PDF マニュアル (Docs/user_manual_ja|en.pdf) の file:// URL。
+        /// Application.OpenURL に渡すと既定の PDF ビューア（通常はブラウザ）で開く。見つからなければ null。
+        /// </summary>
+        internal static string ManualPdfUrl(bool english)
+        {
+            var path = AssetDatabase.GUIDToAssetPath(english ? ManualEnPdfGuid : ManualJaPdfGuid);
+            if (string.IsNullOrEmpty(path))
+            {
+                Debug.LogWarning("[DenEmo] Manual PDF not found.");
+                return null;
+            }
+            return new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        }
 
         internal static StyleSheet LoadTheme() => Load<StyleSheet>(ThemeUssGuid);
 
@@ -49,7 +68,7 @@ namespace DenEmo.UI
 
         internal static VisualTreeAsset LoadVisualTree(string guid) => Load<VisualTreeAsset>(guid);
 
-        private static T Load<T>(string guid) where T : Object
+        private static T Load<T>(string guid) where T : UnityEngine.Object
         {
             var path = AssetDatabase.GUIDToAssetPath(guid);
             if (string.IsNullOrEmpty(path))

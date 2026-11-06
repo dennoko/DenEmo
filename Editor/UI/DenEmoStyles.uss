@@ -227,6 +227,38 @@
     color: var(--dennoko-semantic-warning);
 }
 
+/* Animation のフッター: 情報欄 (トラック数・キー数) と主ボタンを 1:2 で分け、情報が見切れないようにする */
+.dennoko-root .dennoko-footer.dennoko-footer--split > .dennoko-footer__info {
+    flex-grow: 1;
+    flex-basis: 0;
+    max-width: none;
+}
+
+.dennoko-root .dennoko-footer.dennoko-footer--split > .unity-button.dennoko-button-primary {
+    flex-grow: 2;
+    flex-basis: 0;
+}
+
+/* フッター左端の「上書き保存」(Pose / Animation)。保存ボタンの近くに置くためフッター内に置く */
+.dennoko-root .dennoko-footer > .unity-toggle.dennoko-footer__toggle {
+    flex-shrink: 0;
+    margin: 0 4px 0 2px;
+}
+
+/* 出力ドックの保存設定 (Pose): 上書き先の ObjectField は行の残りを使い、オプションは文字幅で並べる */
+.dennoko-root .dennoko-output-row > .unity-object-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.dennoko-root .dennoko-output-row > .unity-toggle {
+    flex-shrink: 1;
+    min-width: 0;
+    margin: 0 12px 0 0;
+}
+
 /* ─── Timeline(Exp): UI Toolkit 版タイムライン（検証） ─────── */
 
 .dennoko-root .dennoko-tl-settings,

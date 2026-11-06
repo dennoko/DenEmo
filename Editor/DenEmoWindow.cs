@@ -89,8 +89,6 @@ namespace DenEmo
 
         // ─── UI Toolkit chrome (CreateGUI で構築) ────────────────────────────
         private const string ToolName          = "DenEmo";
-        private const string DenEmoManualUrl   = "https://github.com/dennoko/DenEmo";
-        private const string DefaultReleaseUrl = "https://github.com/dennoko/DenEmo/releases";
 
         private DennokoStatus _status;
         private DennokoAppBar _appBar;
@@ -442,8 +440,8 @@ namespace DenEmo
         {
             _appBar = new DennokoAppBar(root, ToolName, DenEmoLoc.EnglishMode)
             {
-                ManualUrl  = DenEmoManualUrl,
-                ReleaseUrl = DefaultReleaseUrl,
+                // ? ボタンは表示言語の PDF マニュアルを開く（RefreshChromeLabels で言語に合わせて差し替える）。
+                // 配布ページへの導線は持たないため ReleaseUrl は設定しない（⋮ に項目を出さず、バージョン表示もクリック不可）。
                 // 全設定のリセット機能は DenEmo に無いため ResetAll は付けない（⋮ に項目を出さない）
             };
             _appBar.LanguageChanged += english =>
@@ -538,9 +536,8 @@ namespace DenEmo
 
             if (_appBar != null)
             {
-                // 更新ありのときだけラベルのクリックで配布ページを開く（version.json の url を優先）
-                _appBar.ReleaseUrl = !string.IsNullOrEmpty(r.Url) ? r.Url : DefaultReleaseUrl;
-                _appBar.SetVersionClickable(update, update ? DenEmoLoc.T("ui.version.clickable.tip") : null);
+                // 配布ページへの導線は持たないので、更新ありでもラベルはクリック不可のまま
+                _appBar.SetVersionClickable(false);
             }
         }
 
@@ -548,14 +545,9 @@ namespace DenEmo
         private void RefreshChromeLabels()
         {
             if (_appBar == null) return;
-            _appBar.TextResetAll     = DenEmoLoc.T("ui.appbar.resetAll");
-            _appBar.TextResetConfirm = DenEmoLoc.T("ui.appbar.resetConfirm");
-            _appBar.TextResetOk      = DenEmoLoc.T("ui.appbar.resetOk");
-            _appBar.TextCancel       = DenEmoLoc.T("dlg.cancel");
             _appBar.TextCheckUpdate  = DenEmoLoc.T("ui.appbar.checkUpdate");
-            _appBar.TextOpenRelease  = DenEmoLoc.T("ui.appbar.openRelease");
             _appBar.TextManual       = DenEmoLoc.T("ui.appbar.manual");
-            _appBar.TextSettings     = DenEmoLoc.T("ui.appbar.settings");
+            _appBar.ManualUrl        = DenEmoUiAssets.ManualPdfUrl(DenEmoLoc.EnglishMode);
             _appBar.RefreshTexts(DenEmoLoc.EnglishMode);
             ApplyVersionLabel();
             _tabPose.text    = DenEmoLoc.T("ui.animMode.tab.pose");

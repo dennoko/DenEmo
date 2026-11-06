@@ -159,7 +159,8 @@ namespace DenEmo.UI
             headerRow.Add(_titleLabel);
 
             _detachButton = new Button(OnDetachAttach);
-            _detachButton.AddToClassList("dennoko-icon-button");
+            // 記号だと意味が伝わりにくいため文字ボタンにする（リストカードのスナップショットと同じ見出しの文字ボタン）
+            _detachButton.AddToClassList("dennoko-card-header__action");
             headerRow.Add(_detachButton);
 
             _root.Add(headerRow);
@@ -494,10 +495,8 @@ namespace DenEmo.UI
             if (_root == null) return;
             _titleLabel.text  = DenEmoLoc.T("ui.timeline.title");
             _noClipLabel.text = DenEmoLoc.T("ui.timeline.noClip");
-            DennokoIcons.Apply(_detachButton,
-                _isSeparateWindow ? "d_winbtn_win_restore|winbtn_win_restore" : DennokoIcons.Popout,
-                DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach" : "ui.timeline.detach"),
-                DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach.tip" : "ui.timeline.detach.tip"));
+            _detachButton.text    = DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach" : "ui.timeline.detach");
+            _detachButton.tooltip = DenEmoLoc.T(_isSeparateWindow ? "ui.timeline.attach.tip" : "ui.timeline.detach.tip");
             _fpsLabel.text    = DenEmoLoc.T("ui.timeline.fps");
             _lenLabel.text    = DenEmoLoc.T("ui.timeline.length");
             _interpLabel.text    = DenEmoLoc.T("ui.timeline.interp");

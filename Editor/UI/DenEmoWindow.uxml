@@ -9,7 +9,6 @@
         <ui:VisualElement class="dennoko-appbar__actions">
             <ui:Button name="appbar-lang" text="EN" class="dennoko-appbar-lang" />
             <ui:Button name="appbar-manual" class="dennoko-icon-button" />
-            <ui:Button name="appbar-settings" class="dennoko-icon-button" />
         </ui:VisualElement>
     </ui:VisualElement>
 
@@ -61,23 +60,6 @@
                 <ui:VisualElement class="dennoko-card-actions">
                     <ui:Button name="pose-source-apply" />
                     <ui:Button name="pose-source-align" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-
-            <!-- B5 出力カード: 保存設定が 3 行以上あるため上部の最後に置き、ドックには要約チップだけを出す -->
-            <ui:VisualElement name="pose-save-card" class="dennoko-card dennoko-output-card">
-                <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
-                    <ui:Label name="pose-save-title" text="SAVE SETTINGS" class="dennoko-section-title dennoko-card-header__title" />
-                </ui:VisualElement>
-                <ui:VisualElement class="dennoko-hrow">
-                    <ui:TextField name="pose-save-folder" class="dennoko-col-grow" />
-                    <ui:Button name="pose-save-browse" class="dennoko-row-action" />
-                </ui:VisualElement>
-                <ui:Toggle name="pose-overwrite-toggle" />
-                <ui:VisualElement name="pose-overwrite-group" class="dennoko-indent" style="display: none;">
-                    <uie:ObjectField name="pose-overwrite-field" />
-                    <ui:Toggle name="pose-backup-toggle" />
-                    <ui:Toggle name="pose-preserve-extra-toggle" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:ScrollView>
@@ -248,18 +230,27 @@
 
     <!-- 標準フッター: 出力ドック (任意) → フッター → ステータス -->
     <ui:VisualElement name="output-dock" class="dennoko-output" style="display: none;">
-        <!-- Pose: 保存設定の要約チップ (出力カードが見えていないときだけ表示) -->
-        <ui:VisualElement name="output-pose-row" class="dennoko-output-row">
-            <ui:VisualElement name="output-pose-chips" class="dennoko-output__chips" />
+        <!-- Pose: 保存先（新規保存）。フッターの「上書き保存」が OFF のとき -->
+        <ui:VisualElement name="output-pose-folder-row" class="dennoko-output-row">
+            <ui:Label name="output-pose-folder-label" class="dennoko-output__label" />
+            <ui:TextField name="pose-save-folder" />
+            <ui:Button name="pose-save-browse" class="dennoko-output__action" />
         </ui:VisualElement>
-        <!-- Animation: 保存オプション -->
-        <ui:VisualElement name="output-anim-row" class="dennoko-output-row">
-            <ui:Toggle name="anim-save-asnew" />
+        <!-- Pose: 上書き先とオプション。フッターの「上書き保存」が ON のとき -->
+        <ui:VisualElement name="output-pose-target-row" class="dennoko-output-row">
+            <ui:Label name="output-pose-target-label" class="dennoko-output__label" />
+            <uie:ObjectField name="pose-overwrite-field" />
+        </ui:VisualElement>
+        <ui:VisualElement name="output-pose-options-row" class="dennoko-output-row">
+            <ui:Toggle name="pose-backup-toggle" />
+            <ui:Toggle name="pose-preserve-extra-toggle" />
         </ui:VisualElement>
     </ui:VisualElement>
 
     <!-- フッター: 主ボタンは画面に 1 つ。文言と処理はモードごとに C# が差し替える -->
     <ui:VisualElement name="footer" class="dennoko-footer">
+        <!-- Pose / Animation: 上書き保存の切り替え（保存ボタンの近くに置く。状態はモードごと） -->
+        <ui:Toggle name="footer-overwrite-toggle" class="dennoko-footer__toggle" />
         <ui:Label name="footer-info" class="dennoko-footer__info" />
         <ui:Button name="footer-secondary" class="dennoko-button-secondary" style="display: none;" />
         <ui:Button name="footer-primary" class="dennoko-button-primary" />

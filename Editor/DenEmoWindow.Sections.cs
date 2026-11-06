@@ -54,28 +54,25 @@ namespace DenEmo
         private Button        _previewOptionsButton;
         private string        _meshFilterSignature;
 
-        // ─── Save settings card (Pose, B5 出力カード) ─────────────────────────
-        private VisualElement _poseSaveCard;
-        private Label         _poseSaveTitle;
+        // ─── Save settings (Pose。出力ドック + フッターに置く) ────────────────
+        private Label         _outputPoseFolderLabel;
         private TextField     _poseSaveFolderField;
         private Button        _poseSaveBrowse;
-        private Toggle        _poseOverwriteToggle;
-        private VisualElement _poseOverwriteGroup;
+        private Toggle        _footerOverwriteToggle;
+        private Label         _outputPoseTargetLabel;
         private ObjectField   _poseOverwriteField;
         private Toggle        _poseBackupToggle;
         private Toggle        _posePreserveExtraToggle;
 
         // ─── Standard footer (出力ドック → フッター) ──────────────────────────
         private VisualElement _outputDock;
-        private VisualElement _outputPoseRow;
-        private VisualElement _outputPoseChips;
-        private VisualElement _outputAnimRow;
-        private Toggle        _animSaveAsNewToggle;
+        private VisualElement _outputPoseFolderRow;
+        private VisualElement _outputPoseTargetRow;
+        private VisualElement _outputPoseOptionsRow;
         private VisualElement _footer;
         private Label         _footerInfo;
         private Button        _footerSecondary;
         private Button        _footerPrimary;
-        private string        _poseChipSignature;
 
         /// <summary>
         /// モードごとのフッター（主ボタン・副ボタン・情報欄）の内容。現在モードのものだけが表示される。
@@ -260,43 +257,37 @@ namespace DenEmo
             _previewOptionsButton.clicked += () =>
                 UnityEditor.PopupWindow.Show(_previewOptionsButton.worldBound, new VertexPreviewOptionsPopup(this));
 
-            // 保存設定（Pose、B5 出力カード）
-            _poseSaveCard        = root.Q<VisualElement>("pose-save-card");
-            _poseSaveTitle       = root.Q<Label>("pose-save-title");
-            _poseSaveFolderField = root.Q<TextField>("pose-save-folder");
-            _poseSaveBrowse      = root.Q<Button>("pose-save-browse");
-            _poseOverwriteToggle = root.Q<Toggle>("pose-overwrite-toggle");
-            _poseOverwriteGroup  = root.Q<VisualElement>("pose-overwrite-group");
-            _poseOverwriteField  = root.Q<ObjectField>("pose-overwrite-field");
+            // 保存設定（Pose）。保存ボタンの近くに置くため、詳細は出力ドック、上書き切り替えと参照はフッターにある
+            _outputPoseFolderLabel   = root.Q<Label>("output-pose-folder-label");
+            _poseSaveFolderField     = root.Q<TextField>("pose-save-folder");
+            _poseSaveBrowse          = root.Q<Button>("pose-save-browse");
+            _footerOverwriteToggle   = root.Q<Toggle>("footer-overwrite-toggle");
+            _outputPoseTargetLabel   = root.Q<Label>("output-pose-target-label");
+            _poseOverwriteField      = root.Q<ObjectField>("pose-overwrite-field");
             _poseBackupToggle        = root.Q<Toggle>("pose-backup-toggle");
             _posePreserveExtraToggle = root.Q<Toggle>("pose-preserve-extra-toggle");
 
             _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
             _poseSaveFolderField.RegisterValueChangedCallback(evt => saveFolder = evt.newValue);
-            _poseSaveBrowse.clicked += () =>
-            {
-                var newPath = EditorUtility.OpenFolderPanel(DenEmoLoc.T("ui.footer.browse.title"), Application.dataPath, "");
-                if (!string.IsNullOrEmpty(newPath))
-                {
-                    saveFolder = newPath.StartsWith(Application.dataPath)
-                        ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
-                    _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
-                }
-            };
+            _poseSaveBrowse.clicked += BrowseSaveFolder;
 
-            _poseOverwriteToggle.SetValueWithoutNotify(overwriteSaveEnabled);
-            DennokoBlockUI.Show(_poseOverwriteGroup, overwriteSaveEnabled);
-            _poseOverwriteToggle.RegisterValueChangedCallback(evt =>
+            // 「上書き保存」はフッターに 1 つ。Pose は指定クリップへの上書き、Animation は編集中クリップへの上書き
+            // （OFF = 新規クリップとして保存）。状態はモードごとに持ち、UpdateFooter で表示を合わせる
+            _footerOverwriteToggle.RegisterValueChangedCallback(evt =>
             {
-                overwriteSaveEnabled = evt.newValue;
-                DennokoBlockUI.Show(_poseOverwriteGroup, overwriteSaveEnabled);
+                if (_currentMode == EditorMode.Animation) _animSaveAsNew = !evt.newValue;
+                else overwriteSaveEnabled = evt.newValue;
+                UpdateFooter();
             });
 
             _poseOverwriteField.objectType        = typeof(AnimationClip);
             _poseOverwriteField.allowSceneObjects = false;
             _poseOverwriteField.SetValueWithoutNotify(overwriteTargetClip);
             _poseOverwriteField.RegisterValueChangedCallback(evt =>
-                overwriteTargetClip = evt.newValue as AnimationClip);
+            {
+                overwriteTargetClip = evt.newValue as AnimationClip;
+                UpdateFooter();
+            });
 
             _poseBackupToggle.SetValueWithoutNotify(autoBackup);
             _poseBackupToggle.RegisterValueChangedCallback(evt => autoBackup = evt.newValue);
@@ -310,18 +301,14 @@ namespace DenEmo
         /// <summary>標準フッター（出力ドック・情報欄・副ボタン・主ボタン）を配線する。</summary>
         private void BindFooter(VisualElement root)
         {
-            _outputDock          = root.Q<VisualElement>("output-dock");
-            _outputPoseRow       = root.Q<VisualElement>("output-pose-row");
-            _outputPoseChips     = root.Q<VisualElement>("output-pose-chips");
-            _outputAnimRow       = root.Q<VisualElement>("output-anim-row");
-            _animSaveAsNewToggle = root.Q<Toggle>("anim-save-asnew");
+            _outputDock           = root.Q<VisualElement>("output-dock");
+            _outputPoseFolderRow  = root.Q<VisualElement>("output-pose-folder-row");
+            _outputPoseTargetRow  = root.Q<VisualElement>("output-pose-target-row");
+            _outputPoseOptionsRow = root.Q<VisualElement>("output-pose-options-row");
             _footer              = root.Q<VisualElement>("footer");
             _footerInfo          = root.Q<Label>("footer-info");
             _footerSecondary     = root.Q<Button>("footer-secondary");
             _footerPrimary       = root.Q<Button>("footer-primary");
-
-            _animSaveAsNewToggle.SetValueWithoutNotify(_animSaveAsNew);
-            _animSaveAsNewToggle.RegisterValueChangedCallback(evt => _animSaveAsNew = evt.newValue);
 
             _poseFooter.OnPrimary = SavePoseAnimation;
             _animFooter.OnPrimary = () =>
@@ -330,10 +317,16 @@ namespace DenEmo
             // ボタンは 1 つずつで、押したときの現在モードの処理を呼ぶ
             _footerPrimary.clicked   += () => CurrentFooter.OnPrimary?.Invoke();
             _footerSecondary.clicked += () => CurrentFooter.OnSecondary?.Invoke();
+        }
 
-            // 出力カードが見え隠れしたらドックの要約チップを出し入れする
-            _poseScroll.verticalScroller.valueChanged += _ => UpdateFooter();
-            _poseScroll.RegisterCallback<GeometryChangedEvent>(_ => UpdateFooter());
+        /// <summary>保存先欄の「参照」: 新規保存の保存先フォルダーを選ぶ。</summary>
+        private void BrowseSaveFolder()
+        {
+            var newPath = EditorUtility.OpenFolderPanel(DenEmoLoc.T("ui.footer.browse.title"), Application.dataPath, "");
+            if (string.IsNullOrEmpty(newPath)) return;
+            saveFolder = newPath.StartsWith(Application.dataPath)
+                ? "Assets" + newPath.Substring(Application.dataPath.Length) : newPath;
+            _poseSaveFolderField.SetValueWithoutNotify(saveFolder);
         }
 
         /// <summary>言語設定に依存するセクションカードのラベルを更新する。</summary>
@@ -377,23 +370,17 @@ namespace DenEmo
             _meshFilterSignature        = null; // 「すべてのメッシュ」の文言を更新するため選択肢を作り直す
             // 頂点フィルターチップの文言は状態依存のため UpdateSearchCard で設定する
 
-            _poseSaveTitle.text           = DenEmoLoc.T("ui.section.saveSettings");
-            _poseSaveFolderField.label    = DenEmoLoc.T("ui.footer.saveTo");
+            _outputPoseFolderLabel.text   = DenEmoLoc.T("ui.output.saveTo");
+            _poseSaveFolderField.tooltip  = DenEmoLoc.T("ui.output.saveTo.tip");
             _poseSaveBrowse.text          = DenEmoLoc.T("ui.footer.browse");
-            _poseOverwriteToggle.text     = DenEmoLoc.T("ui.footer.overwriteEnable");
-            _poseOverwriteToggle.tooltip  = DenEmoLoc.T("ui.footer.overwriteEnable.tip");
-            _poseOverwriteField.label     = DenEmoLoc.T("ui.footer.overwriteTarget");
-            _poseBackupToggle.text        = DenEmoLoc.T("ui.footer.autoBackup");
+            _poseSaveBrowse.tooltip       = DenEmoLoc.T("ui.footer.browse.tip");
+            _footerOverwriteToggle.text   = DenEmoLoc.T("ui.footer.overwrite.short");
+            // ツールチップはモードで変わるため UpdateFooter で設定する
+            _outputPoseTargetLabel.text   = DenEmoLoc.T("ui.footer.overwriteTarget");
+            _poseBackupToggle.text        = DenEmoLoc.T("ui.output.autoBackup");
             _poseBackupToggle.tooltip     = DenEmoLoc.T("ui.footer.autoBackup.tip");
-            _posePreserveExtraToggle.text    = DenEmoLoc.T("ui.footer.preserveExtra");
+            _posePreserveExtraToggle.text    = DenEmoLoc.T("ui.output.keepExtra");
             _posePreserveExtraToggle.tooltip = DenEmoLoc.T("ui.footer.preserveExtra.tip");
-
-            if (_animSaveAsNewToggle != null)
-            {
-                _animSaveAsNewToggle.text    = DenEmoLoc.T("ui.animMode.saveAsNew");
-                _animSaveAsNewToggle.tooltip = DenEmoLoc.T("ui.animMode.saveAsNew.tip");
-            }
-            _poseChipSignature = null; // ドックの要約チップの文言を作り直す
 
             UpdateSectionCards();
             UpdateFooter();
@@ -533,23 +520,39 @@ namespace DenEmo
                 _footerInfo.EnableInClassList("dennoko-footer__info--warning", f.InfoWarning);
             }
 
-            // 出力ドック: Pose は保存設定の要約チップ（出力カードが見えていないときだけ）、Animation は保存オプション
-            bool poseDock = f.Visible && _currentMode == EditorMode.Pose && UpdatePoseDockChips();
-            bool animDock = f.Visible && _currentMode == EditorMode.Animation
-                            && hasTarget && _animModeUI.ClipModel.Clip != null;
-            DennokoBlockUI.Show(_outputPoseRow, poseDock);
-            DennokoBlockUI.Show(_outputAnimRow, animDock);
-            bool dock = poseDock || animDock;
-            DennokoBlockUI.Show(_outputDock, dock);
-            _footer.EnableInClassList("dennoko-footer--joined", dock);
+            // 「上書き保存」(フッター): Pose は常に、Animation はクリップがあるときだけ出す
+            bool isPose = f.Visible && _currentMode == EditorMode.Pose;
+            bool isAnim = f.Visible && _currentMode == EditorMode.Animation;
+            bool showOverwrite = isPose || (isAnim && hasTarget && _animModeUI.ClipModel.Clip != null);
+            DennokoBlockUI.Show(_footerOverwriteToggle, showOverwrite);
+            if (showOverwrite)
+            {
+                bool on = isAnim ? !_animSaveAsNew : overwriteSaveEnabled;
+                if (_footerOverwriteToggle.value != on) _footerOverwriteToggle.SetValueWithoutNotify(on);
+                _footerOverwriteToggle.tooltip = DenEmoLoc.T(isAnim ? "ui.animMode.overwrite.tip" : "ui.footer.overwriteEnable.tip");
+            }
+
+            // Animation は情報欄と主ボタンを 1:2 で分け、キー数などの情報が見切れないようにする
+            _footer.EnableInClassList("dennoko-footer--split", isAnim);
+
+            // 出力ドック (Pose のみ): 保存先 + 参照（上書き OFF）または上書き先とオプション（ON）。
+            // Animation の上書き先は編集中のクリップなのでドックは使わない
+            DennokoBlockUI.Show(_outputPoseFolderRow,  isPose && !overwriteSaveEnabled);
+            DennokoBlockUI.Show(_outputPoseTargetRow,  isPose && overwriteSaveEnabled);
+            DennokoBlockUI.Show(_outputPoseOptionsRow, isPose && overwriteSaveEnabled);
+            DennokoBlockUI.Show(_outputDock, isPose);
+            _footer.EnableInClassList("dennoko-footer--joined", isPose);
         }
 
         private void ComputePoseFooter(bool hasTarget)
         {
             var f = _poseFooter;
+            bool needClip = overwriteSaveEnabled && overwriteTargetClip == null;
             f.PrimaryText    = DenEmoLoc.T("ui.footer.primary.pose");
-            f.PrimaryEnabled = hasTarget;
-            f.PrimaryTooltip = hasTarget ? DenEmoLoc.T("ui.footer.saveAnim") : DenEmoLoc.T("ui.footer.primary.needTarget");
+            f.PrimaryEnabled = hasTarget && !needClip;
+            f.PrimaryTooltip = !hasTarget ? DenEmoLoc.T("ui.footer.primary.needTarget")
+                             : needClip   ? DenEmoLoc.T("ui.footer.primary.needOverwriteClip")
+                             : DenEmoLoc.T("ui.footer.saveAnim");
             f.InfoWarning    = false;
             f.InfoTooltip    = null;
             if (!hasTarget) { f.InfoText = null; return; }
@@ -595,62 +598,6 @@ namespace DenEmo
                 f.InfoTooltip = null;
                 f.InfoWarning = false;
             }
-        }
-
-        /// <summary>
-        /// Pose の出力ドックに保存設定の要約チップを並べる（B5）。出力カードが上部スクロールの中で見えているときは
-        /// 同じ情報を 2 か所に出さないため false を返してドックを隠す。
-        /// </summary>
-        private bool UpdatePoseDockChips()
-        {
-            if (_outputPoseChips == null || _poseSaveCard == null || _poseScroll == null) return false;
-            if (IsVisibleInScroll(_poseSaveCard, _poseScroll)) return false;
-
-            bool overwrite = overwriteSaveEnabled && overwriteTargetClip != null;
-            var chips = new List<(string icon, string text)>();
-            if (overwrite)
-            {
-                chips.Add((DennokoIcons.Save, DenEmoLoc.Tf("ui.output.chip.overwrite", overwriteTargetClip.name)));
-                if (!autoBackup)          chips.Add((null, DenEmoLoc.T("ui.output.chip.noBackup")));
-                if (!preserveExtraCurves) chips.Add((null, DenEmoLoc.T("ui.output.chip.dropExtra")));
-            }
-            else
-            {
-                chips.Add((DennokoIcons.Folder, DenEmoLoc.Tf("ui.output.chip.folder", ShortenPath(saveFolder))));
-            }
-
-            var sb = new System.Text.StringBuilder();
-            foreach (var c in chips) sb.Append(c.text).Append('\n');
-            string sig = sb.ToString();
-            if (sig != _poseChipSignature)
-            {
-                _poseChipSignature = sig;
-                _outputPoseChips.Clear();
-                string tip = DenEmoLoc.T("ui.output.chip.tip");
-                foreach (var c in chips)
-                    _outputPoseChips.Add(DennokoBlockUI.Chip(c.icon, c.text, tip, () => _poseScroll.ScrollTo(_poseSaveCard)));
-            }
-            return true;
-        }
-
-        /// <summary>要素が ScrollView のビューポート内に見えているか（一部でも 48px 以上、または全体が見えていれば true）。</summary>
-        private static bool IsVisibleInScroll(VisualElement element, ScrollView scroll)
-        {
-            if (element.resolvedStyle.display == DisplayStyle.None) return false;
-            var b  = element.worldBound;
-            var vp = scroll.contentViewport.worldBound;
-            if (float.IsNaN(b.height) || float.IsNaN(vp.height) || b.height <= 0f || vp.height <= 0f) return false;
-            float overlap = Mathf.Min(b.yMax, vp.yMax) - Mathf.Max(b.yMin, vp.yMin);
-            return overlap >= Mathf.Min(b.height - 1f, 48f);
-        }
-
-        /// <summary>長いパスは末尾の 2 階層だけを残して省略する（チップ用）。</summary>
-        private static string ShortenPath(string path)
-        {
-            if (string.IsNullOrEmpty(path) || path.Length <= 36) return path;
-            var parts = path.Replace('\\', '/').TrimEnd('/').Split('/');
-            if (parts.Length <= 2) return path;
-            return "…/" + parts[parts.Length - 2] + "/" + parts[parts.Length - 1];
         }
 
         // ─── Target mesh helpers ──────────────────────────────────────────────
