@@ -6,19 +6,27 @@ Open DenEmo from the Unity menu bar: `dennokoworks > DenEmo`.
 
 ---
 
+## Window Layout
+
+From top to bottom the window shows: the header -> the mode tabs (Single Frame / Multi Frame / Apply to Avatar) -> the settings for the current mode -> the shape key list -> the save area (footer) -> the status bar. The shape key list fills the remaining height, and the settings above it scroll only when the window is short. The save button always sits at the very bottom.
+
 ## Header
 
-The **EN / JA** button in the top-right corner switches the UI language. Your choice is saved automatically.
+- **Version and ↻**: The current version is shown next to the tool name. When a newer version exists it reads "Update available". Click ↻ to check again.
+- **EN / JA**: Switches the UI language (the button shows the language you will switch to). Your choice is saved automatically.
+- **?**: Opens the PDF manual (this guide) in the current language.
 
 ---
 
 ## Target Mesh (common to both modes)
 
-The **TARGET MESH** section is always shown at the top. Select the mesh (SkinnedMeshRenderer) you want to edit here before doing anything else.
+The **TARGET MESH** section is always shown right below the mode tabs. Select the mesh (SkinnedMeshRenderer) you want to edit here before doing anything else. While no mesh is set, the shape key list shows a **From selection** button that sets the mesh from the object selected in the Hierarchy.
 
 ### Primary Mesh
 
-Drag a GameObject from the Hierarchy or use the object picker to set the primary mesh. Click ✕ to clear it.
+Drag a GameObject from the Hierarchy or use the object picker to set the primary mesh. You can drop it anywhere in the DenEmo window. Click ✕ to clear it.
+
+If the mesh is inactive (disabled or hidden), a warning appears below the field with an **Enable** button that activates it on the spot.
 
 ### Additional Meshes
 
@@ -26,9 +34,9 @@ Some avatars split their face across multiple meshes (e.g., separate eyebrow or 
 
 > Example: Your VRChat avatar has `Body` and `Brow` as separate face meshes. Set `Body` as the primary mesh and drag `Brow` into the `+` slot. Both appear in the list together.
 
-### Refresh
+### Reload
 
-Press **Refresh** after adding blendshapes to a mesh in another tool, or whenever the list seems out of date. It re-reads all registered meshes and rebuilds the list.
+Press the **Reload** button on the right of the section title after adding blendshapes to a mesh in another tool, or whenever the list seems out of date. It re-reads all registered meshes and rebuilds the list.
 
 ---
 
@@ -62,14 +70,14 @@ Checks or unchecks the save-target checkboxes based on which shape keys appear i
 
 ### SEARCH & FILTER
 
-These chips and the search field narrow down the shape key list. Combine multiple filters freely.
+The search field and filter chips at the top of the shape key list narrow it down. Combine multiple filters freely. Chips that are on are shown with a blue border.
 
-**🔍 Keyword**
-Type to filter by name. Multiple words separated by spaces are treated as AND conditions. Press ✕ to clear.
+**Keyword**
+Type in the search field ("Search shape keys") to filter by name. Multiple words separated by spaces are treated as AND conditions. Press ✕ to clear. The right end of the search field shows "visible / total".
 
 > Example: Type `mouth open` to show only shape keys whose names contain both words.
 
-**☆ Fav**
+**★ Fav**
 Shows only shape keys you have starred. Click the ☆ or ★ button on any row to toggle the favorite flag.
 
 > Example: Star the 8-10 shape keys you use on every expression so you can isolate them instantly without searching.
@@ -79,7 +87,7 @@ Shows only shape keys whose save checkbox is currently checked.
 
 > Example: Before saving, switch to this view to confirm exactly which shape keys will be written to the file.
 
-**Non-zero**
+**≠0 Non-zero**
 Shows only shape keys with a slider value other than zero.
 
 > Example: After loading a reference animation, use this filter to see which shape keys the expression actually moves.
@@ -90,12 +98,14 @@ Pairs shape keys ending in `...L` and `...R` into a single combined row. The sha
 > Example: `cheek_puff.L` and `cheek_puff.R` appear as one row. Turn Symmetry off if you need to set one side to a different value.
 
 **● Vertex Filter**
-Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✕ to clear.
+Press this button, then click any vertex in the SceneView. The list narrows to show only shape keys that actually move that vertex. An active filter shows the selected vertex index. Press ✕ to clear. The ⚙ button next to it changes the color and size of the vertices drawn in the SceneView.
 
 > Example: A vertex on the upper lip is deforming in an unexpected way. Click it in the SceneView to find which shape keys affect that specific point.
 
 **Mesh filter (popup)**
-Appears only when two or more meshes are registered. Select **All** to see every shape key together, or pick one mesh name to see only that mesh's shape keys.
+Appears only when two or more meshes are registered. Select **All meshes** to see every shape key together, or pick one mesh name to see only that mesh's shape keys.
+
+When the filters leave nothing to show, the list shows a **Clear filters** button.
 
 ---
 
@@ -126,15 +136,15 @@ Shape keys are automatically grouped by name prefix (e.g., all `mouth_*` keys fo
 
 > Example: Your avatar has 40 mouth-related shape keys. Collapse the `mouth` group when you are only working on the eyebrows.
 
-### Snapshot and Restore Snapshot
+### Snapshot (Snap / Restore)
 
-**Snapshot** saves the current slider values for all shape keys to memory. **Restore Snapshot** instantly reverts all sliders to that saved state.
+These buttons sit on the right of the shape key list header. **Snap** saves the current slider values for all shape keys to memory. **Restore** instantly reverts all sliders to that saved state.
 
-> Example: You have a complex expression dialed in. Take a Snapshot, then experiment freely. If the experiment fails, Restore Snapshot brings back the working state in one click.
+> Example: You have a complex expression dialed in. Press Snap, then experiment freely. If the experiment fails, Restore brings back the working state in one click.
 
 ### Bulk Check Operations
 
-Clicking the `✓▼` button in the toolbar opens a menu to perform bulk operations on the shape key checkboxes (inclusion toggles).
+Clicking the `⋮` button at the right end of the shape key list header opens a menu to perform bulk operations on the shape key checkboxes (inclusion toggles).
 
 * **Check All Visible**: Checks all shape keys currently displayed in the list (matching search and filters). Shape keys bound to the VRCAvatarDescriptor eyelids/LipSync are excluded.
 * **Uncheck All Visible**: Unchecks all shape keys currently displayed in the list.
@@ -148,28 +158,31 @@ Clicking the `✓▼` button in the toolbar opens a menu to perform bulk operati
 
 ---
 
-### SAVE SETTINGS
+### Saving (bottom of the window)
 
-Controls how the finished expression is exported.
+The finished expression is exported from the save area at the very bottom of the window. Every save setting sits right above or next to the **Save** button.
 
-**Save To**
-The folder where new `.anim` files are created. Type a path directly or click **Browse** to pick a folder.
+**Overwrite** (checkbox at the left of the footer)
+When off, the expression is saved as a new `.anim` file. When on, the row above the Save button switches to the overwrite target, and saving writes directly into that existing file.
 
-**Enable Overwrite Save**
-When enabled, a target clip field appears below. Saving writes directly to that existing file rather than creating a new one.
+**Save to** (when Overwrite is off)
+The folder the save dialog opens in for a new file. Type a path directly or click **Browse** on its right to pick a folder.
 
-**Auto Backup on Overwrite**
-When overwrite is enabled, this option copies the current file to a `_backups/` subfolder before overwriting it. Keep this on to avoid losing previous versions.
+**Target** (when Overwrite is on)
+The `.anim` file to overwrite. The Save button stays disabled until a target is set.
 
-**Keep non-blendshape animation** (default: on)
+**Auto backup** (when Overwrite is on)
+Copies the current file to a `_backups/` subfolder before overwriting it. Keep this on to avoid losing previous versions.
+
+**Keep non-shape-key data** (when Overwrite is on; default: on)
 Keeps non-blendshape data already present in the overwrite target - object toggles, bone transforms, material values and so on - instead of erasing it. When off, saving produces a blendshape-only animation.
 
 > This data is NOT reflected in the DenEmo preview (the scene view). It is included in the saved `.anim`.
 
-**Save Animation**
-Exports all checked shape keys with their current slider values. If Overwrite Save is enabled and a target is set, it overwrites that file. Otherwise it creates a new file in the Save To folder.
+**Save**
+Exports all checked shape keys with their current slider values. With Overwrite on it writes into the target file; with Overwrite off it creates a new file where you choose in the save dialog. The left of the footer shows how many shape keys will be saved ("N / M to save").
 
-> Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, enable Overwrite Save pointing at the first file (with Auto Backup on) - the original is preserved in `_backups/` and the file is updated in place.
+> Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, turn on Overwrite and set the first file as the target (with Auto backup on) - the original is preserved in `_backups/` and the file is updated in place.
 
 ---
 
@@ -197,7 +210,7 @@ When no clip is loaded, the section shows a three-step workflow guide:
 
 ### SHAPE KEY VALUE CORRECTION
 
-This section is **collapsed by default**. Click the header to expand it.
+This section is **collapsed by default**. Click the header to expand it. While collapsed, the header still shows "N adjusted" when any shape key has a correction set.
 
 It lets you remap the value range of individual shape keys across the entire clip. This is useful when an expression edit causes a shape key to look wrong at its full range - a common issue in VRChat when blink animations conflict with face texture modifications that partially close the eye.
 
@@ -216,11 +229,11 @@ new_value = original_value * (Max - Min) / 100 + Min
 
 Curve tangents are scaled by the same factor, preserving the shape of the animation curve.
 
-Press **Apply Correction to Timeline** to apply the rescaled values to the animation clip in memory (the timeline). This action itself does not save the asset file. To save the changes, use the Save section at the very bottom of the window.
+Press **Apply Correction to Timeline** to apply the rescaled values to the animation clip in memory (the timeline). This action itself does not save the asset file. To save the changes, press **Save Animation** at the very bottom of the window.
 
 The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from the defaults (0 and 100) are affected.
 
-> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction to Timeline. All blink keyframes are rescaled into the 0-80 range - the curve shape and timing remain unchanged. Then, use the Save section at the bottom of the window to save the clip.
+> Example: A blink animation drives the `blink` shape key to 100, but your face texture modification already partially closes the eye, so reaching 100 looks broken. Set Max to 80 and press Apply Correction to Timeline. All blink keyframes are rescaled into the 0-80 range - the curve shape and timing remain unchanged. Then press **Save Animation** at the bottom of the window to save the clip.
 
 > Example: You want `mouth_open` to never fully close in this animation. Set Min to 20. Original 0 keyframes become 20, original 100 keyframes stay at 100.
 
@@ -230,8 +243,8 @@ The operation supports Undo (Ctrl+Z). Only shape keys whose Min/Max differ from 
 
 The timeline shows the playback position, transport controls, and a visual track area for every animated shape key. It can be detached from the main window.
 
-**↗ Detach / ↘ Attach**
-Detach opens the timeline in a separate floating window for more screen space. Closing the separate window (or pressing ↘ Attach inside it) returns the timeline to the main DenEmo window.
+**Detach / Attach**
+**Detach** (on the right of the timeline header) opens the timeline in a separate floating window for more screen space. Closing the separate window (or pressing **Attach** inside it) returns the timeline to the main DenEmo window. While detached, the main window shows **Focus Timeline Window** / **Close Timeline Window** buttons.
 
 #### Global Settings
 
@@ -241,8 +254,8 @@ Frame rate of the clip. Changing it rescales the frame numbers shown in the rule
 **Len (s)**
 Total duration of the clip in seconds.
 
-**All Keys Interp**
-Changes the interpolation method for all existing keyframes at once.
+**Interp / Apply to All**
+Choose Step / Linear / Ease under **Interp** to set the interpolation for newly created keyframes. **Apply to All** changes every existing keyframe to the current choice at once.
 
 | Option | Behavior |
 |--------|----------|
@@ -259,7 +272,7 @@ Changes the interpolation method for all existing keyframes at once.
 | `\|<` | Jump to the first frame |
 | `\|◆` | Jump to the previous keyframe |
 | `<` | Step one frame backward |
-| Play / Stop | Start or stop playback (loops continuously) |
+| `▶` / Stop | Start or stop playback (loops continuously) |
 | `>` | Step one frame forward |
 | `◆\|` | Jump to the next keyframe |
 | `>\|` | Jump to the last frame |
@@ -285,7 +298,7 @@ Toggles recording mode. When active, dragging any shape key slider automatically
 #### Timeline Area
 
 **Ruler**
-Shows frame numbers above the track area. Tick density adjusts automatically based on clip length and window width.
+Shows frame numbers above the track area. Tick density adjusts automatically based on clip length and window width. **Reset Zoom** returns the view to the whole clip (100%).
 
 **Scrubber**
 The thin bar just below the ruler. Click or drag anywhere on it to move the playhead. The mesh preview updates in real time.
@@ -374,21 +387,26 @@ Appears at the far right of each row. ◆ (filled) means a keyframe exists at th
 
 ### RECORDING BANNER
 
-When **REC** is active, a red banner appears below the timeline:
+When **REC** is active, a banner with a red ● appears right below the mode tabs:
 
-> RECORDING - Dragging a slider records a keyframe at the current time
+> ● Recording   Moving a slider records a key at the current frame   [Stop]
 
-This banner makes the recording state unmissable so you always know whether slider movements will stamp keyframes.
+This banner makes the recording state unmissable so you always know whether slider movements will stamp keyframes. Press **Stop** on the banner to end recording.
 
 ---
 
 ### SAVE ANIMATION
 
+Saving happens in the save area at the very bottom of the window.
+
+**Overwrite** (checkbox at the left of the footer; default: on)
+When on, the clip being edited is saved over its own file. When off, a save dialog opens and the clip is saved as a new clip (starting in the original clip's folder). It means the same as Overwrite in Single Frame Mode, but each mode remembers its own on/off state.
+
 **Keyframe statistics**
-The top of the Save Animation section shows how many tracks and total keyframes the current clip contains (e.g., *3 tracks / 12 keyframes total*). If no keyframes have been recorded yet, a warning message is displayed instead, reminding you to add keyframes before saving.
+The left of the footer shows how many tracks and total keyframes the current clip contains (e.g., *3 tracks / 12 keyframes total*). If no keyframes have been recorded yet, a warning is shown instead, reminding you to add keyframes before saving.
 
 **Save Animation**
-Writes the current clip's keyframes to the `.anim` file. If the clip was loaded from an existing file, it overwrites that file. If the clip was just created with **New** and has not been saved to disk yet, a file save dialog appears.
+Writes the current clip's keyframes to the `.anim` file.
 
 > Example: After recording a full wink sequence, press Save Animation to finalize the file and make it available in the Project window.
 
@@ -405,9 +423,9 @@ The **APPLY TO AVATAR** mode allows you to bulk-replace expression animations (`
 - **Auto-Detection**:
   If the target mesh is part of an avatar that has a `VRC Avatar Descriptor`, the tool automatically detects the avatar root and the custom Animator Controller assigned to the FX layer.
 - **Manual Assignment**:
-  If no avatar is detected or the VRChat SDK is not installed, a "VRChat avatar not found" warning is displayed. In this case, drag and drop the Animator Controller asset you want to edit directly into the **"Manual Controller"** field.
-- **Rescan**:
-  If you modify the avatar hierarchy or FX layer setup, click the **"Rescan"** button to update the detected information.
+  If no avatar is detected or the VRChat SDK is not installed, a "VRChat avatar not found" warning is displayed. In this case, drag and drop the Animator Controller asset you want to edit directly into the **"FX Layer"** field.
+- **Rescan (↻)**:
+  If you modify the avatar hierarchy or FX layer setup, click the **↻** button in the AVATAR / FX LAYER header to update the detected information.
 
 ---
 
@@ -416,15 +434,16 @@ The **APPLY TO AVATAR** mode allows you to bulk-replace expression animations (`
 Lists the animation clips within the FX controller that animate the shape keys of your target mesh.
 
 - **Search & Filters**:
-  - **🔍 Keyword**: Filter by the original animation name (supports space-separated multi-word AND search).
-  - **Assigned Only**: Shows only the entries that have a replacement animation assigned.
-- **Show all blendshape animations**:
-  If no animations matching the target mesh are found, click this to bypass the path restriction and display all animation clips in the controller.
+  - **Keyword**: Type in the search field ("Search animations") to filter by the original animation name (supports space-separated multi-word AND search). The right end shows "visible / total".
+  - **Assigned N**: A chip in the list header. Turn it on to show only the entries that have a replacement animation assigned.
+  - **Left Hand / Right Hand and gestures**: Chips below the search field narrow the list to expressions played by that hand gesture.
+- **Show all**:
+  If no animations matching the target mesh are found, the list shows a **Show all** button. It bypasses the path restriction and displays every blendshape animation in the controller.
 - **Mesh path mismatch (Warning)**:
   If the hierarchy path of the mesh in the animation binding does not match the current path of the target mesh on the avatar, a "⚠ Mesh path mismatch" warning is displayed.
 
 #### Preview on Hover
-Hovering your mouse over any animation name in the list plays a real-time preview of that expression on the avatar in the Scene view. If a replacement is assigned, the new animation is previewed instead. The active preview animation is displayed in the info band at the bottom, and you can stop it at any time.
+Hovering your mouse over any animation name in the list plays a real-time preview of that expression on the avatar in the Scene view. If a replacement is assigned, the new animation is previewed instead. The active preview animation is shown in the row right below the list, and the ✕ button there stops it.
 
 #### Assigning Replacements
 Click the **"None ▾"** button (or the assigned clip name) on the right side of a row to open a popup picker showing shape key animations in the project. Alternatively, drag and drop any `.anim` file from the Project window directly onto the slot button.
@@ -436,16 +455,16 @@ Click the **"None ▾"** button (or the assigned clip name) on the right side of
 
 ### Apply Settings & Execution
 
-Applies the mapping configuration to the FX controller.
+Applies the mapping configuration to the FX controller. Choose how under **Apply mode** below the list.
 
-- **Duplicate and Apply (Recommended)**:
+- **Duplicate & apply (safe)**:
   Creates a duplicate of the FX controller, modifies only the duplicate, and assigns it to the avatar's FX layer. This keeps your original controller asset safe and untouched.
-- **Direct Modify**:
-  Modifies the existing FX controller asset directly. An automatic backup of the controller is created in a `_backups/` folder to prevent accidental data loss.
+- **Modify directly**:
+  Modifies the existing FX controller asset directly. **No backup is created.** Use "Duplicate & apply" if you want to be able to go back.
 - **Manual Assignment Note**:
   If no avatar is detected, you will need to manually set the duplicated controller into the avatar's FX layer.
 
-Click the **"Replace [N] Expressions"** button to open a confirmation dialog showing a summary of the changes. Click "OK" to apply. The results (new controller path, backup location, Descriptor update status) will be shown in a card, and you can click the **"Show" (Ping)** button to locate the new controller in your Project view.
+Click **Replace** at the very bottom of the window (its left shows "Replace N (M refs)") to open a confirmation dialog showing a summary of the changes. Click "Apply" to run it. The results (new controller path, Descriptor update status) stay at the bottom of the AVATAR / FX LAYER section, and the **→** button next to the controller path locates the new controller in your Project window.
 
 ---
 
@@ -465,4 +484,4 @@ A. Turn off the ↔ Symmetry chip, adjust the individual L or R row, then turn S
 
 **Q. Can I work in Multi Frame Mode without looking at the timeline?**
 
-A. Yes. Detach the timeline with ↗ Detach, minimize or move that window out of the way, and use only the ◆ / ◇ buttons in the shape key list combined with REC mode. The timeline still records keyframes correctly in the background.
+A. Yes. Detach the timeline with **Detach**, minimize or move that window out of the way, and use only the ◆ / ◇ buttons in the shape key list combined with REC mode. The timeline still records keyframes correctly in the background.

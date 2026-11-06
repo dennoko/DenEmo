@@ -33,9 +33,13 @@
             <!-- B1 対象カード (モード間で共有。C# がホスト間を移動する) -->
             <ui:VisualElement name="pose-target-host">
                 <ui:VisualElement name="target-card" class="dennoko-card dennoko-target-card">
+                    <!-- 見出し + 右端の文字ボタン（シェイプキー一覧のスナップ / 復元と同じ形） -->
+                    <ui:VisualElement class="dennoko-card-header dennoko-card-header--row">
+                        <ui:Label name="target-title" text="TARGET MESH" class="dennoko-section-title dennoko-card-header__title" />
+                        <ui:Button name="target-refresh" class="dennoko-card-header__action" />
+                    </ui:VisualElement>
                     <ui:VisualElement class="dennoko-target-row">
                         <uie:ObjectField name="target-main-field" />
-                        <ui:Button name="target-refresh" class="dennoko-icon-button" />
                         <ui:Button name="target-main-clear" class="dennoko-icon-button" />
                     </ui:VisualElement>
                     <!-- 追加メッシュ行 + 追加用の空行 (C# で動的生成) -->

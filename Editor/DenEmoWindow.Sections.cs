@@ -20,6 +20,7 @@ namespace DenEmo
     {
         // ─── Target mesh card (B1) ────────────────────────────────────────────
         private VisualElement _targetCard;
+        private Label         _targetTitle;
         private ObjectField   _targetMainField;
         private Button        _targetMainClear;
         private Button        _targetRefresh;
@@ -118,6 +119,7 @@ namespace DenEmo
         {
             // 対象メッシュ (B1)
             _targetCard           = root.Q<VisualElement>("target-card");
+            _targetTitle          = root.Q<Label>("target-title");
             _targetMainField      = root.Q<ObjectField>("target-main-field");
             _targetMainClear      = root.Q<Button>("target-main-clear");
             _targetRefresh        = root.Q<Button>("target-refresh");
@@ -335,7 +337,9 @@ namespace DenEmo
             if (_targetCard == null) return;
 
             _targetMainField.tooltip    = DenEmoLoc.T("ui.mesh.tooltip");
-            DennokoIcons.Apply(_targetRefresh,   DennokoIcons.Refresh, "↻", DenEmoLoc.T("ui.mesh.refresh.tip"));
+            _targetTitle.text           = DenEmoLoc.T("ui.section.targetMesh");
+            _targetRefresh.text         = DenEmoLoc.T("ui.mesh.refresh");
+            _targetRefresh.tooltip      = DenEmoLoc.T("ui.mesh.refresh.tip");
             DennokoIcons.Apply(_targetMainClear, DennokoIcons.Close,   "✕", DenEmoLoc.T("ui.mesh.clear.tip"));
             _targetInactiveText.text    = DenEmoLoc.T("ui.mesh.inactive.warn");
             _targetInactiveFix.text     = DenEmoLoc.T("ui.mesh.inactive.fix");

@@ -116,7 +116,7 @@ public static class DenEmoLoc
         ["ui.footer.overwriteTarget"] = "上書き先",
 
         // UI Toolkit sections (titles / filter chips / save options)
-        ["ui.section.targetMesh"]    = "対象メッシュ",
+        ["ui.section.targetMesh"]    = "ターゲットメッシュ",
         ["ui.section.animSource"]    = "アニメーション参照",
         ["ui.section.searchFilter"]  = "検索・絞り込み",
         ["ui.section.saveAnim"]      = "アニメーション保存",
@@ -346,6 +346,7 @@ public static class DenEmoLoc
         ["ui.appbar.manual"]                = "マニュアル (PDF) を開く",
         ["ui.appbar.checkUpdate"]           = "更新を確認",
         ["ui.mesh.clear.tip"]               = "対象メッシュをクリア",
+        ["ui.mesh.refresh"]                 = "再読み込み",
         ["ui.mesh.refresh.tip"]             = "シェイプキー一覧を再読み込み",
         ["ui.mesh.additional.tip"]          = "追加の対象メッシュ（同じ一覧でまとめて編集します）",
         ["ui.mesh.additional.remove.tip"]   = "このメッシュを対象から外す",
@@ -706,6 +707,7 @@ public static class DenEmoLoc
         ["ui.appbar.manual"]                = "Open manual (PDF)",
         ["ui.appbar.checkUpdate"]           = "Check for updates",
         ["ui.mesh.clear.tip"]               = "Clear target mesh",
+        ["ui.mesh.refresh"]                 = "Reload",
         ["ui.mesh.refresh.tip"]             = "Reload the shape key list",
         ["ui.mesh.additional.tip"]          = "Additional target mesh (edited in the same list)",
         ["ui.mesh.additional.remove.tip"]   = "Remove this mesh from the targets",
