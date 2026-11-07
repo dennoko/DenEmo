@@ -37,6 +37,11 @@ namespace DenEmo.UI
         /// ジェスチャ検知をこの通知で補完する。
         /// </summary>
         public Action<bool> OnSliderDragStateChanged;
+        /// <summary>
+        /// ドラッグ以外の単発の値変更（入力欄・0 リセット等）で OnValueChanged を呼び終えた直後に呼ぶ。
+        /// 保留中のキー記録を確定し、1 つの Undo 操作にまとめる。
+        /// </summary>
+        public Action OnValueEditCommitted;
     }
 
     // ─── AnimationModeUI ─────────────────────────────────────────────────────
@@ -82,8 +87,10 @@ namespace DenEmo.UI
         private const double RECORD_FLUSH_INTERVAL_SEC = 0.05;
         private readonly Dictionary<string, float> _pendingRecords = new Dictionary<string, float>();
         private double _lastRecordFlush;
-        private bool   _dragUndoRecorded; // 同一ドラッグジェスチャ内で Undo スナップショットを 1 回に抑える
         private bool   _externalSliderDrag; // UI Toolkit スライダーのドラッグ中フラグ（hotControl の代替）
+        // ジェスチャ中にスロットル記録で書き換えたシェイプの「ジェスチャ開始前のカーブ」（null = トラック無し）。
+        // ジェスチャ終了時に CommitGestureUndo で 1 つの Undo 操作として確定する。
+        private readonly Dictionary<string, AnimationCurve> _gestureOriginalCurves = new Dictionary<string, AnimationCurve>();
 
         // REC オフ・キーなしで動かした（クリップに記録されない）シェイプ。シーク時に警告を出す。
         private readonly HashSet<string> _unrecordedTweaks = new HashSet<string>();
@@ -128,18 +135,20 @@ namespace DenEmo.UI
             // ドラッグジェスチャ終了（hotControl 解放）を検知して未フラッシュのキー記録を確定する
             if (GUIUtility.hotControl == 0 && !_externalSliderDrag)
             {
-                if (_pendingRecords.Count > 0)
+                if (_pendingRecords.Count > 0 || _gestureOriginalCurves.Count > 0)
                 {
                     FlushPendingRecords(force: true);
                     window.Repaint();
                 }
-                _dragUndoRecorded = false;
             }
         }
 
         /// <summary>Undo/Redo 後に呼ぶ。キャッシュを無効化してビューポートを同期する。</summary>
         public void OnUndoRedo()
         {
+            // Undo でクリップが巻き戻ったので、未確定のジェスチャ情報は古い状態を指す。破棄する。
+            _pendingRecords.Clear();
+            _gestureOriginalCurves.Clear();
             ClipModel.MarkDirty();
             if (Preview.IsActive)
                 Preview.SampleAt(ClipModel.CurrentTime);
@@ -165,30 +174,57 @@ namespace DenEmo.UI
 
         /// <summary>
         /// スロットル中のキー記録をクリップへ確定する。force=false の場合は前回フラッシュから
-        /// 一定時間経過しているときのみ実行する。Undo スナップショットはジェスチャ内で 1 回だけ取る。
+        /// 一定時間経過しているときのみ実行する。スロットル記録自体は Undo を取らず、
+        /// force=true（ジェスチャ終了）のときにジェスチャ全体を 1 つの Undo 操作として確定する。
         /// </summary>
         private void FlushPendingRecords(bool force)
         {
-            if (_pendingRecords.Count == 0 || ClipModel.Clip == null) return;
-
-            double now = EditorApplication.timeSinceStartup;
-            if (!force && now - _lastRecordFlush < RECORD_FLUSH_INTERVAL_SEC) return;
-            _lastRecordFlush = now;
-
-            bool recordUndo = !_dragUndoRecorded;
-            // 保留中の全シェイプを 1 回の SetEditorCurves コミットにまとめる（LR 同期や複数スライダー操作で
-            // シェイプごとの逐次コミットによるクリップ内部再構築を避ける）。
-            var entries = new List<(string, float)>(_pendingRecords.Count);
-            foreach (var kv in _pendingRecords)
+            if (ClipModel.Clip == null)
             {
-                entries.Add((kv.Key, kv.Value));
-                _unrecordedTweaks.Remove(kv.Key);
+                _pendingRecords.Clear();
+                _gestureOriginalCurves.Clear();
+                return;
             }
-            Editor.RecordKeysThrottled(entries, ClipModel.CurrentTime, CurrentInterp, recordUndo);
-            _dragUndoRecorded = true;
-            _pendingRecords.Clear();
+
+            if (_pendingRecords.Count == 0 && (!force || _gestureOriginalCurves.Count == 0)) return;
+
+            if (_pendingRecords.Count > 0)
+            {
+                double now = EditorApplication.timeSinceStartup;
+                if (!force && now - _lastRecordFlush < RECORD_FLUSH_INTERVAL_SEC) return;
+                _lastRecordFlush = now;
+
+                // 保留中の全シェイプを 1 回の SetEditorCurves コミットにまとめる（LR 同期や複数スライダー操作で
+                // シェイプごとの逐次コミットによるクリップ内部再構築を避ける）。
+                var entries = new List<(string, float)>(_pendingRecords.Count);
+                foreach (var kv in _pendingRecords)
+                {
+                    entries.Add((kv.Key, kv.Value));
+                    _unrecordedTweaks.Remove(kv.Key);
+                    if (!_gestureOriginalCurves.ContainsKey(kv.Key))
+                        _gestureOriginalCurves[kv.Key] = Editor.GetCurveCopy(kv.Key);
+                }
+                Editor.RecordKeysThrottled(entries, ClipModel.CurrentTime, CurrentInterp, recordUndo: false);
+                _pendingRecords.Clear();
+            }
+
+            if (force && _gestureOriginalCurves.Count > 0)
+            {
+                Editor.CommitGestureUndo(_gestureOriginalCurves, "Record Keyframe");
+                _gestureOriginalCurves.Clear();
+            }
 
             Preview.SampleAt(ClipModel.CurrentTime);
+        }
+
+        /// <summary>
+        /// ドラッグ以外の単発の値変更（入力欄・0 リセット等）の直後に呼ぶ。
+        /// 保留中のキー記録を即座に確定し、SMR の Undo と同じ Undo グループに収める。
+        /// </summary>
+        private void CommitValueEdit()
+        {
+            if (_externalSliderDrag) return;
+            FlushPendingRecords(force: true);
         }
 
         /// <summary>
@@ -218,11 +254,7 @@ namespace DenEmo.UI
             if (_externalSliderDrag == dragging) return;
             _externalSliderDrag = dragging;
             if (!dragging)
-            {
-                if (_pendingRecords.Count > 0)
-                    FlushPendingRecords(force: true);
-                _dragUndoRecorded = false;
-            }
+                FlushPendingRecords(force: true);
         }
 
         public void OnTargetChanged(ShapeKeyModel shapeModel)
@@ -325,6 +357,8 @@ namespace DenEmo.UI
                     OnToggleTrackFilter = () => TrackFilterEnabled = !TrackFilterEnabled,
 
                     OnSliderDragStateChanged = NotifySliderDrag,
+
+                    OnValueEditCommitted = CommitValueEdit,
 
                     HasKeyframeAtCurrentTime = shapeName =>
                         ClipModel.HasKeyframeAt(shapeName, ClipModel.CurrentTime),

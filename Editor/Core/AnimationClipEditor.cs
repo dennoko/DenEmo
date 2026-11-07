@@ -112,6 +112,47 @@ namespace DenEmo.Core
                 _model.MarkDirty();
         }
 
+        // ─── Gesture undo ────────────────────────────────────────────────────
+
+        /// <summary>指定シェイプの現在のカーブのコピーを返す（トラックが無ければ null）。</summary>
+        public AnimationCurve GetCurveCopy(string shapeName)
+        {
+            if (Clip == null) return null;
+            return AnimationUtility.GetEditorCurve(Clip, MakeBinding(shapeName)); // GetEditorCurve は常に新しいインスタンスを返す
+        }
+
+        /// <summary>
+        /// スロットル記録（recordUndo=false）で変更されたカーブ群を 1 つの Undo 操作として確定する。
+        /// Undo.RecordObject は呼び出し後〜同一フレーム内の変更しか記録しないため、複数フレームにまたがる
+        /// ドラッグや LR 同期の後追いフラッシュは記録から漏れる。そこで「最終カーブを退避 → ジェスチャ開始前の
+        /// カーブへ戻す → RecordObject → 最終カーブを再適用」を同一呼び出し内で行い、差分を確実に記録させる。
+        /// originals の値が null のシェイプはジェスチャ前にトラックが無かったことを表す。
+        /// </summary>
+        public void CommitGestureUndo(IReadOnlyDictionary<string, AnimationCurve> originals, string label)
+        {
+            if (Clip == null || originals.Count == 0) return;
+
+            var bindings = new List<EditorCurveBinding>(originals.Count);
+            var finals   = new List<AnimationCurve>(originals.Count);
+            foreach (var kv in originals)
+            {
+                var binding = MakeBinding(kv.Key);
+                bindings.Add(binding);
+                finals.Add(AnimationUtility.GetEditorCurve(Clip, binding));
+            }
+
+            int i = 0;
+            foreach (var kv in originals)
+                AnimationUtility.SetEditorCurve(Clip, bindings[i++], kv.Value);
+
+            Undo.RecordObject(Clip, label);
+
+            for (i = 0; i < bindings.Count; i++)
+                AnimationUtility.SetEditorCurve(Clip, bindings[i], finals[i]);
+
+            Commit();
+        }
+
         // ─── Keyframe delete ─────────────────────────────────────────────────
 
         /// <summary>指定時刻に最も近いキーを 1 つ削除する。</summary>

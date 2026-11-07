@@ -191,8 +191,7 @@ namespace DenEmo.UI
 
             if (_animContext != null)
             {
-                _animContext.OnValueChanged?.Invoke(b.Left, _model, 0f);
-                if (b.Right != null) _animContext.OnValueChanged?.Invoke(b.Right, _model, 0f);
+                ApplyAnimValueEdit(b, 0f, "Reset Shape Key");
             }
             else if (b.Right != null)
             {
@@ -243,7 +242,22 @@ namespace DenEmo.UI
 
             if (_animContext != null)
             {
+                // SMR ウェイト（キー無しの一時変更を含む）とクリップのキー記録を 1 つの Undo 操作にまとめる
+                int group = Undo.GetCurrentGroup();
+                var animSmr = b.Left.OwnerSmr ?? _model.TargetSkinnedMesh;
+                if (b.DragUndoDone && animSmr != null)
+                {
+                    float finalLeft  = animSmr.GetBlendShapeWeight(b.Left.Index);
+                    float finalRight = b.Right != null ? animSmr.GetBlendShapeWeight(b.Right.Index) : 0f;
+                    animSmr.SetBlendShapeWeight(b.Left.Index, b.DragStartLeft);
+                    if (b.Right != null) animSmr.SetBlendShapeWeight(b.Right.Index, b.DragStartRight);
+                    Undo.RecordObject(animSmr, "Change Shape Key");
+                    animSmr.SetBlendShapeWeight(b.Left.Index, finalLeft);
+                    if (b.Right != null) animSmr.SetBlendShapeWeight(b.Right.Index, finalRight);
+                }
+                b.DragUndoDone = false;
                 _animContext.OnSliderDragStateChanged?.Invoke(false);
+                Undo.CollapseUndoOperations(group);
                 return;
             }
 
@@ -270,8 +284,18 @@ namespace DenEmo.UI
         {
             if (_animContext != null)
             {
-                _animContext.OnValueChanged?.Invoke(b.Left, _model, newValue);
-                if (b.Right != null) _animContext.OnValueChanged?.Invoke(b.Right, _model, newValue);
+                if (b.Dragging)
+                {
+                    // ドラッグ中は Undo を取らず、EndRowDrag でジェスチャ全体を 1 回の Undo として確定する
+                    b.DragUndoDone = true;
+                    _animContext.OnValueChanged?.Invoke(b.Left, _model, newValue);
+                    if (b.Right != null) _animContext.OnValueChanged?.Invoke(b.Right, _model, newValue);
+                }
+                else
+                {
+                    // 入力欄への直接入力など、ドラッグ外の変更
+                    ApplyAnimValueEdit(b, newValue, "Change Shape Key");
+                }
                 return;
             }
 
@@ -302,11 +326,31 @@ namespace DenEmo.UI
             }
         }
 
+        /// <summary>
+        /// Animation モードでの単発の値変更（ドラッグ外）。SMR ウェイトの Undo を記録してから
+        /// L(/R) の値を流し込み、キー記録を即座に確定して 1 つの Undo 操作にまとめる。
+        /// キーが無い（クリップに記録されない）一時変更も SMR 側の Undo で取り消せる。
+        /// </summary>
+        private void ApplyAnimValueEdit(RowBinding b, float value, string undoLabel)
+        {
+            var ctx = _animContext;
+            int group = Undo.GetCurrentGroup();
+            var smr = b.Left.OwnerSmr ?? _model.TargetSkinnedMesh;
+            if (smr != null) Undo.RecordObject(smr, undoLabel);
+
+            ctx.OnValueChanged?.Invoke(b.Left, _model, value);
+            if (b.Right != null) ctx.OnValueChanged?.Invoke(b.Right, _model, value);
+            ctx.OnValueEditCommitted?.Invoke();
+
+            Undo.CollapseUndoOperations(group);
+        }
+
         private void OnKeyframeClicked(RowBinding b)
         {
             var ctx = _animContext;
             if (ctx == null) return;
 
+            int group = Undo.GetCurrentGroup();
             if (b.Right != null)
             {
                 float rightVal = b.Right.Value;
@@ -318,6 +362,7 @@ namespace DenEmo.UI
             {
                 ctx.OnKeyframeToggle?.Invoke(b.Left, _model);
             }
+            Undo.CollapseUndoOperations(group); // LR の 2 回のトグルを 1 つの Undo にまとめる
             SyncDynamicState();
         }
 

@@ -330,14 +330,15 @@ namespace DenEmo
         {
             _model.SyncValuesFromMesh();
             UpdateVisibility();
-            _listUI.SyncNow();
             if (_currentMode == EditorMode.Animation)
             {
+                // クリップ再サンプル（トラック対象アイテムの値も同期される）を先に行ってから一覧へ反映する
                 _animModeUI.OnUndoRedo();
                 _animTimelineView?.RefreshStructure();
             }
             else if (_currentMode == EditorMode.FxSetup)
                 _fxSetupUI.OnUndoRedo(_model);
+            _listUI.SyncNow();
             Repaint();
         }
 
