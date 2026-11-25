@@ -84,8 +84,11 @@ namespace DenEmo.Models
             CurrentTime = 0f;
             if (clip != null)
             {
-                _clipLength = clip.length    > 0f ? clip.length    : 1f;
-                _fps        = clip.frameRate > 0f ? clip.frameRate : 60f;
+                _fps = clip.frameRate > 0f ? clip.frameRate : 60f;
+                // 0 秒や 1 フレーム未満の極短クリップ（旧 Pose 保存の 0.0001s 等）は
+                // TotalFrames == 0 になりタイムライン描画・編集が破綻するため 1 秒にフォールバックする
+                float minEditableLen = _fps > 0f ? 0.5f / _fps : 0.01f;
+                _clipLength = clip.length >= minEditableLen ? clip.length : 1f;
             }
             MarkDirty();
         }
@@ -247,8 +250,7 @@ namespace DenEmo.Models
             float valZero = loop.Evaluate(0f);
             float tol     = FrameTolerance;
 
-            int endIdx = FindKeyIndex(loop, _clipLength, tol);
-            if (endIdx >= 0) loop.RemoveKey(endIdx);
+            RemoveKeysInTolerance(loop, _clipLength, tol);
 
             int newIdx = loop.AddKey(new Keyframe(_clipLength, valZero));
             if (newIdx < 0)
@@ -342,6 +344,25 @@ namespace DenEmo.Models
             for (int i = 0; i < keys.Length; i++)
                 if (Mathf.Abs(keys[i].time - time) <= tol) return i;
             return -1;
+        }
+
+        /// <summary>
+        /// 指定時刻の許容誤差内にあるキーをすべて削除し、削除した件数を返す。
+        /// 旧 Pose 保存（0f + 0.0001f）など同一フレーム内に複数サブフレームキーが存在する場合の残留を防ぐ。
+        /// </summary>
+        public static int RemoveKeysInTolerance(AnimationCurve curve, float time, float tol)
+        {
+            var keys = curve.keys;
+            int removed = 0;
+            for (int i = keys.Length - 1; i >= 0; i--)
+            {
+                if (Mathf.Abs(keys[i].time - time) <= tol)
+                {
+                    curve.RemoveKey(i);
+                    removed++;
+                }
+            }
+            return removed;
         }
 
         private static int FindTimeIndex(float[] sortedTimes, float time, float tol)

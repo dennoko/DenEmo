@@ -1330,8 +1330,14 @@ namespace DenEmo.UI
             if (w <= 0f || m.ClipLength <= 0f) { HideExtraActionKeys(0); return; }
 
             int used = 0;
+            int lastFrame = int.MinValue;
             foreach (float kTime in m.AllKeyTimes)
             {
+                // 同一フレームにサブフレーム重複キー（旧 Pose 保存の 0.0001s 等）がある場合、↔ ハンドルの重複配置を防ぐ
+                int frame = m.TimeToFrame(kTime);
+                if (frame == lastFrame) continue;
+                lastFrame = frame;
+
                 float kx = TimeToX(kTime, w);
                 if (kx < -ACTION_KEY_WIDTH || kx > w + ACTION_KEY_WIDTH) continue;
                 var widget = GetActionKey(used++);

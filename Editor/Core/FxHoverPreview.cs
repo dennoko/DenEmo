@@ -11,7 +11,7 @@ namespace DenEmo.Core
     public class FxHoverPreview
     {
         private const double HoverDelaySec = 0.2;
-        // 1 フレーム相当以下のクリップは静止表示（Pose モード保存クリップは長さ 0.0001s）
+        // 1 フレーム相当以下のクリップは静止表示（Pose モード保存クリップは長さ 1/60s、旧形式は 0.0001s）
         private const float MinLoopLength = 0.05f;
 
         private readonly FxClipSampler _sampler = new FxClipSampler();

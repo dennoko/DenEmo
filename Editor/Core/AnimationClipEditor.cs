@@ -155,7 +155,7 @@ namespace DenEmo.Core
 
         // ─── Keyframe delete ─────────────────────────────────────────────────
 
-        /// <summary>指定時刻に最も近いキーを 1 つ削除する。</summary>
+        /// <summary>指定時刻に最も近いキー（同一フレーム許容誤差内の重複キーを含む）を削除する。</summary>
         public void DeleteKey(string shapeName, float time)
         {
             if (Clip == null) return;
@@ -164,18 +164,18 @@ namespace DenEmo.Core
             var curve   = AnimationUtility.GetEditorCurve(Clip, binding);
             if (curve == null) return;
 
-            int idx = AnimationClipModel.FindKeyIndex(curve, time, _model.FrameTolerance);
-            if (idx < 0) return;
+            float tol = _model.FrameTolerance;
+            if (AnimationClipModel.FindKeyIndex(curve, time, tol) < 0) return;
 
             Undo.RecordObject(Clip, "Delete Keyframe");
-            curve.RemoveKey(idx);
+            AnimationClipModel.RemoveKeysInTolerance(curve, time, tol);
             bool hasKeys = curve.length > 0;
             AnimationUtility.SetEditorCurve(Clip, binding, hasKeys ? curve : null);
             if (hasKeys) CommitTrack(shapeName, curve);
             else         Commit();
         }
 
-        /// <summary>指定時刻にある全トラックのキーを 1 回の Undo 操作で削除する。</summary>
+        /// <summary>指定時刻にある全トラックのキー（同一フレーム許容誤差内の重複キーを含む）を 1 回の Undo 操作で削除する。</summary>
         public void DeleteKeysAtTime(float time)
         {
             if (Clip == null) return;
@@ -187,9 +187,7 @@ namespace DenEmo.Core
 
             foreach (var track in _model.Tracks)
             {
-                int idx = AnimationClipModel.FindKeyIndex(track.Curve, time, tol);
-                if (idx < 0) continue;
-                track.Curve.RemoveKey(idx);
+                if (AnimationClipModel.RemoveKeysInTolerance(track.Curve, time, tol) == 0) continue;
                 bindings.Add(track.Binding);
                 curves.Add(track.Curve.length > 0 ? track.Curve : null);
             }
@@ -270,27 +268,33 @@ namespace DenEmo.Core
             // 移動対象（oldFrame にキーを持つトラック）と、各トラックの到達限界を求める。
             // 限界計算はキャッシュ済み KeyTimes（float[]）だけで足りるため、ドラッグ中の毎イベントで
             // curve.keys（配列フルコピー）を触らない。
-            var moving = new List<(AnimationTrack track, int keyIndex)>();
+            var moving = new List<(AnimationTrack track, int keyIndex, bool hasDuplicates)>();
             int reached = newFrame;
 
             foreach (var track in _model.Tracks)
             {
                 if (shapeName != null && track.ShapeName != shapeName) continue;
 
-                int keyIndex = -1;
-                int limit    = newFrame;
-                var times    = track.KeyTimes;
+                int  keyIndex      = -1;
+                bool hasDuplicates = false;
+                int  limit         = newFrame;
+                var  times         = track.KeyTimes;
                 for (int i = 0; i < times.Length; i++)
                 {
                     int f = Mathf.RoundToInt(times[i] * fps);
-                    if (f == oldFrame) { keyIndex = i; continue; }
+                    if (f == oldFrame)
+                    {
+                        if (keyIndex < 0) keyIndex = i;
+                        else              hasDuplicates = true;
+                        continue;
+                    }
                     // 移動方向にある最初の他キーの 1 フレーム手前まで
                     if (dir > 0 && f > oldFrame && f - 1 < limit) limit = f - 1;
                     if (dir < 0 && f < oldFrame && f + 1 > limit) limit = f + 1;
                 }
 
                 if (keyIndex < 0) continue;
-                moving.Add((track, keyIndex));
+                moving.Add((track, keyIndex, hasDuplicates));
                 if (dir > 0) reached = Mathf.Min(reached, limit);
                 else         reached = Mathf.Max(reached, limit);
             }
@@ -305,8 +309,17 @@ namespace DenEmo.Core
             var bindings = new List<EditorCurveBinding>(moving.Count);
             var curves   = new List<AnimationCurve>(moving.Count);
             var updates  = new List<(string, AnimationCurve)>(moving.Count);
-            foreach (var (track, keyIndex) in moving)
+            foreach (var (track, keyIndex, hasDuplicates) in moving)
             {
+                // 同一フレームにサブフレーム重複キー（旧 Pose 保存の 0.0001s 等）があれば取り残さないよう先に除去する
+                if (hasDuplicates)
+                {
+                    for (int i = track.Curve.length - 1; i > keyIndex; i--)
+                    {
+                        if (Mathf.RoundToInt(track.Curve[i].time * fps) == oldFrame)
+                            track.Curve.RemoveKey(i);
+                    }
+                }
                 var k = track.Curve[keyIndex];   // インデクサは配列全体をコピーしない
                 k.time = newTime;
                 track.Curve.MoveKey(keyIndex, k);
@@ -326,17 +339,22 @@ namespace DenEmo.Core
 
         // ─── Interpolation ───────────────────────────────────────────────────
 
-        /// <summary>指定時刻に最も近いキーの補間タイプを変更する。</summary>
+        /// <summary>指定時刻の許容誤差内にあるキーの補間タイプを変更する。</summary>
         public void SetKeyInterpolation(string shapeName, float time, InterpolationType interp)
         {
             if (Clip == null) return;
             if (!_model.TryGetTrack(shapeName, out var track)) return;
 
-            int idx = AnimationClipModel.FindKeyIndex(track.Curve, time, _model.FrameTolerance);
-            if (idx < 0) return;
+            float tol = _model.FrameTolerance;
+            if (AnimationClipModel.FindKeyIndex(track.Curve, time, tol) < 0) return;
 
             Undo.RecordObject(Clip, "Change Interpolation");
-            ApplyTangentMode(track.Curve, idx, interp);
+            int keyCount = track.Curve.length;
+            for (int i = 0; i < keyCount; i++)
+            {
+                if (Mathf.Abs(track.Curve[i].time - time) <= tol)
+                    ApplyTangentMode(track.Curve, i, interp);
+            }
             AnimationUtility.SetEditorCurve(Clip, track.Binding, track.Curve);
             CommitTrack(shapeName, track.Curve);
         }
@@ -464,8 +482,8 @@ namespace DenEmo.Core
 
         private static void WriteKey(AnimationCurve curve, float time, float value, InterpolationType interp, float tol)
         {
-            int existing = AnimationClipModel.FindKeyIndex(curve, time, tol);
-            if (existing >= 0) curve.RemoveKey(existing);
+            // 同一フレーム許容誤差内のサブフレーム重複キー（旧 Pose 保存の 0.0001s 等）もまとめて除去する
+            AnimationClipModel.RemoveKeysInTolerance(curve, time, tol);
 
             int idx = curve.AddKey(new Keyframe(time, value));
             if (idx < 0)

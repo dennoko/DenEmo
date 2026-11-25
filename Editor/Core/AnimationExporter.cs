@@ -147,6 +147,11 @@ namespace DenEmo.Core
         // 各アイテムの OwnerSmr / SmrPath を使って複数メッシュ分をまとめてクリップに書き込む
         private static void WriteItemsToClip(ShapeKeyModel model, AnimationClip clip)
         {
+            // Unity Animator / VRChat FX での安定評価のため 2 フレーム同一値で書き出す。
+            // サブフレーム（0.0001s 等）にすると Animation ウィンドウ等で隠れキーになり上書き漏れが起きるため、
+            // クリップのフレームレートに沿った正規の 1 フレーム後（60fps なら 0:01 = 1/60s）に配置する。
+            float secondFrameTime = clip.frameRate > 0f ? 1f / clip.frameRate : 1f / 60f;
+
             foreach (var item in model.Items)
             {
                 if (!item.IsIncluded || item.IsVrcExcluded(model.IsAnimationMode) || item.IsLipSyncShape) continue;
@@ -169,8 +174,8 @@ namespace DenEmo.Core
                 };
 
                 var key = new Keyframe[2];
-                key[0] = new Keyframe(0f,      current);
-                key[1] = new Keyframe(0.0001f, current);
+                key[0] = new Keyframe(0f,              current);
+                key[1] = new Keyframe(secondFrameTime, current);
                 AnimationUtility.SetEditorCurve(clip, binding, new AnimationCurve(key));
             }
         }
