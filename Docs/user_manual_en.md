@@ -165,6 +165,9 @@ The finished expression is exported from the save area at the very bottom of the
 **Overwrite** (checkbox at the left of the footer)
 When off, the expression is saved as a new `.anim` file. When on, the row above the Save button switches to the overwrite target, and saving writes directly into that existing file.
 
+**Save as 2 frames** (checkbox to the right of Overwrite in the footer; default: on)
+When on, writes identical values at 0:00 and 0:01 (1/60s), which is recommended for stable playback in Unity Animator and VRChat FX layers. When off, exports a pure 1-frame clip with a single keyframe at 0:00. This setting is shared across Unity projects.
+
 **Save to** (when Overwrite is off)
 The folder the save dialog opens in for a new file. Type a path directly or click **Browse** on its right to pick a folder.
 
@@ -180,7 +183,7 @@ Keeps non-blendshape data already present in the overwrite target - object toggl
 > This data is NOT reflected in the DenEmo preview (the scene view). It is included in the saved `.anim`.
 
 **Save**
-Exports all checked shape keys with their current slider values. With Overwrite on it writes into the target file; with Overwrite off it creates a new file where you choose in the save dialog. The left of the footer shows how many shape keys will be saved ("N / M to save").
+Exports all checked shape keys with their current slider values. With Overwrite on it writes into the target file; with Overwrite off it creates a new file where you choose in the save dialog.
 
 > Example: You are making three variations of a "surprise" expression. Save the first normally. For the second variation, turn on Overwrite and set the first file as the target (with Auto backup on) - the original is preserved in `_backups/` and the file is updated in place.
 

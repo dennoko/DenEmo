@@ -62,6 +62,7 @@ namespace DenEmo
         private Toggle        _footerOverwriteToggle;
         private Label         _outputPoseTargetLabel;
         private ObjectField   _poseOverwriteField;
+        private Toggle        _poseTwoFrameToggle;
         private Toggle        _poseBackupToggle;
         private Toggle        _posePreserveExtraToggle;
 
@@ -71,6 +72,7 @@ namespace DenEmo
         private VisualElement _outputPoseTargetRow;
         private VisualElement _outputPoseOptionsRow;
         private VisualElement _footer;
+        private VisualElement _footerSpacer;
         private Label         _footerInfo;
         private Button        _footerSecondary;
         private Button        _footerPrimary;
@@ -266,6 +268,7 @@ namespace DenEmo
             _footerOverwriteToggle   = root.Q<Toggle>("footer-overwrite-toggle");
             _outputPoseTargetLabel   = root.Q<Label>("output-pose-target-label");
             _poseOverwriteField      = root.Q<ObjectField>("pose-overwrite-field");
+            _poseTwoFrameToggle      = root.Q<Toggle>("pose-two-frame-toggle");
             _poseBackupToggle        = root.Q<Toggle>("pose-backup-toggle");
             _posePreserveExtraToggle = root.Q<Toggle>("pose-preserve-extra-toggle");
 
@@ -291,6 +294,13 @@ namespace DenEmo
                 UpdateFooter();
             });
 
+            _poseTwoFrameToggle.SetValueWithoutNotify(twoFrameSave);
+            _poseTwoFrameToggle.RegisterValueChangedCallback(evt =>
+            {
+                twoFrameSave = evt.newValue;
+                EditorPrefs.SetBool(PrefTwoFrameSave, twoFrameSave);
+            });
+
             _poseBackupToggle.SetValueWithoutNotify(autoBackup);
             _poseBackupToggle.RegisterValueChangedCallback(evt => autoBackup = evt.newValue);
 
@@ -308,6 +318,7 @@ namespace DenEmo
             _outputPoseTargetRow  = root.Q<VisualElement>("output-pose-target-row");
             _outputPoseOptionsRow = root.Q<VisualElement>("output-pose-options-row");
             _footer              = root.Q<VisualElement>("footer");
+            _footerSpacer        = root.Q<VisualElement>("footer-spacer");
             _footerInfo          = root.Q<Label>("footer-info");
             _footerSecondary     = root.Q<Button>("footer-secondary");
             _footerPrimary       = root.Q<Button>("footer-primary");
@@ -381,7 +392,9 @@ namespace DenEmo
             _footerOverwriteToggle.text   = DenEmoLoc.T("ui.footer.overwrite.short");
             // ツールチップはモードで変わるため UpdateFooter で設定する
             _outputPoseTargetLabel.text   = DenEmoLoc.T("ui.footer.overwriteTarget");
-            _poseBackupToggle.text        = DenEmoLoc.T("ui.output.autoBackup");
+            _poseTwoFrameToggle.text         = DenEmoLoc.T("ui.output.twoFrameSave");
+            _poseTwoFrameToggle.tooltip      = DenEmoLoc.T("ui.output.twoFrameSave.tip");
+            _poseBackupToggle.text           = DenEmoLoc.T("ui.output.autoBackup");
             _poseBackupToggle.tooltip     = DenEmoLoc.T("ui.footer.autoBackup.tip");
             _posePreserveExtraToggle.text    = DenEmoLoc.T("ui.output.keepExtra");
             _posePreserveExtraToggle.tooltip = DenEmoLoc.T("ui.footer.preserveExtra.tip");
@@ -536,7 +549,14 @@ namespace DenEmo
                 _footerOverwriteToggle.tooltip = DenEmoLoc.T(isAnim ? "ui.animMode.overwrite.tip" : "ui.footer.overwriteEnable.tip");
             }
 
-            // Animation は情報欄と主ボタンを 1:2 で分け、キー数などの情報が見切れないようにする
+            // Pose のみ: 「2フレーム保存」を上書き保存の右に並べ、主ボタンを半分の横幅にする
+            DennokoBlockUI.Show(_poseTwoFrameToggle, isPose);
+            if (isPose && _poseTwoFrameToggle.value != twoFrameSave)
+                _poseTwoFrameToggle.SetValueWithoutNotify(twoFrameSave);
+            DennokoBlockUI.Show(_footerSpacer, isPose);
+
+            // Pose は主ボタンを半分幅に、Animation は情報欄と主ボタンを 1:2 で分けて情報が見切れないようにする
+            _footer.EnableInClassList("dennoko-footer--pose",  isPose);
             _footer.EnableInClassList("dennoko-footer--split", isAnim);
 
             // 出力ドック (Pose のみ): 保存先 + 参照（上書き OFF）または上書き先とオプション（ON）。
@@ -557,18 +577,9 @@ namespace DenEmo
             f.PrimaryTooltip = !hasTarget ? DenEmoLoc.T("ui.footer.primary.needTarget")
                              : needClip   ? DenEmoLoc.T("ui.footer.primary.needOverwriteClip")
                              : DenEmoLoc.T("ui.footer.saveAnim");
-            f.InfoWarning    = false;
+            f.InfoText       = null;
             f.InfoTooltip    = null;
-            if (!hasTarget) { f.InfoText = null; return; }
-
-            int eligible = 0, included = 0;
-            foreach (var item in _model.Items)
-            {
-                if (item.IsVrcExcluded(_model.IsAnimationMode) || item.IsLipSyncShape) continue;
-                eligible++;
-                if (item.IsIncluded) included++;
-            }
-            f.InfoText = DenEmoLoc.Tf("ui.footer.info.included", included, eligible);
+            f.InfoWarning    = false;
         }
 
         private void ComputeAnimFooter(bool hasTarget)
@@ -855,7 +866,7 @@ namespace DenEmo
                 string clipPath = AssetDatabase.GetAssetPath(overwriteTargetClip);
                 SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
                 var err = AnimationExporter.SaveAnimationClipToPath(_model, clipPath, out string path, autoBackup,
-                                                                    preserveExtraCurves, _importedExtraCurves);
+                                                                    preserveExtraCurves, _importedExtraCurves, twoFrameSave);
                 if (err != null) SetStatus(err, 3);
                 else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
             }
@@ -863,7 +874,7 @@ namespace DenEmo
             {
                 SetStatus(DenEmoLoc.T("status.saving"), 0, 0);
                 var err = AnimationExporter.SaveAnimationClip(_model, saveFolder, out string path, autoBackup,
-                                                              preserveExtraCurves, _importedExtraCurves);
+                                                              preserveExtraCurves, _importedExtraCurves, twoFrameSave);
                 if (err != null) SetStatus(err, 3);
                 else SetStatus(DenEmoLoc.Tf("dlg.save.done.msg", path), 1);
             }

@@ -239,10 +239,17 @@
     flex-basis: 0;
 }
 
-/* フッター左端の「上書き保存」(Pose / Animation)。保存ボタンの近くに置くためフッター内に置く */
+/* Pose のフッター: 主ボタンを半分の横幅にし、左に「上書き保存」「2フレーム保存」を並べる */
+.dennoko-root .dennoko-footer.dennoko-footer--pose > .unity-button.dennoko-button-primary {
+    flex-grow: 0;
+    flex-shrink: 1;
+    flex-basis: 50%;
+}
+
+/* フッター左側のチェックボックス（「上書き保存」「2フレーム保存」）。保存ボタンの近くに置くためフッター内に置く */
 .dennoko-root .dennoko-footer > .unity-toggle.dennoko-footer__toggle {
     flex-shrink: 0;
-    margin: 0 4px 0 2px;
+    margin: 0 8px 0 2px;
 }
 
 /* 出力ドックの保存設定 (Pose): 上書き先の ObjectField は行の残りを使い、オプションは文字幅で並べる */

@@ -10,9 +10,10 @@ namespace DenEmo.Core
     {
         /// <param name="preserveExtraCurves">上書き時、書き込み先の blendShape 以外のカーブを消さずに残す。</param>
         /// <param name="importedExtras">アニメーション参照から取り込んだ blendShape 以外のカーブ（無ければ null）。</param>
+        /// <param name="twoFrameSave">true で 0f と 1 フレーム後の 2 キー構成、false で 0f のみの完全 1 フレーム構成で保存する。</param>
         public static string SaveAnimationClip(ShapeKeyModel model, string saveFolder, out string generatedPath,
                                                bool autoBackup = false, bool preserveExtraCurves = true,
-                                               ExtraCurveSet importedExtras = null)
+                                               ExtraCurveSet importedExtras = null, bool twoFrameSave = true)
         {
             generatedPath = null;
             if (model.TargetSkinnedMesh == null) return DenEmoLoc.T("dlg.apply.noTarget");
@@ -57,7 +58,7 @@ namespace DenEmo.Core
                 isOverwrite = false;
             }
 
-            WriteItemsToClip(model, clip);
+            WriteItemsToClip(model, clip, twoFrameSave);
             if (importedExtras != null) importedExtras.WriteTo(clip, overwriteExisting: false);
 
             if (isOverwrite)
@@ -80,9 +81,10 @@ namespace DenEmo.Core
 
         /// <param name="preserveExtraCurves">上書き時、書き込み先の blendShape 以外のカーブを消さずに残す。</param>
         /// <param name="importedExtras">アニメーション参照から取り込んだ blendShape 以外のカーブ（無ければ null）。</param>
+        /// <param name="twoFrameSave">true で 0f と 1 フレーム後の 2 キー構成、false で 0f のみの完全 1 フレーム構成で保存する。</param>
         public static string SaveAnimationClipToPath(ShapeKeyModel model, string path, out string generatedPath,
                                                      bool autoBackup = false, bool preserveExtraCurves = true,
-                                                     ExtraCurveSet importedExtras = null)
+                                                     ExtraCurveSet importedExtras = null, bool twoFrameSave = true)
         {
             generatedPath = null;
             if (model.TargetSkinnedMesh == null) return DenEmoLoc.T("dlg.apply.noTarget");
@@ -115,7 +117,7 @@ namespace DenEmo.Core
                 clip = new AnimationClip { frameRate = 60 };
             }
 
-            WriteItemsToClip(model, clip);
+            WriteItemsToClip(model, clip, twoFrameSave);
             if (importedExtras != null) importedExtras.WriteTo(clip, overwriteExisting: false);
 
             if (existingClip != null)
@@ -145,11 +147,12 @@ namespace DenEmo.Core
         }
 
         // 各アイテムの OwnerSmr / SmrPath を使って複数メッシュ分をまとめてクリップに書き込む
-        private static void WriteItemsToClip(ShapeKeyModel model, AnimationClip clip)
+        private static void WriteItemsToClip(ShapeKeyModel model, AnimationClip clip, bool twoFrameSave = true)
         {
-            // Unity Animator / VRChat FX での安定評価のため 2 フレーム同一値で書き出す。
+            // twoFrameSave=true: Unity Animator / VRChat FX での安定評価のため 2 フレーム同一値で書き出す。
             // サブフレーム（0.0001s 等）にすると Animation ウィンドウ等で隠れキーになり上書き漏れが起きるため、
             // クリップのフレームレートに沿った正規の 1 フレーム後（60fps なら 0:01 = 1/60s）に配置する。
+            // twoFrameSave=false: 0:00 のみの完全な 1 フレームクリップとして書き出す。
             float secondFrameTime = clip.frameRate > 0f ? 1f / clip.frameRate : 1f / 60f;
 
             foreach (var item in model.Items)
@@ -173,10 +176,19 @@ namespace DenEmo.Core
                     propertyName = prop,
                 };
 
-                var key = new Keyframe[2];
-                key[0] = new Keyframe(0f,              current);
-                key[1] = new Keyframe(secondFrameTime, current);
-                AnimationUtility.SetEditorCurve(clip, binding, new AnimationCurve(key));
+                AnimationCurve curve;
+                if (twoFrameSave)
+                {
+                    var key = new Keyframe[2];
+                    key[0] = new Keyframe(0f,              current);
+                    key[1] = new Keyframe(secondFrameTime, current);
+                    curve = new AnimationCurve(key);
+                }
+                else
+                {
+                    curve = new AnimationCurve(new Keyframe(0f, current));
+                }
+                AnimationUtility.SetEditorCurve(clip, binding, curve);
             }
         }
 

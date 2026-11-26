@@ -255,6 +255,9 @@
     <ui:VisualElement name="footer" class="dennoko-footer">
         <!-- Pose / Animation: 上書き保存の切り替え（保存ボタンの近くに置く。状態はモードごと） -->
         <ui:Toggle name="footer-overwrite-toggle" class="dennoko-footer__toggle" />
+        <!-- Pose のみ: 2フレーム保存（上書き保存の右に並べてフッターの高さを抑える） -->
+        <ui:Toggle name="pose-two-frame-toggle" class="dennoko-footer__toggle" style="display: none;" />
+        <ui:VisualElement name="footer-spacer" class="dennoko-spacer" style="display: none;" />
         <ui:Label name="footer-info" class="dennoko-footer__info" />
         <ui:Button name="footer-secondary" class="dennoko-button-secondary" style="display: none;" />
         <ui:Button name="footer-primary" class="dennoko-button-primary" />

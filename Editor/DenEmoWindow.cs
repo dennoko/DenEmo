@@ -45,6 +45,9 @@ namespace DenEmo
         private bool overwriteSaveEnabled = false;
         // 上書き保存時に書き込み先の blendShape 以外のカーブを残す
         private bool preserveExtraCurves = true;
+        // Pose 保存時に 0f と 1/60s の 2 フレーム同一値で書き出す（プロジェクト間共有・EditorPrefs）
+        private const string PrefTwoFrameSave = "DenEmo_PoseTwoFrameSave";
+        private bool twoFrameSave        = true;
         // アニメーション参照の読み込み時に blendShape 以外のカーブも取り込む
         private bool importExtraCurves   = true;
         private bool _animSaveAsNew       = false;
@@ -146,6 +149,7 @@ namespace DenEmo
             autoBackup           = DenEmoProjectPrefs.GetBool("DenEmo_AutoBackup",        true);
             overwriteSaveEnabled = DenEmoProjectPrefs.GetBool("DenEmo_OverwriteSaveEnabled", false);
             preserveExtraCurves  = DenEmoProjectPrefs.GetBool("DenEmo_PreserveExtraCurves", true);
+            twoFrameSave         = EditorPrefs.GetBool(PrefTwoFrameSave, true);
             importExtraCurves    = DenEmoProjectPrefs.GetBool("DenEmo_ImportExtraCurves",   true);
             _animSaveAsNew       = DenEmoProjectPrefs.GetBool("DenEmo_AnimSaveAsNew",     false);
             _meshFilterIndex     = DenEmoProjectPrefs.GetInt("DenEmo_MeshFilter", -1);
@@ -303,6 +307,17 @@ namespace DenEmo
 
             SaveBlendValuesPrefs();
             SaveCollapsedGroupsPrefs();
+        }
+
+        private void OnFocus()
+        {
+            // プロジェクト間共有の EditorPrefs 設定を他プロジェクトでの変更に追従させる
+            bool sharedTwoFrame = EditorPrefs.GetBool(PrefTwoFrameSave, true);
+            if (twoFrameSave != sharedTwoFrame)
+            {
+                twoFrameSave = sharedTwoFrame;
+                UpdateFooter();
+            }
         }
 
         private void OnEditorUpdate()
